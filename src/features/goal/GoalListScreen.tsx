@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Horizon } from '../../core/horizon/horizon'
-import { Chip } from '../../components/Chip'
+import { ChipLabel } from '../../components/Chip'
 import { isActive } from '../../lib/domain'
 import { daysLeftLabel, horizonLabel } from '../../lib/format'
 import { usePlanner } from '../../store/planner'
@@ -120,9 +120,7 @@ export function GoalListScreen({
                   {horizonLabel(goal.horizon_kind, goal.ready_at, goal.hold_until)}
                 </div>
               </div>
-              {atRisk > 0 ? (
-                <Chip>{`부족 ${atRisk}개`}</Chip>
-              ) : null}
+              {atRisk > 0 ? <ChipLabel>{`부족 ${atRisk}개`}</ChipLabel> : null}
               <span className="num text-[12.5px] text-text-2">{count}개</span>
               {goal.ready_at ? (
                 <span className="num w-[76px] text-right text-[12px] text-text-3">

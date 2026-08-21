@@ -1,12 +1,33 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { AppShell, type ScreenKey } from './features/shell/AppShell'
-import { ForecastScreen } from './features/forecast/ForecastScreen'
-import { GoalDetailScreen } from './features/goal/GoalDetailScreen'
 import { GoalListScreen } from './features/goal/GoalListScreen'
-import { ItemDetailScreen } from './features/item/ItemDetailScreen'
 import { LibraryScreen } from './features/library/LibraryScreen'
-import { SettingsScreen } from './features/settings/SettingsScreen'
 import { TodayScreen } from './features/today/TodayScreen'
+
+/*
+  차트를 쓰는 화면은 따로 떼어 낸다. 첫 화면인 오늘에는 차트가 없는데
+  차트 라이브러리까지 같이 받아오면 처음 켤 때만 느려진다.
+*/
+const ForecastScreen = lazy(() =>
+  import('./features/forecast/ForecastScreen').then((m) => ({
+    default: m.ForecastScreen,
+  }))
+)
+const GoalDetailScreen = lazy(() =>
+  import('./features/goal/GoalDetailScreen').then((m) => ({
+    default: m.GoalDetailScreen,
+  }))
+)
+const ItemDetailScreen = lazy(() =>
+  import('./features/item/ItemDetailScreen').then((m) => ({
+    default: m.ItemDetailScreen,
+  }))
+)
+const SettingsScreen = lazy(() =>
+  import('./features/settings/SettingsScreen').then((m) => ({
+    default: m.SettingsScreen,
+  }))
+)
 import { Onboarding } from './features/onboarding/Onboarding'
 import { isActive } from './lib/domain'
 import { notifyDueCount, shouldNotify } from './lib/notify'
@@ -73,7 +94,9 @@ export function App() {
       screen={route.screen}
       onNavigate={(screen) => setRoute({ screen })}
     >
-      {renderRoute(route, setRoute)}
+      <Suspense fallback={<ScreenLoading />}>
+        {renderRoute(route, setRoute)}
+      </Suspense>
     </AppShell>
   )
 }
@@ -119,4 +142,12 @@ function renderRoute(
     case 'settings':
       return <SettingsScreen />
   }
+}
+
+function ScreenLoading() {
+  return (
+    <div className="mx-auto w-full max-w-[940px] px-6 py-7 text-[13px] text-text-3">
+      불러오는 중
+    </div>
+  )
 }
