@@ -10,6 +10,8 @@
   --surface: #ffffff;
   --rail: #f7f7f3;
   --raise: #fbfbf9;
+  --hover: #f1f1ec;
+  --dot: #c9c9bf;
   --text: #1c1c19;
   --text-2: #5d5d56;
   --text-3: #93938a;
@@ -53,6 +55,8 @@
     --surface: #212320;
     --rail: #1d1f1c;
     --raise: #272925;
+    --hover: #282a25;
+    --dot: #4a4c45;
     --text: #ecece5;
     --text-2: #a0a097;
     --text-3: #71736a;
@@ -91,6 +95,8 @@
   --surface: #212320;
   --rail: #1d1f1c;
   --raise: #272925;
+  --hover: #282a25;
+  --dot: #4a4c45;
   --text: #ecece5;
   --text-2: #a0a097;
   --text-3: #71736a;
@@ -128,6 +134,8 @@
   --color-surface: var(--surface);
   --color-rail: var(--rail);
   --color-raise: var(--raise);
+  --color-hover: var(--hover);
+  --color-dot: var(--dot);
   --color-text: var(--text);
   --color-text-2: var(--text-2);
   --color-text-3: var(--text-3);
