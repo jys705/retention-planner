@@ -1,13 +1,23 @@
 import { useEffect, useState } from 'react'
 import { AppShell, type ScreenKey } from './features/shell/AppShell'
+import { ForecastScreen } from './features/forecast/ForecastScreen'
+import { GoalDetailScreen } from './features/goal/GoalDetailScreen'
+import { GoalListScreen } from './features/goal/GoalListScreen'
+import { ItemDetailScreen } from './features/item/ItemDetailScreen'
+import { LibraryScreen } from './features/library/LibraryScreen'
 import { TodayScreen } from './features/today/TodayScreen'
 import { usePlanner } from './store/planner'
+
+type Route =
+  | { screen: ScreenKey }
+  | { screen: 'goals'; goalId: string }
+  | { screen: 'library'; itemId: string }
 
 export function App() {
   const ready = usePlanner((s) => s.ready)
   const load = usePlanner((s) => s.load)
   const theme = usePlanner((s) => s.settings.theme)
-  const [screen, setScreen] = useState<ScreenKey>('today')
+  const [route, setRoute] = useState<Route>({ screen: 'today' })
 
   useEffect(() => {
     void load()
@@ -28,23 +38,62 @@ export function App() {
   }
 
   return (
-    <AppShell screen={screen} onNavigate={setScreen}>
-      {screen === 'today' ? <TodayScreen /> : <Placeholder screen={screen} />}
+    <AppShell
+      screen={route.screen}
+      onNavigate={(screen) => setRoute({ screen })}
+    >
+      {renderRoute(route, setRoute)}
     </AppShell>
   )
 }
 
-const PLACEHOLDER_LABEL: Record<Exclude<ScreenKey, 'today'>, string> = {
-  forecast: '예보',
-  goals: '목표',
-  library: '서재',
-  settings: '설정',
+function renderRoute(
+  route: Route,
+  setRoute: (next: Route) => void
+): React.ReactNode {
+  if ('itemId' in route) {
+    return (
+      <ItemDetailScreen
+        itemId={route.itemId}
+        onBack={() => setRoute({ screen: 'library' })}
+      />
+    )
+  }
+  if ('goalId' in route) {
+    return (
+      <GoalDetailScreen
+        goalId={route.goalId}
+        onOpenItem={(itemId) => setRoute({ screen: 'library', itemId })}
+      />
+    )
+  }
+  switch (route.screen) {
+    case 'today':
+      return <TodayScreen />
+    case 'forecast':
+      return <ForecastScreen />
+    case 'goals':
+      return (
+        <GoalListScreen
+          onOpenGoal={(goalId) => setRoute({ screen: 'goals', goalId })}
+        />
+      )
+    case 'library':
+      return (
+        <LibraryScreen
+          onOpenItem={(itemId) => setRoute({ screen: 'library', itemId })}
+          onOpenGoal={(goalId) => setRoute({ screen: 'goals', goalId })}
+        />
+      )
+    case 'settings':
+      return <SettingsPlaceholder />
+  }
 }
 
-function Placeholder({ screen }: { screen: Exclude<ScreenKey, 'today'> }) {
+function SettingsPlaceholder() {
   return (
     <div className="mx-auto w-full max-w-[940px] px-6 py-7">
-      <h1 className="text-[20px] font-semibold">{PLACEHOLDER_LABEL[screen]}</h1>
+      <h1 className="text-[22px] font-semibold">설정</h1>
       <p className="pt-2 text-[13px] text-text-2">준비 중이에요.</p>
     </div>
   )

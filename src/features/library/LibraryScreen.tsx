@@ -1,0 +1,337 @@
+import { useState } from 'react'
+import { defaultFsrs } from '../../core/fsrs/fsrs6'
+import { Badge } from '../../components/Badge'
+import type { GoalRow, ItemRow } from '../../db/types'
+import { statusBadgeOf } from '../../lib/badge'
+import { cn } from '../../lib/cn'
+import { diffDays, type DateOnly } from '../../lib/date'
+import {
+  goalColor,
+  isActive,
+  memoryStateOf,
+  splitTitle,
+  titleStem,
+} from '../../lib/domain'
+import { dueLabel, horizonLabel, percent } from '../../lib/format'
+import { usePlanner } from '../../store/planner'
+
+type SortKey = 'due' | 'retention' | 'title'
+
+const SORTS: { key: SortKey; name: string }[] = [
+  { key: 'due', name: '다음에 볼 날' },
+  { key: 'retention', name: '기억률 낮은순' },
+  { key: 'title', name: '이름순' },
+]
+
+export function LibraryScreen({
+  onOpenItem,
+  onOpenGoal,
+}: {
+  onOpenItem: (id: string) => void
+  onOpenGoal: (id: string) => void
+}) {
+  const { items, goals, today } = usePlanner()
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SortKey>('due')
+  const [grouped, setGrouped] = useState(true)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+
+  const active = items.filter(isActive)
+  const matched = query.trim()
+    ? active.filter((i) => i.title.toLowerCase().includes(query.trim().toLowerCase()))
+    : active
+
+  const rows = matched.map((item) => ({
+    item,
+    goal: goals.find((g) => g.id === item.goal_id) ?? null,
+    retention: retentionOf(item, today),
+  }))
+
+  const sorted = [...rows].sort((a, b) => {
+    if (sort === 'retention') return a.retention - b.retention
+    if (sort === 'title') return a.item.title < b.item.title ? -1 : 1
+    return (a.item.due ?? '9999') < (b.item.due ?? '9999') ? -1 : 1
+  })
+
+  return (
+    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 py-7">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-[22px] font-semibold">서재</h1>
+          <span className="num text-[13px] text-text-3">
+            {matched.length}개
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="찾기"
+            aria-label="항목 찾기"
+            className="w-[180px] rounded-ctl border border-line-2 bg-surface px-[10px] py-[6px] text-[13px] outline-none"
+          />
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+            aria-label="정렬"
+            className="rounded-ctl border border-line-2 bg-surface px-[8px] py-[6px] text-[12.5px]"
+          >
+            {SORTS.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => setGrouped((g) => !g)}
+            className="rounded-ctl border border-line-2 bg-surface px-[10px] py-[6px] text-[12.5px] text-text-2 hover:bg-hover"
+          >
+            {grouped ? '평면으로' : '목표별로 묶기'}
+          </button>
+        </div>
+      </header>
+
+      {matched.length === 0 ? (
+        <div className="rounded-card border border-line bg-surface px-[18px] py-[22px]">
+          <p className="text-[15px] font-medium">찾는 항목이 없어요.</p>
+          <p className="pt-1 text-[13px] text-text-2">
+            {query.trim()
+              ? `'${query.trim()}'와 맞는 제목이 없습니다. 다른 말로 찾아보거나 오늘 화면에서 새로 적어보세요.`
+              : '오늘 화면에서 한 줄 적으면 여기에 쌓입니다.'}
+          </p>
+        </div>
+      ) : grouped ? (
+        <GroupedList
+          rows={sorted}
+          goals={goals}
+          today={today}
+          collapsed={collapsed}
+          onToggle={(key) =>
+            setCollapsed((c) => ({ ...c, [key]: !c[key] }))
+          }
+          onOpenItem={onOpenItem}
+          onOpenGoal={onOpenGoal}
+        />
+      ) : (
+        <div className="rounded-card border border-line bg-surface">
+          {sorted.map(({ item, goal, retention }) => (
+            <Row
+              key={item.id}
+              item={item}
+              goal={goal}
+              retention={retention}
+              today={today}
+              onClick={() => onOpenItem(item.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      <p className="num text-[11px] text-text-3">
+        비슷한 제목은 공통 부분으로 묶여요. 묶음을 접으면 목표당 한 줄이 됩니다.
+      </p>
+    </div>
+  )
+}
+
+interface RowData {
+  item: ItemRow
+  goal: GoalRow | null
+  retention: number
+}
+
+/** 목표로 한 번, 제목의 공통 부분으로 한 번. 두 단으로 접힌다. */
+function GroupedList({
+  rows,
+  goals,
+  today,
+  collapsed,
+  onToggle,
+  onOpenItem,
+  onOpenGoal,
+}: {
+  rows: RowData[]
+  goals: GoalRow[]
+  today: DateOnly
+  collapsed: Record<string, boolean>
+  onToggle: (key: string) => void
+  onOpenItem: (id: string) => void
+  onOpenGoal: (id: string) => void
+}) {
+  const byGoal = new Map<string, RowData[]>()
+  for (const row of rows) {
+    const key = row.goal?.id ?? '__none__'
+    byGoal.set(key, [...(byGoal.get(key) ?? []), row])
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {[...byGoal.entries()].map(([goalKey, goalRows]) => {
+        const goal = goals.find((g) => g.id === goalKey) ?? null
+        const goalCollapsed = collapsed[goalKey] ?? false
+        const avg =
+          goalRows.reduce((s, r) => s + r.retention, 0) / goalRows.length
+
+        const byStem = new Map<string, RowData[]>()
+        for (const row of goalRows) {
+          const stem = titleStem(row.item.title) || row.item.title
+          byStem.set(stem, [...(byStem.get(stem) ?? []), row])
+        }
+
+        return (
+          <div
+            key={goalKey}
+            className="overflow-hidden rounded-card border border-line bg-surface"
+          >
+            <div className="flex items-center gap-2 border-b border-line px-[14px] py-[10px]">
+              <button
+                type="button"
+                onClick={() => onToggle(goalKey)}
+                className="text-[12px] text-text-3"
+                aria-label={goalCollapsed ? '펼치기' : '접기'}
+              >
+                {goalCollapsed ? '▸' : '▾'}
+              </button>
+              <span
+                aria-hidden
+                className="h-[6px] w-[6px] rounded-full"
+                style={{
+                  background: goal
+                    ? goalColor(goal, goals.indexOf(goal))
+                    : 'var(--dot)',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => (goal ? onOpenGoal(goal.id) : undefined)}
+                className={cn(
+                  'text-[13.5px] font-medium',
+                  goal && 'hover:text-accent'
+                )}
+              >
+                {goal?.name ?? '목표 없음'}
+              </button>
+              <span className="num text-[12px] text-text-3">
+                {goalRows.length}개
+              </span>
+              <div className="flex-1" />
+              {goal ? (
+                <span className="num text-[11.5px] text-text-3">
+                  {horizonLabel(goal.horizon_kind, goal.ready_at, goal.hold_until)}
+                </span>
+              ) : null}
+              <span className="num text-[12px] text-text-2">
+                {percent(avg)}
+              </span>
+            </div>
+
+            {!goalCollapsed
+              ? [...byStem.entries()].map(([stem, stemRows]) => {
+                  const stemKey = `${goalKey}::${stem}`
+                  const stemCollapsed = collapsed[stemKey] ?? false
+                  if (stemRows.length === 1) {
+                    const row = stemRows[0]
+                    return (
+                      <Row
+                        key={row.item.id}
+                        item={row.item}
+                        goal={row.goal}
+                        retention={row.retention}
+                        today={today}
+                        onClick={() => onOpenItem(row.item.id)}
+                      />
+                    )
+                  }
+                  return (
+                    <div key={stemKey}>
+                      <button
+                        type="button"
+                        onClick={() => onToggle(stemKey)}
+                        className="flex w-full items-center gap-2 bg-rail px-[14px] py-[7px] text-left"
+                      >
+                        <span className="text-[11px] text-text-3">
+                          {stemCollapsed ? '▸' : '▾'}
+                        </span>
+                        <span className="text-[12.5px] text-text-2">{stem}</span>
+                        <span className="num text-[11.5px] text-text-3">
+                          {stemRows.length}개
+                        </span>
+                      </button>
+                      {!stemCollapsed
+                        ? stemRows.map((row) => (
+                            <Row
+                              key={row.item.id}
+                              item={row.item}
+                              goal={row.goal}
+                              retention={row.retention}
+                              today={today}
+                              indent
+                              onClick={() => onOpenItem(row.item.id)}
+                            />
+                          ))
+                        : null}
+                    </div>
+                  )
+                })
+              : null}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function Row({
+  item,
+  goal,
+  retention,
+  today,
+  indent,
+  onClick,
+}: {
+  item: ItemRow
+  goal: GoalRow | null
+  retention: number
+  today: DateOnly
+  indent?: boolean
+  onClick: () => void
+}) {
+  const badge = statusBadgeOf(item.due_kind, item.goal_risk)
+  const parts = splitTitle(item.title)
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex w-full items-center gap-3 border-b border-line px-[14px] py-[9px] text-left last:border-b-0 hover:bg-hover',
+        indent && 'pl-[32px]'
+      )}
+    >
+      <span className="min-w-0 flex-1 truncate text-[13.5px]">
+        <span className="text-text-2">{parts.pre}</span>
+        <span className="num text-[13px]">{parts.num}</span>
+        <span className="text-text-2">{parts.post}</span>
+      </span>
+      {badge ? <Badge kind={badge} /> : null}
+      <span className="rail-panel num grid w-[220px] flex-none grid-cols-[52px_84px_1fr] items-center gap-[12px] pr-[4px]">
+        <span className="text-right text-[12.5px]">{percent(retention)}</span>
+        <span className="text-right text-[12px] text-text-2">
+          {item.due ? dueLabel(today, item.due) : '없음'}
+        </span>
+        <span className="truncate font-sans text-[11.5px] text-text-3">
+          {goal?.name ?? ''}
+        </span>
+      </span>
+    </button>
+  )
+}
+
+function retentionOf(item: ItemRow, today: DateOnly): number {
+  const state = memoryStateOf(item)
+  if (!state || !item.last_review) return 1
+  return defaultFsrs.retrievability(
+    Math.max(0, diffDays(item.last_review, today)),
+    state.stability
+  )
+}

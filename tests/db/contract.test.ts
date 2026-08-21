@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { LocalRepository } from '../../src/db/local'
 import { MemoryRepository } from '../../src/db/memory'
 import type {
   GoalRow,
@@ -232,4 +233,56 @@ runRepositoryContract('memory', async () => {
   const repo = new MemoryRepository()
   await repo.init()
   return repo
+})
+
+// 브라우저용 구현도 같은 계약을 만족해야 한다.
+runRepositoryContract('local', async () => {
+  installFakeLocalStorage()
+  const repo = new LocalRepository()
+  await repo.init()
+  return repo
+})
+
+/** 노드에는 localStorage 가 없으므로 같은 모양의 가짜를 끼운다. */
+function installFakeLocalStorage(): void {
+  const store = new Map<string, string>()
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+      clear: () => store.clear(),
+    },
+  })
+}
+
+describe('브라우저 저장소는 새로고침을 견딘다', () => {
+  it('다시 열어도 적어둔 게 남아 있다', async () => {
+    installFakeLocalStorage()
+
+    const first = new LocalRepository()
+    await first.init()
+    await first.insertGoal(makeGoal('g1'))
+    await first.insertItem(makeItem('i1', { goal_id: 'g1' }))
+    await first.insertReview(makeReview('r1', 'i1'))
+    await first.setSetting('theme', 'dark')
+
+    // 새로고침에 해당한다. 같은 저장 공간에 새 인스턴스를 붙인다.
+    const second = new LocalRepository()
+    await second.init()
+
+    expect((await second.listGoals()).map((g) => g.id)).toEqual(['g1'])
+    expect((await second.listItems()).map((i) => i.id)).toEqual(['i1'])
+    expect((await second.listReviews()).map((r) => r.id)).toEqual(['r1'])
+    expect(await second.getSetting('theme')).toBe('dark')
+  })
+
+  it('저장된 내용이 깨져 있으면 빈 상태로 시작한다', async () => {
+    installFakeLocalStorage()
+    globalThis.localStorage.setItem('retention-planner:v1', '{{ 깨짐')
+    const repo = new LocalRepository()
+    await expect(repo.init()).resolves.toBeUndefined()
+    expect(await repo.listItems()).toEqual([])
+  })
 })

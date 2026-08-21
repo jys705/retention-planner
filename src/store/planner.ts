@@ -5,9 +5,14 @@ import type { Horizon } from '../core/horizon/horizon'
 import {
   applyReview,
   initialSchedule,
+  schedule,
   type Intensity,
 } from '../core/policy/constraints'
-import { spread, type SpreadCandidate } from '../core/spread/assign'
+import {
+  spread,
+  type SpreadCandidate,
+  type SpreadResult,
+} from '../core/spread/assign'
 import { feasibleInterval } from '../core/spread/feasible'
 import { fuzzDue } from '../core/spread/fuzz'
 import { replayState } from '../core/simulate/replay'
@@ -20,12 +25,13 @@ import type {
   DueKind,
   DueSource,
 } from '../db/types'
-import { diffDays, toEpochDay, todayLocal, type DateOnly } from '../lib/date'
+import { diffDays, todayLocal, type DateOnly } from '../lib/date'
 import {
   effectiveConfig,
   isActive,
   memoryStateOf,
   spreadGroupKey,
+  type EffectiveConfig,
 } from '../lib/domain'
 import {
   DEFAULT_SETTINGS,
@@ -390,6 +396,42 @@ function nextItemState(
 }
 
 /**
+ * 날짜 조정을 걷어냈을 때 FSRS 와 제약만으로 잡히는 날.
+ *
+ * 저장된 `due` 를 쓰면 안 된다. 그건 이미 조정을 거친 값이라
+ * "조정 전과 비교" 가 자기 자신과의 비교가 되고, 다시 계산할 때마다
+ * 그룹에 들었다 빠졌다 하며 일정이 흔들린다.
+ */
+function naturalScheduleOf(
+  item: ItemRow,
+  config: EffectiveConfig,
+  state: MemoryState,
+  settings: Settings
+) {
+  return schedule({
+    from: item.last_review ?? item.first_studied_at,
+    state,
+    horizon: config.horizon,
+    intensity: config.intensity,
+    targetRetention: config.targetRetention,
+    minReviews: config.minReviews,
+    repsSinceGoal: item.reps_since_goal,
+    bufferDays: settings.bufferDays,
+    maxIntervalDays: config.maxIntervalDays,
+  })
+}
+
+/**
+ * 마감선이 끌어당긴 항목인지.
+ *
+ * FSRS 는 더 뒤를 원했는데 마감선 때문에 앞으로 당겨진 항목들이 곧 몰림의 정체다.
+ * 이것들만 편다. 아직 평소 간격으로 도는 항목은 그대로 둔다.
+ */
+function isPulledByDeadline(dueKind: DueKind): boolean {
+  return dueKind === 'deadline_pull' || dueKind === 'final_check'
+}
+
+/**
  * 같은 준비 완료일을 향하는 항목들을 서로 다른 날로 편다.
  *
  * 목표가 없는 항목은 몰림이 구조적으로 생기지 않으므로 가볍게 흔들기만 한다.
@@ -430,10 +472,11 @@ export function computeSpread(
 
     // 옮길 수 있는 구간은 마무리 복습에 대한 것이다.
     // 아직 평소 간격으로 도는 항목은 건드리지 않는다. 그쪽은 몰림의 원인이 아니다.
-    if (toEpochDay(item.due) < interval.earliest) continue
+    const natural = naturalScheduleOf(item, config, state, settings)
+    if (!isPulledByDeadline(natural.dueKind) && !interval.atRisk) continue
 
     const list = groups.get(key) ?? []
-    list.push({ interval, naturalDue: item.due })
+    list.push({ interval, naturalDue: natural.due })
     groups.set(key, list)
   }
 
@@ -489,6 +532,46 @@ export function computeSpread(
   }
 
   return patches
+}
+
+/**
+ * 목표 하나에 대해 날짜 조정 결과를 다시 계산해서 그대로 돌려준다.
+ *
+ * 조정 전 분포와 봉우리가 함께 나온다. 목표 상세의 "조정 전과 비교" 토글과
+ * "가장 몰리는 날" 한 줄이 이 값을 쓴다.
+ */
+export function spreadPreview(
+  items: ItemRow[],
+  goals: GoalRow[],
+  settings: Settings,
+  today: DateOnly,
+  readyAt: DateOnly
+): SpreadResult | null {
+  const goalById = new Map(goals.map((g) => [g.id, g]))
+  const candidates: SpreadCandidate[] = []
+
+  for (const item of items.filter(isActive)) {
+    const goal = item.goal_id ? (goalById.get(item.goal_id) ?? null) : null
+    const config = effectiveConfig(item, goal, settings)
+    if (spreadGroupKey(config) !== readyAt) continue
+    const state = memoryStateOf(item)
+    if (!state || item.due === null) continue
+
+    const interval = feasibleInterval({
+      itemId: item.id,
+      state,
+      anchor: item.last_review ?? item.first_studied_at,
+      readyAt,
+      notBefore: today,
+      bufferDays: settings.bufferDays,
+      targetRetention: config.targetRetention,
+    })
+    const natural = naturalScheduleOf(item, config, state, settings)
+    if (!isPulledByDeadline(natural.dueKind) && !interval.atRisk) continue
+    candidates.push({ interval, naturalDue: natural.due })
+  }
+
+  return candidates.length === 0 ? null : spread(candidates)
 }
 
 /** 오늘 볼 항목. 연체된 것도 함께 올린다. */
