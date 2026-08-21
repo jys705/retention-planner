@@ -138,3 +138,64 @@ describe('하루 상한 밀어내기', () => {
     )
   })
 })
+
+describe('상한 층이 앞 층의 구간을 넘지 않는다', () => {
+  it('구간이 좁고 항목이 많아도 모두 자기 구간 안에 남는다', () => {
+    // 옮길 수 있는 날이 나흘뿐인데 항목이 스물이다.
+    // 상한을 지키려면 구간 밖으로 나가야 하지만, 나가면 안 된다.
+    const window = { from: 3, to: 6 }
+    const list = Array.from({ length: 20 }, (_, i) =>
+      candidate(`i${String(i).padStart(2, '0')}`, addDays(TODAY, 5), {
+        notBefore: addDays(TODAY, window.from),
+        notAfter: addDays(TODAY, window.to),
+        pushPriority: i % 4,
+      })
+    )
+    const result = applyDailyCap(list, 2)
+    for (const c of list) {
+      const placed = result.moved[c.itemId] ?? c.date
+      expect(toEpochDay(placed)).toBeGreaterThanOrEqual(
+        toEpochDay(addDays(TODAY, window.from))
+      )
+      expect(toEpochDay(placed)).toBeLessThanOrEqual(
+        toEpochDay(addDays(TODAY, window.to))
+      )
+    }
+    // 구간을 지키느라 못 지킨 날은 숨기지 않고 알려준다.
+    expect(result.stillOver.length).toBeGreaterThan(0)
+  })
+
+  it('구간이 오늘보다 늦게 시작해도 오늘로 당기지 않는다', () => {
+    const earliest = addDays(TODAY, 4)
+    const list = Array.from({ length: 9 }, (_, i) =>
+      candidate(`i${i}`, addDays(TODAY, 5), {
+        notBefore: earliest,
+        notAfter: addDays(TODAY, 6),
+      })
+    )
+    const result = applyDailyCap(list, 2)
+    for (const c of list) {
+      const placed = result.moved[c.itemId] ?? c.date
+      expect(toEpochDay(placed)).toBeGreaterThanOrEqual(toEpochDay(earliest))
+    }
+  })
+
+  it('구간 안에 자리가 있으면 이른 쪽을 먼저 쓴다', () => {
+    // 구간은 넉넉하고 넘치는 날만 덜어내면 되는 경우.
+    const list = Array.from({ length: 5 }, (_, i) =>
+      candidate(`i${i}`, addDays(TODAY, 5), {
+        notBefore: addDays(TODAY, 1),
+        notAfter: addDays(TODAY, 9),
+      })
+    )
+    const result = applyDailyCap(list, 2)
+    const placedDays = list.map((c) =>
+      toEpochDay(result.moved[c.itemId] ?? c.date)
+    )
+    // 앞쪽으로 펴야 마감선을 넘지 않는다.
+    expect(Math.min(...placedDays)).toBeLessThan(toEpochDay(addDays(TODAY, 5)))
+    expect(Math.max(...placedDays)).toBeLessThanOrEqual(
+      toEpochDay(addDays(TODAY, 9))
+    )
+  })
+})

@@ -13,7 +13,10 @@ import {
   type SpreadCandidate,
   type SpreadResult,
 } from '../core/spread/assign'
-import { feasibleInterval } from '../core/spread/feasible'
+import {
+  feasibleInterval,
+  type FeasibleInterval,
+} from '../core/spread/feasible'
 import { applyDailyCap, type CapCandidate } from '../core/spread/cap'
 import { fuzzDue } from '../core/spread/fuzz'
 import { replayState } from '../core/simulate/replay'
@@ -29,6 +32,7 @@ import type {
 import {
   diffDays,
   fromEpochDay,
+  maxDate,
   toEpochDay,
   todayLocal,
   type DateOnly,
@@ -470,6 +474,8 @@ export function computeSpread(
 
   const groups = new Map<string, SpreadCandidate[]>()
   const openItems: ItemRow[] = []
+  // 날짜 조정이 자리를 잡아준 항목들. 뒤에 오는 하루 상한 층이 이 구간을 넘으면 안 된다.
+  const placedIntervals = new Map<string, FeasibleInterval>()
 
   for (const item of active) {
     const goal = item.goal_id ? (goalById.get(item.goal_id) ?? null) : null
@@ -499,6 +505,7 @@ export function computeSpread(
     const list = groups.get(key) ?? []
     list.push({ interval, naturalDue: natural.due })
     groups.set(key, list)
+    placedIntervals.set(item.id, interval)
   }
 
   for (const candidates of groups.values()) {
@@ -563,13 +570,20 @@ export function computeSpread(
     const resolved = resolveHorizon(config.horizon)
     const state = memoryStateOf(item)
 
+    // 앞 층이 잡아준 구간이 있으면 그 밖으로는 못 나간다.
+    // 구간의 이른 쪽 끝은 "이보다 일찍 보면 목표한 날 기억률이 목표치에 못 미친다" 는 선이다.
+    const placed = placedIntervals.get(item.id)
     capCandidates.push({
       itemId: item.id,
       date: due,
-      notBefore: today,
-      notAfter: Number.isFinite(resolved.readyAt)
-        ? fromEpochDay(resolved.readyAt - settings.bufferDays)
-        : null,
+      notBefore: placed
+        ? maxDate(today, fromEpochDay(placed.earliest))
+        : today,
+      notAfter: placed
+        ? fromEpochDay(placed.latest)
+        : Number.isFinite(resolved.readyAt)
+          ? fromEpochDay(resolved.readyAt - settings.bufferDays)
+          : null,
       pushPriority: pushPriorityOf(item, resolved.readyAt, state, today),
     })
   }
