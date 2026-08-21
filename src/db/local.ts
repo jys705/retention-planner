@@ -2,6 +2,7 @@ import { MemoryRepository } from './memory'
 import type {
   GoalRow,
   ItemRow,
+  PlannedReviewRow,
   Repository,
   ReviewRow,
 } from './types'
@@ -13,6 +14,8 @@ interface Snapshot {
   items: ItemRow[]
   reviews: ReviewRow[]
   settings: Record<string, string>
+  /** 잡아둔 복습. 계산으로 다시 만들 수 있지만 켜자마자 보여줄 수 있게 함께 남긴다. */
+  planned?: PlannedReviewRow[]
 }
 
 /**
@@ -37,6 +40,7 @@ export class LocalRepository implements Repository {
         reviews: parsed.reviews ?? [],
         settings: parsed.settings ?? {},
       })
+      await this.inner.replacePlannedReviews(parsed.planned ?? [])
     } catch {
       // 저장된 내용을 못 읽으면 빈 상태로 시작한다. 지우지는 않는다.
     }
@@ -52,6 +56,7 @@ export class LocalRepository implements Repository {
       items: await this.inner.listItems(),
       reviews: await this.inner.listReviews(),
       settings: await this.inner.listSettings(),
+      planned: await this.inner.listPlannedReviews(),
     }
     writeRaw(JSON.stringify(snapshot))
   }
@@ -99,6 +104,15 @@ export class LocalRepository implements Repository {
 
   async deleteItem(id: string): Promise<void> {
     await this.inner.deleteItem(id)
+    await this.save()
+  }
+
+  listPlannedReviews(): Promise<PlannedReviewRow[]> {
+    return this.inner.listPlannedReviews()
+  }
+
+  async replacePlannedReviews(rows: PlannedReviewRow[]): Promise<void> {
+    await this.inner.replacePlannedReviews(rows)
     await this.save()
   }
 

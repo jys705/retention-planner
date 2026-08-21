@@ -32,7 +32,7 @@ export const BADGE_TONE: Record<Exclude<StatusBadge, null>, string> = {
 }
 
 export const BADGE_HINT: Record<Exclude<StatusBadge, null>, string> = {
-  short: '한 번 봐서는 목표한 날 기억이 모자라요. 두 번 잡아두었어요.',
+  short: '한 번 봐서는 목표한 날 기억이 모자라요. 목표한 날 전에 한 번 더 잡아둡니다.',
   important: '건너뛰면 목표한 날 기억이 목표치 아래로 떨어져요.',
   easy: '이미 충분히 기억하고 있어요. 건너뛰어도 괜찮아요.',
 }

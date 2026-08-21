@@ -24,6 +24,7 @@ import { getRepository } from '../db'
 import type {
   GoalRow,
   ItemRow,
+  PlannedReviewRow,
   Repository,
   ReviewRow,
   DueKind,
@@ -76,6 +77,8 @@ interface PlannerState {
   goals: GoalRow[]
   items: ItemRow[]
   reviews: ReviewRow[]
+  /** 앞으로 잡아둔 복습. 다시 계산할 때마다 통째로 새로 만든다. */
+  planned: PlannedReviewRow[]
   settings: Settings
 
   load(): Promise<void>
@@ -118,6 +121,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   goals: [],
   items: [],
   reviews: [],
+  planned: [],
   settings: DEFAULT_SETTINGS,
 
   async load() {
@@ -367,17 +371,23 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   async recomputeAll() {
     const db = await repo()
     const { items, goals, settings, today } = get()
-    const patches = computeSpread(items, goals, settings, today)
-    if (patches.size === 0) return
+    const { patches, planned } = computeSpread(items, goals, settings, today)
 
     for (const [id, patch] of patches) {
       await db.updateItem(id, patch)
     }
+    await db.replacePlannedReviews(planned)
+
     set({
-      items: get().items.map((i) => {
-        const patch = patches.get(i.id)
-        return patch ? { ...i, ...patch } : i
-      }),
+      planned,
+      ...(patches.size > 0
+        ? {
+            items: get().items.map((i) => {
+              const patch = patches.get(i.id)
+              return patch ? { ...i, ...patch } : i
+            }),
+          }
+        : {}),
     })
   },
 }))
@@ -462,15 +472,24 @@ function isPulledByDeadline(dueKind: DueKind): boolean {
  * 목표가 없는 항목은 몰림이 구조적으로 생기지 않으므로 가볍게 흔들기만 한다.
  * 평가 직후, 항목이나 목표가 바뀔 때, 앱을 켤 때 다시 돈다.
  */
+export interface SpreadOutcome {
+  patches: Map<string, Partial<ItemRow>>
+  /** 항목마다 앞으로 잡아둔 복습. 한 번으로 부족한 항목에는 둘이 들어간다. */
+  planned: PlannedReviewRow[]
+}
+
 export function computeSpread(
   items: ItemRow[],
   goals: GoalRow[],
   settings: Settings,
   today: DateOnly
-): Map<string, Partial<ItemRow>> {
+): SpreadOutcome {
   const goalById = new Map(goals.map((g) => [g.id, g]))
   const active = items.filter(isActive)
+  const itemsById = new Map(active.map((i) => [i.id, i]))
   const patches = new Map<string, Partial<ItemRow>>()
+  // 항목별로 잡아둔 날짜들. 대부분 하나지만 부족한 항목에는 둘이 들어간다.
+  const extraDates = new Map<string, DateOnly[]>()
 
   const groups = new Map<string, SpreadCandidate[]>()
   const openItems: ItemRow[] = []
@@ -512,6 +531,9 @@ export function computeSpread(
     // 마감선이 아직 안 왔고 실제로 몰릴 여지가 있을 때만 편다.
     const result = spread(candidates)
     const moved = new Set(result.movedItemIds)
+    for (const [itemId, dates] of groupAssignments(result.assignments)) {
+      extraDates.set(itemId, dates)
+    }
     for (const candidate of candidates) {
       const id = candidate.interval.itemId
       const placed = result.primaryDue[id]
@@ -590,14 +612,78 @@ export function computeSpread(
 
   const capped = applyDailyCap(capCandidates, settings.dailyCap)
   for (const [itemId, date] of Object.entries(capped.moved)) {
+    const before = patches.get(itemId)?.due ?? itemsById.get(itemId)?.due
     patches.set(itemId, {
       ...(patches.get(itemId) ?? {}),
       due: date,
       due_source: 'spread',
     })
+    // 상한이 첫 날짜를 옮겼으면 잡아둔 목록의 첫 칸도 따라 움직인다.
+    const dates = extraDates.get(itemId)
+    if (dates && before) {
+      const at = dates.indexOf(before)
+      if (at >= 0) {
+        const next = [...dates]
+        next[at] = date
+        next.sort()
+        extraDates.set(itemId, next)
+      }
+    }
   }
 
-  return patches
+  const planned = buildPlannedReviews(active, patches, extraDates)
+  return { patches, planned }
+}
+
+/** 배정 결과를 항목별 날짜 목록으로 모은다. */
+function groupAssignments(
+  assignments: readonly { itemId: string; date: DateOnly; ordinal: number }[]
+): Map<string, DateOnly[]> {
+  const byItem = new Map<string, DateOnly[]>()
+  for (const a of [...assignments].sort((x, y) => x.ordinal - y.ordinal)) {
+    byItem.set(a.itemId, [...(byItem.get(a.itemId) ?? []), a.date])
+  }
+  for (const [id, dates] of byItem) byItem.set(id, [...new Set(dates)].sort())
+  return byItem
+}
+
+/**
+ * 잡아둔 복습 목록을 만든다.
+ *
+ * 대부분의 항목은 다음 날짜 하나뿐이고, 한 번으로 부족한 항목만 둘을 갖는다.
+ * `items.due` 는 이 중 가장 이른 날짜를 그대로 담아둔 값이다.
+ */
+function buildPlannedReviews(
+  active: ItemRow[],
+  patches: Map<string, Partial<ItemRow>>,
+  extraDates: Map<string, DateOnly[]>
+): PlannedReviewRow[] {
+  const rows: PlannedReviewRow[] = []
+  for (const item of active) {
+    const patch = patches.get(item.id)
+    const due = patch?.due ?? item.due
+    if (!due) continue
+    const kind = patch?.due_kind ?? item.due_kind ?? 'normal'
+    const source = patch?.due_source ?? item.due_source ?? 'fsrs'
+    const dates = extraDates.get(item.id) ?? [due]
+    dates.forEach((date, ordinal) => {
+      rows.push({
+        // 계산으로 다시 만드는 값이라 id 도 계산해서 만든다. 다시 돌려도 같은 id 다.
+        id: `${item.id}#${ordinal}`,
+        item_id: item.id,
+        date,
+        ordinal,
+        kind,
+        source,
+      })
+    })
+  }
+  return rows.sort(
+    (a, b) =>
+      (a.date < b.date ? -1 : a.date > b.date ? 1 : 0) ||
+      (a.item_id < b.item_id ? -1 : a.item_id > b.item_id ? 1 : 0) ||
+      a.ordinal - b.ordinal
+  )
 }
 
 /**

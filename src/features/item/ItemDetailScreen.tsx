@@ -23,7 +23,7 @@ export function ItemDetailScreen({
   itemId: string
   onBack: () => void
 }) {
-  const { items, goals, reviews, settings, today } = usePlanner()
+  const { items, goals, reviews, settings, today, planned } = usePlanner()
   const item = items.find((i) => i.id === itemId)
   if (!item) {
     return (
@@ -35,6 +35,10 @@ export function ItemDetailScreen({
   const goal = goals.find((g) => g.id === item.goal_id) ?? null
   const view = buildItemView(item, goal, reviews, settings, today)
   const badge = statusBadgeOf(item.due_kind, item.goal_risk)
+  const plannedDates = planned
+    .filter((p) => p.item_id === item.id)
+    .map((p) => p.date)
+    .sort()
 
   return (
     <div className="mx-auto flex w-full max-w-[940px] flex-col gap-5 px-6 py-7">
@@ -97,7 +101,11 @@ export function ItemDetailScreen({
           </div>
           <Caption>
             {view.feasible.atRisk
-              ? '한 번 봐서는 목표한 날 기억이 모자라요. 그래서 두 번 잡아두었어요.'
+              ? plannedDates.length >= 2
+                ? `한 번 봐서는 목표한 날 기억이 모자라요. 그래서 ${plannedDates
+                    .map(monthDay)
+                    .join(', ')} 두 번 잡아두었어요.`
+                : '한 번 봐서는 목표한 날 기억이 모자라요. 목표한 날 전에 한 번 더 잡아둡니다.'
               : `이 범위 안에서 보면 목표한 날 기억률이 ${percent(
                   view.config.targetRetention
                 )} 아래로 안 떨어져요.`}

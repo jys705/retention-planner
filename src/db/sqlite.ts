@@ -1,6 +1,12 @@
 import Database from '@tauri-apps/plugin-sql'
 import { MIGRATIONS, SCHEMA_VERSION_KEY } from './migrations'
-import type { GoalRow, ItemRow, Repository, ReviewRow } from './types'
+import type {
+  GoalRow,
+  ItemRow,
+  PlannedReviewRow,
+  Repository,
+  ReviewRow,
+} from './types'
 
 const GOAL_COLUMNS = [
   'id', 'name', 'horizon_kind', 'ready_at', 'hold_until', 'target_retention',
@@ -14,6 +20,10 @@ const ITEM_COLUMNS = [
   'min_reviews', 'state', 'stability', 'difficulty', 'due', 'due_kind',
   'due_source', 'last_review', 'reps', 'lapses', 'reps_since_goal',
   'goal_risk', 'archived_at',
+] as const
+
+const PLANNED_COLUMNS = [
+  'id', 'item_id', 'date', 'ordinal', 'kind', 'source',
 ] as const
 
 const REVIEW_COLUMNS = [
@@ -142,6 +152,22 @@ export class SqliteRepository implements Repository {
     await this.handle.execute('DELETE FROM items WHERE id = $1', [id])
   }
 
+  async listPlannedReviews(): Promise<PlannedReviewRow[]> {
+    return this.handle.select<PlannedReviewRow[]>(
+      'SELECT * FROM planned_reviews ORDER BY date, item_id, ordinal'
+    )
+  }
+
+  async replacePlannedReviews(rows: PlannedReviewRow[]): Promise<void> {
+    await this.handle.execute('DELETE FROM planned_reviews')
+    for (const row of rows) {
+      await this.handle.execute(
+        insertSql('planned_reviews', PLANNED_COLUMNS),
+        valuesOf(row, PLANNED_COLUMNS)
+      )
+    }
+  }
+
   async listReviews(): Promise<ReviewRow[]> {
     return this.handle.select<ReviewRow[]>(
       'SELECT * FROM reviews ORDER BY reviewed_at, recorded_at, id'
@@ -191,6 +217,7 @@ export class SqliteRepository implements Repository {
     reviews: ReviewRow[]
     settings: Record<string, string>
   }): Promise<void> {
+    await this.handle.execute('DELETE FROM planned_reviews')
     await this.handle.execute('DELETE FROM reviews')
     await this.handle.execute('DELETE FROM items')
     await this.handle.execute('DELETE FROM goals')

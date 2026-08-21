@@ -82,6 +82,22 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_reviews_item ON reviews(item_id, reviewed_at)`,
     ],
   },
+  {
+    version: 2,
+    name: 'planned reviews',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS planned_reviews (
+        id       TEXT PRIMARY KEY,
+        item_id  TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        date     TEXT NOT NULL,
+        ordinal  INTEGER NOT NULL,
+        kind     TEXT NOT NULL,
+        source   TEXT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_planned_reviews_date ON planned_reviews(date)`,
+      `CREATE INDEX IF NOT EXISTS idx_planned_reviews_item ON planned_reviews(item_id)`,
+    ],
+  },
 ]
 
 export const SCHEMA_VERSION_KEY = 'schema_version'

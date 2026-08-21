@@ -5,7 +5,7 @@ import { INTENSITY_RETENTION, type Intensity } from '../../core/policy/constrain
 import { Badge } from '../../components/Badge'
 import { Chip, Hint } from '../../components/Chip'
 import { Expand } from '../../components/Expand'
-import type { GoalRow, ItemRow } from '../../db/types'
+import type { GoalRow } from '../../db/types'
 import { statusBadgeOf } from '../../lib/badge'
 import { addDays, diffDays, maxDate, toEpochDay, type DateOnly } from '../../lib/date'
 import { effectiveConfig, isActive, memoryStateOf } from '../../lib/domain'
@@ -34,7 +34,7 @@ export function GoalDetailScreen({
   goalId: string
   onOpenItem: (itemId: string) => void
 }) {
-  const { items, goals, settings, today } = usePlanner()
+  const { items, goals, settings, today, planned } = usePlanner()
   const updateGoal = usePlanner((s) => s.updateGoal)
   const [showBefore, setShowBefore] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -75,11 +75,19 @@ export function GoalDetailScreen({
       ? 0
       : rows.reduce((sum, r) => sum + r.retentionAtGoal, 0) / rows.length
   const atRisk = rows.filter((r) => r.item.goal_risk === 'at_risk').length
+  // 화면이 "두 번 잡아두었다" 고 말하려면 실제로 두 날짜가 있어야 한다.
+  const doubleBooked = rows.filter(
+    (r) => planned.filter((p) => p.item_id === r.item.id).length >= 2
+  ).length
 
   const preview = goal.ready_at
     ? spreadPreview(items, goals, settings, today, goal.ready_at)
     : null
-  const bars = buildBars(rows, preview, today, goal.ready_at)
+  const mineIds = new Set(mine.map((i) => i.id))
+  const plannedDates = planned
+    .filter((p) => mineIds.has(p.item_id))
+    .map((p) => p.date)
+  const bars = buildBars(plannedDates, preview, today, goal.ready_at)
   const peakAfter = Math.max(0, ...bars.map((b) => b.count))
   const peakBefore = preview?.peakBefore ?? peakAfter
   const scheduled = bars.reduce((sum, b) => sum + b.count, 0)
@@ -114,7 +122,7 @@ export function GoalDetailScreen({
       </div>
 
       <p className="text-[13px] leading-relaxed text-text-2">
-        {summarySentence(goal, rows.length, avgAtGoal, atRisk, today)}
+        {summarySentence(goal, rows.length, avgAtGoal, atRisk, doubleBooked, today)}
       </p>
 
       <Expand
@@ -283,16 +291,15 @@ function goalHorizonOf(goal: GoalRow): Horizon {
 }
 
 function buildBars(
-  rows: { item: ItemRow }[],
+  plannedDates: readonly DateOnly[],
   preview: SpreadResult | null,
   today: DateOnly,
   readyAt: DateOnly | null
 ): LoadBar[] {
   const after = new Map<DateOnly, number>()
-  for (const { item } of rows) {
-    if (!item.due) continue
+  for (const planned of plannedDates) {
     // 연체된 것은 오늘 칸에 얹는다. 지나간 날에 복습이 일어날 수는 없다.
-    const date = item.due < today ? today : item.due
+    const date = planned < today ? today : planned
     after.set(date, (after.get(date) ?? 0) + 1)
   }
 
@@ -329,6 +336,7 @@ function summarySentence(
   count: number,
   avgAtGoal: number,
   atRisk: number,
+  doubleBooked: number,
   today: DateOnly
 ): string {
   if (count === 0) return '아직 이 목표에 묶인 항목이 없어요.'
@@ -337,9 +345,11 @@ function summarySentence(
   }
   const left = goal.ready_at ? daysLeftLabel(today, goal.ready_at) : ''
   const risk =
-    atRisk > 0
-      ? ` 다만 ${atRisk}개는 한 번 봐서는 모자라서 두 번 잡아두었어요.`
-      : ''
+    doubleBooked > 0
+      ? ` 다만 ${doubleBooked}개는 한 번 봐서는 모자라서 두 번 잡아두었어요.`
+      : atRisk > 0
+        ? ` 다만 ${atRisk}개는 한 번 봐서는 모자라요. 목표한 날 전에 한 번 더 잡아둡니다.`
+        : ''
   return `${left}. 지금 속도면 목표한 날 평균 ${percent(
     avgAtGoal
   )}쯤 기억하고 있을 거예요.${risk}`

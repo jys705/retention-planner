@@ -4,6 +4,7 @@ import { MemoryRepository } from '../../src/db/memory'
 import type {
   GoalRow,
   ItemRow,
+  PlannedReviewRow,
   Repository,
   ReviewRow,
 } from '../../src/db/types'
@@ -79,6 +80,22 @@ function makeReview(
     r_at_review: 1,
     next_interval: 2,
     memo_snapshot: null,
+    ...overrides,
+  }
+}
+
+function makePlanned(
+  id: string,
+  itemId: string,
+  overrides: Partial<PlannedReviewRow> = {}
+): PlannedReviewRow {
+  return {
+    id,
+    item_id: itemId,
+    date: '2026-08-13',
+    ordinal: 0,
+    kind: 'normal',
+    source: 'fsrs',
     ...overrides,
   }
 }
@@ -220,6 +237,65 @@ export function runRepositoryContract(
       const first = await repo.getItem('i1')
       if (first) first.title = '바꿔치기'
       expect((await repo.getItem('i1'))?.title).toBe('항목 i1')
+    })
+
+    it('잡아둔 복습을 통째로 갈아끼운다', async () => {
+      await repo.insertItem(makeItem('i1'))
+      expect(await repo.listPlannedReviews()).toEqual([])
+
+      const rows = [
+        makePlanned('i1#0', 'i1', { date: '2026-08-13', ordinal: 0 }),
+        makePlanned('i1#1', 'i1', { date: '2026-08-16', ordinal: 1 }),
+      ]
+      await repo.replacePlannedReviews(rows)
+      expect(await repo.listPlannedReviews()).toEqual(rows)
+
+      await repo.replacePlannedReviews([
+        makePlanned('i1#0', 'i1', { date: '2026-08-20' }),
+      ])
+      const after = await repo.listPlannedReviews()
+      expect(after).toHaveLength(1)
+      expect(after[0].date).toBe('2026-08-20')
+    })
+
+    it('잡아둔 복습을 날짜순으로 돌려준다', async () => {
+      await repo.insertItem(makeItem('i1'))
+      await repo.insertItem(makeItem('i2'))
+      await repo.replacePlannedReviews([
+        makePlanned('i2#0', 'i2', { date: '2026-08-20' }),
+        makePlanned('i1#1', 'i1', { date: '2026-08-16', ordinal: 1 }),
+        makePlanned('i1#0', 'i1', { date: '2026-08-13' }),
+      ])
+      expect((await repo.listPlannedReviews()).map((r) => r.id)).toEqual([
+        'i1#0',
+        'i1#1',
+        'i2#0',
+      ])
+    })
+
+    it('항목을 지우면 잡아둔 복습도 함께 사라진다', async () => {
+      await repo.insertItem(makeItem('i1'))
+      await repo.insertItem(makeItem('i2'))
+      await repo.replacePlannedReviews([
+        makePlanned('i1#0', 'i1'),
+        makePlanned('i2#0', 'i2'),
+      ])
+      await repo.deleteItem('i1')
+      expect((await repo.listPlannedReviews()).map((r) => r.id)).toEqual([
+        'i2#0',
+      ])
+    })
+
+    it('통째로 갈아끼우면 잡아둔 복습은 비워진다', async () => {
+      await repo.insertItem(makeItem('i1'))
+      await repo.replacePlannedReviews([makePlanned('i1#0', 'i1')])
+      await repo.replaceAll({
+        goals: [],
+        items: [makeItem('i9')],
+        reviews: [],
+        settings: {},
+      })
+      expect(await repo.listPlannedReviews()).toEqual([])
     })
 
     it('같은 id 를 두 번 넣으면 막는다', async () => {

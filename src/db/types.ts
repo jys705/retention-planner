@@ -63,6 +63,25 @@ export interface ItemRow {
   archived_at: string | null
 }
 
+/**
+ * 앞으로 잡아둔 복습. 항목 하나에 여러 개가 붙을 수 있다.
+ *
+ * `items.due` 로는 날짜를 하나밖에 못 담는데, 한 번 봐서는 목표한 날을 못 맞추는
+ * 항목에는 복습을 두 번 잡아야 한다. 그 두 번째가 갈 곳이 여기다.
+ *
+ * 평가 이력(`reviews`)과 달리 이건 계산으로 다시 만들 수 있는 값이다.
+ * 날짜를 다시 계산할 때마다 통째로 새로 쓴다.
+ */
+export interface PlannedReviewRow {
+  id: string
+  item_id: string
+  date: DateOnly
+  /** 0 이 먼저 보는 쪽. */
+  ordinal: number
+  kind: DueKind
+  source: DueSource
+}
+
 export interface ReviewRow {
   id: string
   item_id: string
@@ -100,6 +119,10 @@ export interface Repository {
   insertItem(item: ItemRow): Promise<void>
   updateItem(id: string, patch: Partial<ItemRow>): Promise<void>
   deleteItem(id: string): Promise<void>
+
+  listPlannedReviews(): Promise<PlannedReviewRow[]>
+  /** 잡아둔 복습을 통째로 갈아끼운다. 계산으로 다시 만드는 값이라 부분 수정을 두지 않는다. */
+  replacePlannedReviews(rows: PlannedReviewRow[]): Promise<void>
 
   listReviews(): Promise<ReviewRow[]>
   listReviewsByItem(itemId: string): Promise<ReviewRow[]>

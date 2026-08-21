@@ -11,8 +11,17 @@ import { LoadBars, type LoadBar } from '../charts/LoadBars'
 const HORIZON_DAYS = 60
 
 export function ForecastScreen() {
-  const { items, goals, settings, today } = usePlanner()
+  const { items, goals, settings, today, planned } = usePlanner()
   const [selected, setSelected] = useState<DateOnly | null>(null)
+
+  // 한 번으로 부족한 항목에는 복습이 둘 잡혀 있다. 그것까지 세야 예보가 맞는다.
+  const plannedByItem = new Map<string, DateOnly[]>()
+  for (const row of planned) {
+    plannedByItem.set(row.item_id, [
+      ...(plannedByItem.get(row.item_id) ?? []),
+      row.date,
+    ])
+  }
 
   const inputs: ProjectItemInput[] = items
     .filter(isActive)
@@ -36,6 +45,7 @@ export function ForecastScreen() {
           repsSinceGoal: item.reps_since_goal,
           bufferDays: settings.bufferDays,
           maxIntervalDays: config.maxIntervalDays,
+          plannedDates: plannedByItem.get(item.id) ?? [item.due],
         },
       ]
     })

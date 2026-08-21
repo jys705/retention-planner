@@ -26,6 +26,13 @@ export interface ProjectItemInput extends ProjectionSettings {
   anchor: DateOnly
   /** 이미 잡혀 있는 다음 복습일. */
   due: DateOnly
+  /**
+   * 이미 잡아둔 복습 날짜들. 있으면 이쪽을 먼저 쓰고 그 뒤부터 내다본다.
+   *
+   * 한 번으로 부족한 항목에는 복습이 둘 잡혀 있다. 그걸 빼고 세면
+   * 예보가 실제보다 적게 나온다.
+   */
+  plannedDates?: readonly DateOnly[]
   /** 언제부터 볼지. 보통 오늘이다. */
   from: DateOnly
   /** 며칠 앞까지 내다볼지. */
@@ -58,8 +65,13 @@ export function projectItem(input: ProjectItemInput): ProjectedReview[] {
   const out: ProjectedReview[] = []
   let state = input.state
   let anchor = input.anchor
-  let cursor = input.due
   let repsSinceGoal = input.repsSinceGoal ?? 0
+
+  // 잡아둔 날짜가 있으면 그것부터 쓴다. 없으면 다음 복습일 하나로 시작한다.
+  const queue = [...(input.plannedDates ?? [])]
+    .filter((d) => toEpochDay(d) >= toEpochDay(input.from))
+    .sort()
+  let cursor = queue.length > 0 ? (queue.shift() as DateOnly) : input.due
 
   // 연체된 항목은 오늘 보는 것으로 친다. 지나간 날에 복습이 일어날 수는 없다.
   if (toEpochDay(cursor) < toEpochDay(input.from)) cursor = input.from
@@ -104,7 +116,12 @@ export function projectItem(input: ProjectItemInput): ProjectedReview[] {
 
     state = nextState
     anchor = cursor
-    cursor = result.due
+    // 잡아둔 날짜가 남아 있으면 그쪽을 먼저 따른다.
+    const upcoming = queue.shift()
+    cursor =
+      upcoming !== undefined && toEpochDay(upcoming) > toEpochDay(anchor)
+        ? upcoming
+        : result.due
   }
 
   return out

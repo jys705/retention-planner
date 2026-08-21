@@ -1,6 +1,7 @@
 import type {
   GoalRow,
   ItemRow,
+  PlannedReviewRow,
   Repository,
   ReviewRow,
 } from './types'
@@ -17,6 +18,7 @@ export class MemoryRepository implements Repository {
   private goals = new Map<string, GoalRow>()
   private items = new Map<string, ItemRow>()
   private reviews = new Map<string, ReviewRow>()
+  private planned = new Map<string, PlannedReviewRow>()
   private settings = new Map<string, string>()
 
   async init(): Promise<void> {}
@@ -87,6 +89,19 @@ export class MemoryRepository implements Repository {
     for (const [reviewId, review] of this.reviews) {
       if (review.item_id === id) this.reviews.delete(reviewId)
     }
+    for (const [plannedId, planned] of this.planned) {
+      if (planned.item_id === id) this.planned.delete(plannedId)
+    }
+  }
+
+  async listPlannedReviews(): Promise<PlannedReviewRow[]> {
+    return [...this.planned.values()].sort(comparePlanned).map(clone)
+  }
+
+  async replacePlannedReviews(rows: PlannedReviewRow[]): Promise<void> {
+    this.planned = new Map(
+      rows.filter((r) => this.items.has(r.item_id)).map((r) => [r.id, clone(r)])
+    )
   }
 
   async listReviews(): Promise<ReviewRow[]> {
@@ -132,7 +147,15 @@ export class MemoryRepository implements Repository {
     this.items = new Map(data.items.map((i) => [i.id, clone(i)]))
     this.reviews = new Map(data.reviews.map((r) => [r.id, clone(r)]))
     this.settings = new Map(Object.entries(data.settings))
+    // 잡아둔 복습은 계산으로 다시 만드는 값이라 통째로 비운다.
+    this.planned = new Map()
   }
+}
+
+function comparePlanned(a: PlannedReviewRow, b: PlannedReviewRow): number {
+  if (a.date !== b.date) return a.date < b.date ? -1 : 1
+  if (a.item_id !== b.item_id) return a.item_id < b.item_id ? -1 : 1
+  return a.ordinal - b.ordinal
 }
 
 function compareReview(a: ReviewRow, b: ReviewRow): number {
