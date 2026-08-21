@@ -39,6 +39,7 @@ import {
   serializeSetting,
   type Settings,
 } from '../lib/settings'
+import type { Backup } from '../lib/transfer'
 import { newId } from './ids'
 
 export interface NewItemDraft {
@@ -80,6 +81,7 @@ interface PlannerState {
   deleteItem(id: string): Promise<void>
   attachItemsToGoal(goalId: string, itemIds: string[]): Promise<void>
   saveSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void>
+  importAll(backup: Backup): Promise<void>
   recomputeAll(): Promise<void>
 }
 
@@ -337,6 +339,18 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const db = await repo()
     await db.setSetting(key, serializeSetting(value))
     set({ settings: { ...get().settings, [key]: value } })
+  },
+
+  async importAll(backup) {
+    const db = await repo()
+    await db.replaceAll({
+      goals: backup.goals,
+      items: backup.items,
+      reviews: backup.reviews,
+      settings: backup.settings,
+    })
+    set({ ready: false })
+    await get().load()
   },
 
   async recomputeAll() {

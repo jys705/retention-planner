@@ -1,0 +1,96 @@
+import { useState } from 'react'
+import { usePlanner } from '../../store/planner'
+
+const STEPS = [
+  {
+    title: '한 일을 한 줄로 적어요',
+    body: '복습은 원래 보던 문제집이나 노트에서 하세요. 이 앱은 무엇을 언제 다시 볼지만 챙깁니다.',
+    example: 'AWS SCS-C03 1~10번 문제 풀이',
+  },
+  {
+    title: '다시 볼 날을 알려드려요',
+    body: '잊을 때쯤 오늘 목록에 올려둡니다. 시험 날짜를 정해두면 그날까지 기억이 가장 높게 올라오도록 잡아요.',
+    example: '다음은 10월 2일에 3개예요',
+  },
+  {
+    title: '체크할 때 얼마나 기억났는지 고르면 돼요',
+    body: '네 단계 중 하나를 고르면 다음 날짜가 다시 계산됩니다. 그게 전부예요.',
+    example: '다시 | 어려움 | 알맞음 | 쉬움',
+  },
+] as const
+
+/**
+ * 첫 실행 안내. 세 단계이고 언제든 건너뛸 수 있으며 한 번만 보여준다.
+ *
+ * 익숙해진 사람에게 계속 보이는 설명은 잡음이라 다시 뜨지 않는다.
+ */
+export function Onboarding() {
+  const saveSetting = usePlanner((s) => s.saveSetting)
+  const addItem = usePlanner((s) => s.addItem)
+  const today = usePlanner((s) => s.today)
+  const [step, setStep] = useState(0)
+
+  async function finish(withSample: boolean) {
+    if (withSample) {
+      await addItem({
+        title: 'AWS SCS-C03 1~10번 문제 풀이',
+        firstStudiedAt: today,
+      })
+    }
+    await saveSetting('onboardingDone', true)
+  }
+
+  const current = STEPS[step]
+  const last = step === STEPS.length - 1
+
+  return (
+    <div className="flex h-full items-center justify-center bg-desk p-5">
+      <div className="w-full max-w-[520px] rounded-panel border border-line bg-surface px-[28px] py-[26px] shadow-md">
+        <div className="flex items-center justify-between">
+          <span className="num text-[11.5px] text-text-3">
+            {step + 1} / {STEPS.length}
+          </span>
+          <button
+            type="button"
+            onClick={() => void finish(false)}
+            className="text-[12px] text-text-3 hover:text-text-2"
+          >
+            건너뛰기
+          </button>
+        </div>
+
+        <h1 className="pt-4 text-[19px] font-semibold leading-snug">
+          {current.title}
+        </h1>
+        <p className="pt-2 text-[13.5px] leading-relaxed text-text-2">
+          {current.body}
+        </p>
+
+        <div className="num mt-5 rounded-card bg-rail px-[14px] py-[12px] text-[13px] text-text-2">
+          {current.example}
+        </div>
+
+        <div className="flex items-center justify-between pt-6">
+          <button
+            type="button"
+            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            disabled={step === 0}
+            className="text-[12.5px] text-text-3 disabled:opacity-0"
+          >
+            이전
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (last) void finish(true)
+              else setStep((s) => s + 1)
+            }}
+            className="rounded-ctl bg-accent px-[16px] py-[8px] text-[13px] font-semibold text-white"
+          >
+            {last ? '샘플 항목 하나로 시작하기' : '다음'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

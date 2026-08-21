@@ -24,6 +24,8 @@ export interface Settings {
   /** 마지막으로 묶기를 제안한 날. 하루에 한 번만 제안한다. */
   lastSuggestionDate: string | null
   onboardingDone: boolean
+  /** 마지막으로 알림을 보낸 날. 하루에 한 번만 울린다. */
+  lastNotifiedDate: string | null
   /** 평가한 횟수. 20회를 넘기면 등급 설명을 한 줄로 줄인다. */
   ratingCount: number
   /** 새 항목의 마지막 설정. 제목만 치고 넘어갈 때 이걸 물려준다. */
@@ -44,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dismissedPrefixes: [],
   lastSuggestionDate: null,
   onboardingDone: false,
+  lastNotifiedDate: null,
   ratingCount: 0,
   lastGoalId: null,
 }
@@ -92,6 +95,9 @@ export function parseSettings(raw: Record<string, string>): Settings {
     out.lastSuggestionDate = raw.lastSuggestionDate || null
   }
   if (raw.lastGoalId !== undefined) out.lastGoalId = raw.lastGoalId || null
+  if (raw.lastNotifiedDate !== undefined) {
+    out.lastNotifiedDate = raw.lastNotifiedDate || null
+  }
   if (raw.onboardingDone !== undefined) {
     out.onboardingDone = raw.onboardingDone === 'true'
   }

@@ -5,7 +5,11 @@ import { GoalDetailScreen } from './features/goal/GoalDetailScreen'
 import { GoalListScreen } from './features/goal/GoalListScreen'
 import { ItemDetailScreen } from './features/item/ItemDetailScreen'
 import { LibraryScreen } from './features/library/LibraryScreen'
+import { SettingsScreen } from './features/settings/SettingsScreen'
 import { TodayScreen } from './features/today/TodayScreen'
+import { Onboarding } from './features/onboarding/Onboarding'
+import { isActive } from './lib/domain'
+import { notifyDueCount, shouldNotify } from './lib/notify'
 import { usePlanner } from './store/planner'
 
 type Route =
@@ -17,6 +21,10 @@ export function App() {
   const ready = usePlanner((s) => s.ready)
   const load = usePlanner((s) => s.load)
   const theme = usePlanner((s) => s.settings.theme)
+  const settings = usePlanner((s) => s.settings)
+  const items = usePlanner((s) => s.items)
+  const today = usePlanner((s) => s.today)
+  const saveSetting = usePlanner((s) => s.saveSetting)
   const [route, setRoute] = useState<Route>({ screen: 'today' })
 
   useEffect(() => {
@@ -29,6 +37,27 @@ export function App() {
     else root.setAttribute('data-theme', theme)
   }, [theme])
 
+  // 정해둔 시각이 지났으면 오늘 볼 게 몇 개인지 한 번 알려준다.
+  useEffect(() => {
+    if (!ready || !settings.onboardingDone) return
+    if (
+      !shouldNotify(
+        new Date(),
+        settings.notifyAt,
+        settings.lastNotifiedDate,
+        today
+      )
+    ) {
+      return
+    }
+    const due = items.filter(
+      (i) => isActive(i) && i.due !== null && i.due <= today
+    ).length
+    void notifyDueCount(due, today).then((sent) => {
+      if (sent) void saveSetting('lastNotifiedDate', today)
+    })
+  }, [ready, settings, items, today, saveSetting])
+
   if (!ready) {
     return (
       <div className="flex h-full items-center justify-center bg-desk text-[13px] text-text-3">
@@ -36,6 +65,8 @@ export function App() {
       </div>
     )
   }
+
+  if (!settings.onboardingDone) return <Onboarding />
 
   return (
     <AppShell
@@ -86,15 +117,6 @@ function renderRoute(
         />
       )
     case 'settings':
-      return <SettingsPlaceholder />
+      return <SettingsScreen />
   }
-}
-
-function SettingsPlaceholder() {
-  return (
-    <div className="mx-auto w-full max-w-[940px] px-6 py-7">
-      <h1 className="text-[22px] font-semibold">설정</h1>
-      <p className="pt-2 text-[13px] text-text-2">준비 중이에요.</p>
-    </div>
-  )
 }
