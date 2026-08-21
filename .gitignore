@@ -1,0 +1,27 @@
+# 로컬 전용
+SPEC.md
+design/
+DECISIONS.md
+PROGRESS.md
+
+# 의존성과 빌드 산출물
+node_modules/
+dist/
+dist-ssr/
+src-tauri/target/
+src-tauri/gen/
+
+# 로컬 데이터
+*.db
+*.db-journal
+*.sqlite
+
+# 환경과 도구
+.agents/
+.claude/
+.env
+.env.*
+*.local
+.DS_Store
+.vscode/
+.idea/

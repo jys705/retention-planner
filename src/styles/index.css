@@ -1,0 +1,195 @@
+@import 'tailwindcss';
+
+/*
+  색과 서체는 Claude Design Round A 에서 확정한 값이다. 변수 이름을 바꾸지 않는다.
+  라이트가 기본이고 다크는 data-theme 속성과 시스템 설정 양쪽에서 켜진다.
+*/
+:root {
+  --desk: #eaeae5;
+  --bg: #f4f4f1;
+  --surface: #ffffff;
+  --rail: #f7f7f3;
+  --raise: #fbfbf9;
+  --text: #1c1c19;
+  --text-2: #5d5d56;
+  --text-3: #93938a;
+  --line: #e6e6df;
+  --line-2: #d3d3c9;
+  --accent: #3f7a52;
+  --accent-2: #2f6641;
+  --accent-soft: #e8f0e9;
+
+  --imp-fg: #7a5712;
+  --imp-bg: #f6ebd2;
+  --easy-fg: #456079;
+  --easy-bg: #e7eef3;
+  --adj-fg: #75756b;
+  --adj-bg: #ededE6;
+
+  --g1: #5b5fa6;
+  --g2: #3e6e9e;
+  --g3: #2f7c7c;
+  --g4: #3f7a52;
+
+  --goal-1: #3f7a52;
+  --goal-2: #4a6e96;
+  --goal-3: #8a5f7a;
+  --goal-4: #8a7132;
+
+  --radius-ctl: 6px;
+  --radius-card: 10px;
+  --radius-panel: 14px;
+  --row-h: 52px;
+
+  --shadow-sm: 0 1px 2px rgba(28, 28, 25, 0.05);
+  --shadow-md: 0 6px 24px rgba(28, 28, 25, 0.09);
+  --shadow-win: 0 24px 60px rgba(28, 28, 25, 0.16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --desk: #111210;
+    --bg: #1a1b18;
+    --surface: #212320;
+    --rail: #1d1f1c;
+    --raise: #272925;
+    --text: #ecece5;
+    --text-2: #a0a097;
+    --text-3: #71736a;
+    --line: #32342e;
+    --line-2: #41443c;
+    --accent: #7fb58d;
+    --accent-2: #9bc9a6;
+    --accent-soft: #25302a;
+
+    --imp-fg: #d9b87a;
+    --imp-bg: #332b1b;
+    --easy-fg: #9fb8cc;
+    --easy-bg: #1e2833;
+    --adj-fg: #8e9086;
+    --adj-bg: #2a2c27;
+
+    --g1: #8e93d6;
+    --g2: #6fa0ce;
+    --g3: #58afaf;
+    --g4: #7fb58d;
+
+    --goal-1: #7fb58d;
+    --goal-2: #7fa0c8;
+    --goal-3: #b992ac;
+    --goal-4: #c0a465;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 6px 24px rgba(0, 0, 0, 0.35);
+    --shadow-win: 0 24px 60px rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme='dark'] {
+  --desk: #111210;
+  --bg: #1a1b18;
+  --surface: #212320;
+  --rail: #1d1f1c;
+  --raise: #272925;
+  --text: #ecece5;
+  --text-2: #a0a097;
+  --text-3: #71736a;
+  --line: #32342e;
+  --line-2: #41443c;
+  --accent: #7fb58d;
+  --accent-2: #9bc9a6;
+  --accent-soft: #25302a;
+
+  --imp-fg: #d9b87a;
+  --imp-bg: #332b1b;
+  --easy-fg: #9fb8cc;
+  --easy-bg: #1e2833;
+  --adj-fg: #8e9086;
+  --adj-bg: #2a2c27;
+
+  --g1: #8e93d6;
+  --g2: #6fa0ce;
+  --g3: #58afaf;
+  --g4: #7fb58d;
+
+  --goal-1: #7fb58d;
+  --goal-2: #7fa0c8;
+  --goal-3: #b992ac;
+  --goal-4: #c0a465;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 6px 24px rgba(0, 0, 0, 0.35);
+  --shadow-win: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+@theme inline {
+  --color-desk: var(--desk);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-rail: var(--rail);
+  --color-raise: var(--raise);
+  --color-text: var(--text);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-imp-fg: var(--imp-fg);
+  --color-imp-bg: var(--imp-bg);
+  --color-easy-fg: var(--easy-fg);
+  --color-easy-bg: var(--easy-bg);
+  --color-adj-fg: var(--adj-fg);
+  --color-adj-bg: var(--adj-bg);
+
+  --color-g1: var(--g1);
+  --color-g2: var(--g2);
+  --color-g3: var(--g3);
+  --color-g4: var(--g4);
+
+  --color-goal-1: var(--goal-1);
+  --color-goal-2: var(--goal-2);
+  --color-goal-3: var(--goal-3);
+  --color-goal-4: var(--goal-4);
+
+  --radius-ctl: 6px;
+  --radius-card: 10px;
+  --radius-panel: 14px;
+
+  --font-sans:
+    'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', system-ui,
+    sans-serif;
+  --font-display: 'Space Grotesk', 'Pretendard Variable', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--desk);
+  color: var(--text);
+  font-family:
+    'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', system-ui,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 앱이 계산한 숫자는 전부 등폭으로. 자릿수가 바뀌어도 열이 밀리지 않는다. */
+.num {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 레일 패널의 폭 계산이 어긋나지 않게 테두리와 패딩을 폭에 포함시킨다. */
+.rail-panel,
+.rail-panel * {
+  box-sizing: border-box;
+}
