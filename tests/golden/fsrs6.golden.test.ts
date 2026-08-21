@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { FSRSAlgorithm, type FSRSState, type Grade as TsGrade } from 'ts-fsrs'
 import { Fsrs6 } from '../../src/core/fsrs/fsrs6'
 import { DEFAULT_W } from '../../src/core/fsrs/params'
-import type { Grade, MemoryState } from '../../src/core/fsrs/types'
+import { GRADES, type Grade, type MemoryState } from '../../src/core/fsrs/types'
 import { makeRng, randInt } from './rng'
 
 const TOLERANCE = 1e-9
@@ -110,6 +110,45 @@ describe('골든 테스트: ts-fsrs 대조', () => {
       const theirs = runReference(reference, steps)
       expect(Math.abs(mine.stability - theirs.stability)).toBeLessThan(TOLERANCE)
       expect(Math.abs(mine.difficulty - theirs.difficulty)).toBeLessThan(TOLERANCE)
+    }
+  })
+
+  it("같은 날 '어려움' 을 눌러도 ts-fsrs 와 일치한다", () => {
+    // 단기 수식의 마스크가 G >= 3 이 아니라 G >= 2 라는 것은 여기서만 드러난다.
+    // 일반 시퀀스 테스트는 이 자리를 안 밟고 지나간다.
+    for (const first of GRADES) {
+      let mine = ours.nextState(null, 0, first)
+      let theirs = reference.next_state(null, 0, first as TsGrade)
+
+      for (let repeat = 0; repeat < 6; repeat += 1) {
+        mine = ours.nextState(mine, 0, 2)
+        theirs = reference.next_state(theirs, 0, 2 as TsGrade)
+        expect(Math.abs(mine.stability - theirs.stability)).toBeLessThan(
+          TOLERANCE
+        )
+        expect(Math.abs(mine.difficulty - theirs.difficulty)).toBeLessThan(
+          TOLERANCE
+        )
+      }
+    }
+  })
+
+  it('같은 날 네 등급을 각각 눌러도 일치한다', () => {
+    for (const first of GRADES) {
+      for (const second of GRADES) {
+        const mine = ours.nextState(ours.nextState(null, 0, first), 0, second)
+        const theirs = reference.next_state(
+          reference.next_state(null, 0, first as TsGrade),
+          0,
+          second as TsGrade
+        )
+        expect(Math.abs(mine.stability - theirs.stability)).toBeLessThan(
+          TOLERANCE
+        )
+        expect(Math.abs(mine.difficulty - theirs.difficulty)).toBeLessThan(
+          TOLERANCE
+        )
+      }
     }
   })
 
