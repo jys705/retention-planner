@@ -120,3 +120,67 @@ describe('앱 안에서의 날짜 조정', () => {
     expect(moved.length).toBeGreaterThan(0)
   })
 })
+
+describe('하루 상한', () => {
+  it('모든 목표를 합쳐 하루 상한을 넘지 않게 편다', async () => {
+    resetRepositoryForTest()
+    resetPlannerForTest()
+    usePlanner.setState({
+      ready: false,
+      goals: [],
+      items: [],
+      reviews: [],
+      today: TODAY,
+    })
+    await usePlanner.getState().load()
+    usePlanner.getState().setToday(TODAY)
+    await usePlanner.getState().saveSetting('dailyCap', 4)
+
+    // 같은 날 공부한 항목을 잔뜩 넣으면 다음 복습이 한 날에 몰린다.
+    for (let i = 0; i < 24; i += 1) {
+      await usePlanner.getState().addItem({
+        title: `몰림 확인 ${i + 1}`,
+        firstStudiedAt: TODAY,
+      })
+    }
+    await usePlanner.getState().recomputeAll()
+
+    const counts = new Map<string, number>()
+    for (const item of usePlanner.getState().items) {
+      if (!item.due) continue
+      counts.set(item.due, (counts.get(item.due) ?? 0) + 1)
+    }
+    expect(Math.max(...counts.values())).toBeLessThanOrEqual(4)
+  })
+
+  it('상한을 올리면 다시 모인다', async () => {
+    resetRepositoryForTest()
+    resetPlannerForTest()
+    usePlanner.setState({
+      ready: false,
+      goals: [],
+      items: [],
+      reviews: [],
+      today: TODAY,
+    })
+    await usePlanner.getState().load()
+    usePlanner.getState().setToday(TODAY)
+    await usePlanner.getState().saveSetting('dailyCap', 50)
+
+    for (let i = 0; i < 12; i += 1) {
+      await usePlanner.getState().addItem({
+        title: `여유 확인 ${i + 1}`,
+        firstStudiedAt: TODAY,
+      })
+    }
+    await usePlanner.getState().recomputeAll()
+
+    const counts = new Map<string, number>()
+    for (const item of usePlanner.getState().items) {
+      if (!item.due) continue
+      counts.set(item.due, (counts.get(item.due) ?? 0) + 1)
+    }
+    // 상한이 넉넉하면 굳이 흩뜨리지 않는다.
+    expect(Math.max(...counts.values())).toBeGreaterThan(4)
+  })
+})

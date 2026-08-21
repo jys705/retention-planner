@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { defaultFsrs } from '../core/fsrs/fsrs6'
 import type { Grade, MemoryState } from '../core/fsrs/types'
-import type { Horizon } from '../core/horizon/horizon'
+import { resolveHorizon, type Horizon } from '../core/horizon/horizon'
 import {
   applyReview,
   initialSchedule,
@@ -14,6 +14,7 @@ import {
   type SpreadResult,
 } from '../core/spread/assign'
 import { feasibleInterval } from '../core/spread/feasible'
+import { applyDailyCap, type CapCandidate } from '../core/spread/cap'
 import { fuzzDue } from '../core/spread/fuzz'
 import { replayState } from '../core/simulate/replay'
 import { getRepository } from '../db'
@@ -25,7 +26,13 @@ import type {
   DueKind,
   DueSource,
 } from '../db/types'
-import { diffDays, todayLocal, type DateOnly } from '../lib/date'
+import {
+  diffDays,
+  fromEpochDay,
+  toEpochDay,
+  todayLocal,
+  type DateOnly,
+} from '../lib/date'
 import {
   effectiveConfig,
   isActive,
@@ -545,7 +552,70 @@ export function computeSpread(
     }
   }
 
+  // 마지막으로 모든 목표를 합쳐서 하루 총량을 본다.
+  // 각 목표가 잘 펴져 있어도 셋이 겹치면 하루에 서른 개가 될 수 있다.
+  const capCandidates: CapCandidate[] = []
+  for (const item of active) {
+    const due = patches.get(item.id)?.due ?? item.due
+    if (!due || due < today) continue
+    const goal = item.goal_id ? (goalById.get(item.goal_id) ?? null) : null
+    const config = effectiveConfig(item, goal, settings)
+    const resolved = resolveHorizon(config.horizon)
+    const state = memoryStateOf(item)
+
+    capCandidates.push({
+      itemId: item.id,
+      date: due,
+      notBefore: today,
+      notAfter: Number.isFinite(resolved.readyAt)
+        ? fromEpochDay(resolved.readyAt - settings.bufferDays)
+        : null,
+      pushPriority: pushPriorityOf(item, resolved.readyAt, state, today),
+    })
+  }
+
+  const capped = applyDailyCap(capCandidates, settings.dailyCap)
+  for (const [itemId, date] of Object.entries(capped.moved)) {
+    patches.set(itemId, {
+      ...(patches.get(itemId) ?? {}),
+      due: date,
+      due_source: 'spread',
+    })
+  }
+
   return patches
+}
+
+/**
+ * 하루가 넘칠 때 어느 항목부터 미룰지.
+ *
+ * 큰 값이 먼저 밀린다. 이미 충분히 기억하고 있는 항목이 가장 먼저 밀리고,
+ * 목표한 날에 기억을 못 지킬 위험이 있는 항목은 끝까지 남긴다.
+ */
+function pushPriorityOf(
+  item: ItemRow,
+  readyAtDay: number,
+  state: MemoryState | null,
+  today: DateOnly
+): number {
+  if (item.due_kind === 'deadline_pull') return 0
+  if (item.goal_risk === 'at_risk') return 1
+  if (item.due_kind === 'final_check') return 5
+
+  // 목표가 가까울수록 덜 밀린다.
+  if (Number.isFinite(readyAtDay)) {
+    const daysLeft = readyAtDay - toEpochDay(today)
+    if (daysLeft <= 7) return 2
+    if (daysLeft <= 30) return 3
+  }
+
+  // 지금 기억률이 높을수록 미뤄도 덜 아쉽다.
+  if (state && item.last_review) {
+    const elapsed = Math.max(0, diffDays(item.last_review, today))
+    const retention = defaultFsrs.retrievability(elapsed, state.stability)
+    return retention >= 0.85 ? 4 : 3
+  }
+  return 3
 }
 
 /**
