@@ -16,10 +16,19 @@ pnpm install
 pnpm dev
 ```
 
-브라우저에서 바로 열립니다. 데스크탑 앱으로 빌드하려면 [Rust](https://rustup.rs) 를 설치한 뒤:
+브라우저에서 바로 열립니다.
+
+데스크탑 앱(`.app`)으로 빌드하려면 [Rust](https://rustup.rs) 와 Xcode 가 필요합니다:
 
 ```bash
 pnpm tauri build
+```
+
+빌드 결과는 `src-tauri/target/release/bundle/macos/retention-planner.app` 에 나옵니다.
+서명하지 않은 앱이라 처음 열 때 한 번 격리 속성을 지워야 합니다:
+
+```bash
+xattr -dr com.apple.quarantine src-tauri/target/release/bundle/macos/retention-planner.app
 ```
 
 검사와 빌드:
