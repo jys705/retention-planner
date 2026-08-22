@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ForecastScreen } from '../../src/features/forecast/ForecastScreen'
-import { anItem, render, setupApp, teardownApp } from './harness'
+import { aGoal, anItem, render, setupApp, teardownApp } from './harness'
 
 const TODAY = '2026-10-01'
 
@@ -66,10 +66,14 @@ describe('예보', () => {
     )!
     const [, count] = /(\d+)개$/.exec(cell.getAttribute('title')!)!
     await user.click(cell)
-    expect(screen.getByText(`${count}개 예정`)).toBeInTheDocument()
+    const card = screen.getByRole('region', { name: '그날 무엇을 보나' })
+    // 날짜 줄과 목표별 줄에 같은 수가 함께 나올 수 있다.
+    expect(within(card).getAllByText(`${count}개`).length).toBeGreaterThan(0)
+    // 그날 볼 항목의 제목이 실제로 적혀 있어야 한다.
+    expect(within(card).getByText('항목 1')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '선택 해제' }))
-    expect(screen.queryByText(`${count}개 예정`)).toBeNull()
+    await user.click(screen.getByRole('button', { name: '고정 해제' }))
+    expect(screen.queryByText('그날 무엇을 보나')).toBeNull()
   })
 
   it('S-069 앞으로 볼 게 없으면 그렇다고 말한다', async () => {
@@ -78,5 +82,62 @@ describe('예보', () => {
     expect(
       await screen.findByText(/앞으로 잡힌 복습이 없어요/)
     ).toBeInTheDocument()
+  })
+
+  it('S-159 막대와 달력이 그날 볼 항목을 이름으로 보여준다', async () => {
+    await setupApp(TODAY, {
+      goals: [aGoal({ id: 'g1', name: '자격증 시험' })],
+      items: [
+        anItem({
+          id: 'i1',
+          title: '4장 연습문제',
+          goal_id: 'g1',
+          due: '2026-10-05',
+          first_studied_at: '2026-09-29',
+          last_review: '2026-09-29',
+        }),
+      ],
+    })
+    const { user } = render(<ForecastScreen />)
+    await screen.findByText('달력으로 보기')
+
+    const cell = [...document.querySelectorAll('button[title]')].find((b) =>
+      /10월 5일 1개/.test(b.getAttribute('title') ?? '')
+    )!
+    await user.click(cell)
+
+    const card = screen.getByRole('region', { name: '그날 무엇을 보나' })
+    // 개수가 아니라 무엇인지가 나와야 한다.
+    expect(within(card).getByText('4장 연습문제')).toBeInTheDocument()
+    expect(within(card).getByText('자격증 시험')).toBeInTheDocument()
+  })
+
+  it('S-162 달력 칸에 마우스를 올리면 그날 항목이 뜬다', async () => {
+    await setupApp(TODAY, {
+      goals: [aGoal({ id: 'g1', name: '자격증 시험' })],
+      items: [
+        anItem({
+          id: 'i1',
+          title: '4장 연습문제',
+          goal_id: 'g1',
+          due: '2026-10-05',
+          first_studied_at: '2026-09-29',
+          last_review: '2026-09-29',
+        }),
+      ],
+    })
+    const { user } = render(<ForecastScreen />)
+    await screen.findByText('달력으로 보기')
+
+    const cell = [...document.querySelectorAll('button[title]')].find((b) =>
+      /10월 5일 1개/.test(b.getAttribute('title') ?? '')
+    )!
+    await user.hover(cell)
+    const card = screen.getByRole('region', { name: '그날 무엇을 보나' })
+    expect(within(card).getByText('4장 연습문제')).toBeInTheDocument()
+
+    // 마우스를 떼면 사라진다. 고정한 것이 아니기 때문이다.
+    await user.unhover(cell)
+    expect(screen.queryByRole('region', { name: '그날 무엇을 보나' })).toBeNull()
   })
 })

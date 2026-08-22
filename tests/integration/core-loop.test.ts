@@ -54,11 +54,13 @@ describe('핵심 루프', () => {
 
     await usePlanner.getState().rateItem(item.id, 3, { reviewedAt: TODAY })
 
+    // 항목을 적을 때의 첫 평가와 방금 누른 평가, 둘이 남는다.
     const reviews = usePlanner.getState().reviews
-    expect(reviews).toHaveLength(1)
-    expect(reviews[0].item_id).toBe(item.id)
-    expect(reviews[0].rating).toBe(3)
-    expect(reviews[0].reviewed_at).toBe(TODAY)
+    expect(reviews).toHaveLength(2)
+    expect(reviews[0].reviewed_at).toBe(addDays(TODAY, -3))
+    expect(reviews[1].item_id).toBe(item.id)
+    expect(reviews[1].rating).toBe(3)
+    expect(reviews[1].reviewed_at).toBe(TODAY)
 
     const after = usePlanner.getState().items[0]
     expect(after.reps).toBe(2)
@@ -78,7 +80,7 @@ describe('핵심 루프', () => {
     await usePlanner.getState().load()
     usePlanner.getState().setToday(TODAY)
 
-    expect(usePlanner.getState().reviews).toHaveLength(1)
+    expect(usePlanner.getState().reviews).toHaveLength(2)
     expect(usePlanner.getState().items[0].reps).toBe(2)
   })
 
@@ -97,19 +99,8 @@ describe('핵심 루프', () => {
     }
 
     const stored = usePlanner.getState().items.find((i) => i.id === item.id)!
-    // 항목을 만들 때의 첫 평가는 이력에 남지 않으므로 그것까지 넣고 견준다.
-    const withInitial = [
-      {
-        item_id: item.id,
-        reviewed_at: firstStudiedAt,
-        rating: 3 as const,
-      },
-      ...usePlanner.getState().reviews,
-    ]
-    const full = stateFromHistory(
-      withInitial as Parameters<typeof stateFromHistory>[0],
-      item.id
-    )
+    // 항목을 만들 때의 첫 평가까지 이력에 있으므로 손대지 않고 그대로 재생한다.
+    const full = stateFromHistory(usePlanner.getState().reviews, item.id)
 
     expect(full).not.toBeNull()
     expect(full!.stability).toBeCloseTo(stored.stability!, 9)
@@ -124,7 +115,7 @@ describe('핵심 루프', () => {
     const yesterday = addDays(TODAY, -1)
     await usePlanner.getState().rateItem(item.id, 3, { reviewedAt: yesterday })
 
-    const review = usePlanner.getState().reviews[0]
+    const review = usePlanner.getState().reviews[1]
     expect(review.reviewed_at).toBe(yesterday)
     expect(review.elapsed_days).toBe(9)
     expect(usePlanner.getState().items[0].last_review).toBe(yesterday)
@@ -200,7 +191,7 @@ describe('핵심 루프', () => {
   it('항목을 지우면 평가 이력도 함께 사라진다', async () => {
     const item = await usePlanner.getState().addItem({ title: '지울 것' })
     await usePlanner.getState().rateItem(item.id, 3)
-    expect(usePlanner.getState().reviews).toHaveLength(1)
+    expect(usePlanner.getState().reviews).toHaveLength(2)
     await usePlanner.getState().deleteItem(item.id)
     expect(usePlanner.getState().items).toHaveLength(0)
     expect(usePlanner.getState().reviews).toHaveLength(0)

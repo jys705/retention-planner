@@ -214,7 +214,9 @@ describe('나머지 조작 요소', () => {
     const bar = document.querySelector('.recharts-bar-rectangle')
     expect(bar).not.toBeNull()
     await user.click(bar as Element)
-    expect(screen.getByText(/개 예정/)).toBeInTheDocument()
+    // 개수만이 아니라 그날 무엇을 보는지가 나와야 한다.
+    const card = screen.getByRole('region', { name: '그날 무엇을 보나' })
+    expect(within(card).getByText('예보 항목')).toBeInTheDocument()
   })
 
   it('S-116 서재에서 제목 묶음을 접고 편다', async () => {

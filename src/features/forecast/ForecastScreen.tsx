@@ -1,64 +1,42 @@
 import { useState } from 'react'
-import { projectGroup, type ProjectItemInput } from '../../core/simulate/project'
 import { addDays, type DateOnly } from '../../lib/date'
-import { effectiveConfig, isActive, memoryStateOf } from '../../lib/domain'
-import { fullDate, monthDay, shortDate } from '../../lib/format'
+import { dueReason } from '../../lib/badge'
+import { fullDate, monthDay, percent, shortDate } from '../../lib/format'
 import { usePlanner } from '../../store/planner'
 import { CalendarHeatmap } from '../charts/CalendarHeatmap'
 import { monthKey, monthLabel } from '../charts/calendar'
 import { LoadBars, type LoadBar } from '../charts/LoadBars'
+import { dailyCountOf, rollout, type PlannedItem } from './rollout'
 
 const HORIZON_DAYS = 60
 
 export function ForecastScreen() {
-  const { items, goals, settings, today, planned } = usePlanner()
+  const { items, goals, settings, today } = usePlanner()
   const [selected, setSelected] = useState<DateOnly | null>(null)
+  const [hovered, setHovered] = useState<DateOnly | null>(null)
 
-  // 한 번으로 부족한 항목에는 복습이 둘 잡혀 있다. 그것까지 세야 예보가 맞는다.
-  const plannedByItem = new Map<string, DateOnly[]>()
-  for (const row of planned) {
-    plannedByItem.set(row.item_id, [
-      ...(plannedByItem.get(row.item_id) ?? []),
-      row.date,
-    ])
-  }
+  // 항목마다 따로 굴려서 더하면 날짜 조정 층이 빠진다. 하루씩 실제로 살아 보면
+  // 앱이 그날 잡을 날짜가 그대로 나온다.
+  const plan = rollout({
+    items,
+    goals,
+    settings,
+    from: today,
+    days: HORIZON_DAYS,
+  })
+  const dailyCount = dailyCountOf(plan)
+  const byDate = new Map(plan.map((day) => [day.date, day.items]))
 
-  const inputs: ProjectItemInput[] = items
-    .filter(isActive)
-    .flatMap((item) => {
-      const state = memoryStateOf(item)
-      if (!state || !item.due) return []
-      const goal = goals.find((g) => g.id === item.goal_id) ?? null
-      const config = effectiveConfig(item, goal, settings)
-      return [
-        {
-          itemId: item.id,
-          state,
-          anchor: item.last_review ?? item.first_studied_at,
-          due: item.due,
-          from: today,
-          days: HORIZON_DAYS,
-          horizon: config.horizon,
-          intensity: config.intensity,
-          targetRetention: config.targetRetention,
-          minReviews: config.minReviews,
-          repsSinceGoal: item.reps_since_goal,
-          bufferDays: settings.bufferDays,
-          maxIntervalDays: config.maxIntervalDays,
-          plannedDates: plannedByItem.get(item.id) ?? [item.due],
-        },
-      ]
-    })
+  // 달력 칸에 마우스를 올린 날이 우선이고, 없으면 눌러서 고정해 둔 날을 보여준다.
+  // 막대는 그 자리에 뜨는 상자로 말하므로 이 카드를 건드리지 않는다.
+  const shown = hovered ?? selected
 
-  const projection = projectGroup({ items: inputs, from: today, days: HORIZON_DAYS })
+  const bars: LoadBar[] = plan.map((day) => ({
+    date: day.date,
+    count: day.items.length,
+  }))
 
-  const bars: LoadBar[] = []
-  for (let i = 0; i <= HORIZON_DAYS; i += 1) {
-    const date = addDays(today, i)
-    bars.push({ date, count: projection.dailyCount[date] ?? 0 })
-  }
-
-  const total = projection.total
+  const total = plan.reduce((sum, day) => sum + day.items.length, 0)
   const average = Math.round((total / (HORIZON_DAYS + 1)) * 10) / 10
   const busiest = bars.reduce(
     (best, bar) => (bar.count > best.count ? bar : best),
@@ -100,29 +78,35 @@ export function ForecastScreen() {
           bars={bars}
           cap={settings.dailyCap}
           onSelect={(date) => setSelected(date === selected ? null : date)}
+          renderTooltip={(date) => (
+            <DayCard date={date} items={byDate.get(date) ?? []} floating />
+          )}
           selected={selected}
         />
         <p className="pt-3 text-[12px] text-text-2">
-          막대를 누르면 그날 예정된 개수를 볼 수 있어요.
+          막대에 마우스를 올리면 그날 무엇을 보는지 뜹니다. 누르면 아래에 고정돼요.
         </p>
       </section>
 
-      {selected ? (
-        <div className="flex items-center justify-between rounded-card bg-rail px-[16px] py-[12px]">
-          <div>
-            <div className="text-[13px] font-medium">{fullDate(selected)}</div>
-            <div className="num text-[12px] text-text-3">
-              {projection.dailyCount[selected] ?? 0}개 예정
-            </div>
+      {shown ? (
+        <section
+          aria-label="그날 무엇을 보나"
+          className="rounded-card border border-line bg-surface px-[16px] py-[14px]"
+        >
+          <div className="flex items-start justify-between gap-3 pb-1">
+            <h2 className="text-[13px] font-semibold">그날 무엇을 보나</h2>
+            {selected ? (
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="text-[12px] text-text-3 hover:text-text-2"
+              >
+                고정 해제
+              </button>
+            ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => setSelected(null)}
-            className="text-[12px] text-text-3 hover:text-text-2"
-          >
-            선택 해제
-          </button>
-        </div>
+          <DayCard date={shown} items={byDate.get(shown) ?? []} />
+        </section>
       ) : null}
 
       <section className="rounded-card border border-line bg-surface px-[16px] py-[14px]">
@@ -135,23 +119,24 @@ export function ForecastScreen() {
                   {monthLabel(month)}
                 </span>
                 <span className="num text-[11.5px] text-text-3">
-                  {countInMonth(projection.dailyCount, month)}개
+                  {countInMonth(dailyCount, month)}개
                 </span>
               </div>
               <CalendarHeatmap
                 month={month}
-                counts={projection.dailyCount}
+                counts={dailyCount}
                 cap={settings.dailyCap}
                 selected={selected}
                 onSelect={(date) =>
                   setSelected(date === selected ? null : date)
                 }
+                onHover={setHovered}
               />
             </div>
           ))}
         </div>
         <p className="pt-3 text-[12px] text-text-2">
-          {monthSentence(projection.dailyCount, settings.dailyCap)}
+          {monthSentence(dailyCount, settings.dailyCap)}
         </p>
       </section>
 
@@ -198,6 +183,98 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="flex flex-col gap-[2px]">
       <span className="text-[11px] text-text-3">{label}</span>
       <span className="num text-[16px] font-semibold">{value}</span>
+    </div>
+  )
+}
+
+/**
+ * 하루에 무엇을 보는지.
+ *
+ * 개수만 보여주면 "그날 뭐가 있지" 라는 물음이 그대로 남는다.
+ * 목표별로 묶어서 제목을 직접 보여주고, 길면 뒤를 접는다.
+ */
+function DayCard({
+  date,
+  items,
+  floating,
+}: {
+  date: DateOnly
+  items: readonly PlannedItem[]
+  /** 막대 위에 떠 있는 상자인지. 그때는 더 짧게 줄인다. */
+  floating?: boolean
+}) {
+  const limit = floating ? 6 : 12
+  const overdue = items.filter((i) => i.overdue).length
+  const byGoal = new Map<string, PlannedItem[]>()
+  for (const item of items) {
+    const key = item.goalName ?? '목표 없음'
+    byGoal.set(key, [...(byGoal.get(key) ?? []), item])
+  }
+
+  let shownSoFar = 0
+
+  return (
+    <div
+      className={
+        floating
+          ? 'w-[268px] rounded-card border border-line-2 bg-surface px-[13px] py-[11px] shadow-[var(--shadow-md)]'
+          : ''
+      }
+    >
+      <div className="flex items-baseline gap-2">
+        <span className="text-[12.5px] font-medium">{fullDate(date)}</span>
+        <span className="num text-[12px] text-text-2">{items.length}개</span>
+        {overdue > 0 ? (
+          <span className="num text-[11.5px] text-imp-fg">밀린 것 {overdue}개</span>
+        ) : null}
+      </div>
+
+      {items.length === 0 ? (
+        <p className="pt-[6px] text-[12px] text-text-3">이날은 볼 게 없어요.</p>
+      ) : (
+        <div className="flex flex-col gap-[8px] pt-[8px]">
+          {[...byGoal.entries()].map(([goalName, rows]) => (
+            <div key={goalName} className="flex flex-col gap-[3px]">
+              <div className="flex items-baseline gap-[6px]">
+                <span className="text-[11.5px] font-medium text-text-2">
+                  {goalName}
+                </span>
+                <span className="num text-[11px] text-text-3">
+                  {rows.length}개
+                </span>
+              </div>
+              {rows.map((row) => {
+                if (shownSoFar >= limit) return null
+                shownSoFar += 1
+                return (
+                  <div
+                    key={row.itemId}
+                    className="flex items-baseline gap-2 pl-[6px]"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-[12px] text-text-2">
+                      {row.title}
+                    </span>
+                    <span
+                      className="num flex-none text-[11px] text-text-3"
+                      title="그날 보기 직전에 떠올릴 확률이에요."
+                    >
+                      {percent(row.retention)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+          {items.length > limit ? (
+            <p className="num pl-[6px] text-[11px] text-text-3">
+              외 {items.length - limit}개
+            </p>
+          ) : null}
+          <p className="pt-[2px] text-[11px] leading-relaxed text-text-3">
+            {dueReason(items[0].kind)}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

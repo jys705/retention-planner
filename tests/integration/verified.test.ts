@@ -44,7 +44,9 @@ describe('등급 설명 축약', () => {
 
     // 실제로 25회를 세었는지부터 확인한다.
     expect(usePlanner.getState().settings.ratingCount).toBe(25)
-    expect(usePlanner.getState().reviews).toHaveLength(25)
+    // 항목을 적을 때의 첫 평가가 한 줄 더 있다. 그건 사용자가 누른 것이 아니라
+    // 세는 값(ratingCount)에는 안 들어간다.
+    expect(usePlanner.getState().reviews).toHaveLength(26)
     // 그리고 그 값이 축약 조건을 넘겼는지.
     expect(
       usePlanner.getState().settings.ratingCount < GRADE_HELP_THRESHOLD

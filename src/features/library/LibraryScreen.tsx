@@ -15,6 +15,13 @@ import {
 import { dueLabel, horizonLabel, percent } from '../../lib/format'
 import { usePlanner } from '../../store/planner'
 
+/**
+ * 찾기 칸, 정렬 칸, 묶기 단추가 나란히 선다.
+ * 셋의 높이가 다르면 줄이 어긋나 보이므로 한 곳에서 정해 준다.
+ */
+const CONTROL =
+  'h-[32px] rounded-ctl border border-line-2 bg-surface px-[10px] text-[12.5px]'
+
 type SortKey = 'due' | 'retention' | 'title'
 
 const SORTS: { key: SortKey; name: string }[] = [
@@ -68,13 +75,13 @@ export function LibraryScreen({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="찾기"
             aria-label="항목 찾기"
-            className="w-[180px] rounded-ctl border border-line-2 bg-surface px-[10px] py-[6px] text-[13px] outline-none"
+            className={cn(CONTROL, 'w-[180px] outline-none')}
           />
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as SortKey)}
             aria-label="정렬"
-            className="rounded-ctl border border-line-2 bg-surface px-[8px] py-[6px] text-[12.5px]"
+            className={cn(CONTROL, 'pr-[6px]')}
           >
             {SORTS.map((s) => (
               <option key={s.key} value={s.key}>
@@ -85,9 +92,9 @@ export function LibraryScreen({
           <button
             type="button"
             onClick={() => setGrouped((g) => !g)}
-            className="rounded-ctl border border-line-2 bg-surface px-[10px] py-[6px] text-[12.5px] text-text-2 hover:bg-hover"
+            className={cn(CONTROL, 'text-text-2 hover:bg-hover')}
           >
-            {grouped ? '평면으로' : '목표별로 묶기'}
+            {grouped ? '목표 묶음 풀기' : '목표별로 묶기'}
           </button>
         </div>
       </header>

@@ -9,6 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import type { ReactNode } from 'react'
 import type { DateOnly } from '../../lib/date'
 import { monthDay, shortDate } from '../../lib/format'
 
@@ -26,6 +27,8 @@ export function LoadBars({
   cap,
   showBefore,
   onSelect,
+  onHover,
+  renderTooltip,
   selected,
   height = 200,
 }: {
@@ -33,13 +36,20 @@ export function LoadBars({
   cap?: number | null
   showBefore?: boolean
   onSelect?: (date: DateOnly) => void
+  onHover?: (date: DateOnly | null) => void
+  /** 호버할 때 띄울 내용. 안 주면 개수만 적힌 기본 상자가 뜬다. */
+  renderTooltip?: (date: DateOnly) => ReactNode
   selected?: DateOnly | null
   height?: number
 }) {
   return (
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={bars} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
+        <BarChart
+          data={bars}
+          margin={{ top: 8, right: 12, bottom: 4, left: 0 }}
+          onMouseLeave={() => onHover?.(null)}
+        >
           <CartesianGrid stroke="var(--line)" vertical={false} />
           <XAxis
             dataKey="date"
@@ -82,6 +92,10 @@ export function LoadBars({
               const row = entry as { date?: DateOnly }
               if (row.date && onSelect) onSelect(row.date)
             }}
+            onMouseEnter={(entry: unknown) => {
+              const row = entry as { date?: DateOnly }
+              if (row.date) onHover?.(row.date)
+            }}
           >
             {bars.map((bar) => (
               <Cell
@@ -97,22 +111,32 @@ export function LoadBars({
               />
             ))}
           </Bar>
-          <Tooltip
-            cursor={{ fill: 'var(--hover)' }}
-            contentStyle={{
-              background: 'var(--surface)',
-              border: '1px solid var(--line)',
-              borderRadius: 9,
-              fontSize: 12,
-            }}
-            labelFormatter={(label) =>
-              typeof label === 'string' ? monthDay(label) : ''
-            }
-            formatter={(value, name) => [
-              `${String(value)}개`,
-              name === 'before' ? '조정 전' : '예정',
-            ]}
-          />
+          {renderTooltip ? (
+            <Tooltip
+              cursor={{ fill: 'var(--hover)' }}
+              wrapperStyle={{ outline: 'none', zIndex: 10 }}
+              content={({ active, label }) =>
+                active && typeof label === 'string' ? renderTooltip(label) : null
+              }
+            />
+          ) : (
+            <Tooltip
+              cursor={{ fill: 'var(--hover)' }}
+              contentStyle={{
+                background: 'var(--surface)',
+                border: '1px solid var(--line)',
+                borderRadius: 9,
+                fontSize: 12,
+              }}
+              labelFormatter={(label) =>
+                typeof label === 'string' ? monthDay(label) : ''
+              }
+              formatter={(value, name) => [
+                `${String(value)}개`,
+                name === 'before' ? '조정 전' : '예정',
+              ]}
+            />
+          )}
         </BarChart>
       </ResponsiveContainer>
     </div>

@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { Grade } from '../../core/fsrs/types'
 import type { Horizon } from '../../core/horizon/horizon'
 import { INTENSITY_RETENTION } from '../../core/policy/constraints'
 import { AdjustedBadge, Badge } from '../../components/Badge'
 import { Chip } from '../../components/Chip'
-import { DateField } from '../../components/DateField'
 import type { GoalRow, Intensity, ItemRow } from '../../db/types'
 import { dueReason, statusBadgeOf } from '../../lib/badge'
 import { fromEpochDay, type DateOnly } from '../../lib/date'
@@ -16,14 +14,13 @@ import {
   percent,
   stabilityLabel,
 } from '../../lib/format'
-import { effectiveConfig, horizonFields, memoryStateOf } from '../../lib/domain'
+import { effectiveConfig, horizonFields } from '../../lib/domain'
 import { gradeName } from '../../lib/grade'
 import { INTENSITY_META, intensityName } from '../../lib/intensity'
 import type { Settings } from '../../lib/settings'
 import { usePlanner } from '../../store/planner'
 import { MemoryCurveChart } from '../charts/MemoryCurveChart'
 import { GoalSettingsReadout } from '../goal/GoalSettingsReadout'
-import { gradeOptions } from '../today/gradeOptions'
 import { HorizonPicker } from '../newitem/HorizonPicker'
 import { buildItemView } from './itemView'
 
@@ -37,7 +34,6 @@ export function ItemDetailScreen({
   const { items, goals, reviews, settings, today, planned } = usePlanner()
   const updateItem = usePlanner((s) => s.updateItem)
   const deleteItem = usePlanner((s) => s.deleteItem)
-  const rateItem = usePlanner((s) => s.rateItem)
 
   const [editing, setEditing] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -46,7 +42,6 @@ export function ItemDetailScreen({
   const [draftGoalId, setDraftGoalId] = useState<string | null>(null)
   const [draftHorizon, setDraftHorizon] = useState<Horizon>({ kind: 'open' })
   const [draftIntensity, setDraftIntensity] = useState<Intensity>('standard')
-  const [reviewDate, setReviewDate] = useState<DateOnly | null>(null)
 
   const item = items.find((i) => i.id === itemId)
 
@@ -112,23 +107,6 @@ export function ItemDetailScreen({
     .sort()
 
   const found = item
-  // 마지막으로 본 날보다 앞으로는 기록할 수 없다. 저장 계층도 같은 규칙으로 자른다.
-  const recordedAt =
-    reviewDate !== null && reviewDate >= (item.last_review ?? '') && reviewDate <= today
-      ? reviewDate
-      : today
-  const rateOptions = gradeOptions({
-    reviewedAt: recordedAt,
-    lastReview: item.last_review,
-    state: memoryStateOf(item),
-    horizon: view.config.horizon,
-    intensity: view.config.intensity,
-    targetRetention: view.config.targetRetention,
-    minReviews: view.config.minReviews,
-    repsSinceGoal: item.reps_since_goal,
-    bufferDays: settings.bufferDays,
-    maxIntervalDays: view.config.maxIntervalDays,
-  })
   const draftGoal =
     goals.find((g) => g.id === draftGoalId && g.archived_at === null) ?? null
 
@@ -154,12 +132,6 @@ export function ItemDetailScreen({
       ...(own ? {} : { target_retention: null, min_reviews: null }),
     })
     setEditing(false)
-  }
-
-  async function record(grade: Grade) {
-    await rateItem(found.id, grade, { reviewedAt: recordedAt })
-    // 고른 날짜는 그 한 번의 기록에 붙는다. 다음에는 다시 오늘부터 시작한다.
-    setReviewDate(null)
   }
 
   async function removeItem() {
@@ -370,49 +342,6 @@ export function ItemDetailScreen({
       ) : null}
 
       <Summary item={item} today={today} retention={view.retention} />
-
-      <Section title="봤다고 기록하기">
-        <p className="pb-3 text-[12.5px] text-text-2">
-          오늘 목록에 없어도 방금 본 것을 여기서 바로 기록할 수 있어요.
-        </p>
-        <div className="grid grid-cols-[repeat(4,minmax(0,168px))] gap-2">
-          {rateOptions.map((option) => (
-            <button
-              key={option.grade}
-              type="button"
-              onClick={() => void record(option.grade)}
-              className="flex flex-col gap-[3px] rounded-[9px] border border-line-2 bg-surface px-[11px] pb-[10px] pt-[9px] text-left transition-colors hover:bg-raise"
-              style={{ borderTopColor: option.color, borderTopWidth: 2 }}
-            >
-              <span className="text-[13.5px] font-semibold text-text">
-                {option.name}
-              </span>
-              <span className="text-[11.5px] leading-snug text-text-3">
-                {option.hint}
-              </span>
-              <span className="num text-[12px] text-accent">{option.next}</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 pt-[10px]">
-          <span className="text-[12px] text-text-3">언제 봤나요?</span>
-          <DateField
-            value={recordedAt}
-            today={today}
-            min={item.last_review}
-            max={today}
-            onChange={setReviewDate}
-            label="본 날짜 고르기"
-            text={recordedAt === today ? '오늘' : monthDay(recordedAt)}
-            active={recordedAt !== today}
-          />
-          {recordedAt !== today ? (
-            <span className="text-[12px] text-accent">
-              {monthDay(recordedAt)}에 본 것으로 기록해요
-            </span>
-          ) : null}
-        </div>
-      </Section>
 
       <Section title="기억 곡선">
         <MemoryCurveChart

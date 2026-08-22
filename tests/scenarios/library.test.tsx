@@ -52,12 +52,12 @@ describe('서재', () => {
     expect(screen.getByRole('button', { name: '목표 없음' })).toBeInTheDocument()
   })
 
-  it('S-071 평면으로 보기', async () => {
+  it('S-071 목표 묶음을 풀어 한 줄로 본다', async () => {
     await setupApp(TODAY, mixed())
     const { user } = render(
       <LibraryScreen onOpenItem={noop} onOpenGoal={noop} />
     )
-    await user.click(screen.getByRole('button', { name: '평면으로' }))
+    await user.click(screen.getByRole('button', { name: '목표 묶음 풀기' }))
     // 묶음 머리글이 사라지고 항목이 한 줄씩 늘어선다.
     expect(screen.queryByRole('button', { name: 'AWS SCS-C03' })).toBeNull()
     expect(
@@ -73,7 +73,7 @@ describe('서재', () => {
     const { user } = render(
       <LibraryScreen onOpenItem={noop} onOpenGoal={noop} />
     )
-    await user.click(screen.getByRole('button', { name: '평면으로' }))
+    await user.click(screen.getByRole('button', { name: '목표 묶음 풀기' }))
     await user.selectOptions(screen.getByLabelText('정렬'), 'due')
     const titles = visibleTitles()
     expect(titles[0]).toContain('정보보안 개념 1~3')
@@ -84,7 +84,7 @@ describe('서재', () => {
     const { user } = render(
       <LibraryScreen onOpenItem={noop} onOpenGoal={noop} />
     )
-    await user.click(screen.getByRole('button', { name: '평면으로' }))
+    await user.click(screen.getByRole('button', { name: '목표 묶음 풀기' }))
     await user.selectOptions(screen.getByLabelText('정렬'), 'retention')
     // 기억 지속력이 가장 짧은 것이 가장 낮은 기억률이다.
     expect(visibleTitles()[0]).toContain('정보보안 개념 1~3')
@@ -95,7 +95,7 @@ describe('서재', () => {
     const { user } = render(
       <LibraryScreen onOpenItem={noop} onOpenGoal={noop} />
     )
-    await user.click(screen.getByRole('button', { name: '평면으로' }))
+    await user.click(screen.getByRole('button', { name: '목표 묶음 풀기' }))
     await user.selectOptions(screen.getByLabelText('정렬'), 'title')
     expect(visibleTitles()[0]).toContain('가나다 문제')
   })
@@ -165,7 +165,7 @@ describe('서재', () => {
     const { user } = render(
       <LibraryScreen onOpenItem={noop} onOpenGoal={noop} />
     )
-    await user.click(screen.getByRole('button', { name: '평면으로' }))
+    await user.click(screen.getByRole('button', { name: '목표 묶음 풀기' }))
     const row = screen.getByRole('button', { name: '정보보안 개념 1~3' })
     expect(within(row).getByText('목표 없음')).toBeInTheDocument()
   })

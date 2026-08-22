@@ -37,6 +37,7 @@ export function GoalDetailScreen({
   const [showBefore, setShowBefore] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [draftName, setDraftName] = useState<string | null>(null)
 
   const goal = goals.find((g) => g.id === goalId)
   if (!goal) {
@@ -165,10 +166,30 @@ export function GoalDetailScreen({
       <Expand
         open={editOpen}
         onToggle={() => setEditOpen((o) => !o)}
-        label="설정 일괄 수정"
-        hint="여기서 바꾸면 이 목표에 묶인 항목 전부에 적용돼요."
+        label="목표 편집"
+        hint="이름, 목표 시점, 복습 강도를 여기서 고칩니다. 묶인 항목 전부에 적용돼요."
       >
         <div className="flex flex-col gap-4">
+          <Field label="이름">
+            <input
+              value={draftName ?? goal.name}
+              onChange={(event) => setDraftName(event.target.value)}
+              onBlur={() => {
+                const next = (draftName ?? '').trim()
+                setDraftName(null)
+                if (next !== '' && next !== goal.name) {
+                  void updateGoal(goal.id, { name: next })
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur()
+                if (event.key === 'Escape') setDraftName(null)
+              }}
+              aria-label="목표 이름 고치기"
+              className="w-full rounded-ctl border border-line-2 bg-surface px-[10px] py-[7px] text-[14px] outline-none"
+            />
+          </Field>
+
           <Field label="목표 시점">
             <HorizonPicker
               today={today}

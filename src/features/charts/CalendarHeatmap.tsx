@@ -11,6 +11,7 @@ export function CalendarHeatmap({
   cap,
   selected,
   onSelect,
+  onHover,
 }: {
   /** 그 달의 아무 날짜나. 1일로 맞춰서 쓴다. */
   month: DateOnly
@@ -18,6 +19,7 @@ export function CalendarHeatmap({
   cap?: number | null
   selected?: DateOnly | null
   onSelect?: (date: DateOnly) => void
+  onHover?: (date: DateOnly | null) => void
 }) {
   const first = `${month.slice(0, 8)}01`
   const firstWeekday = new Date(`${first}T00:00:00Z`).getUTCDay()
@@ -52,6 +54,8 @@ export function CalendarHeatmap({
               key={date}
               type="button"
               onClick={() => onSelect?.(date)}
+              onMouseEnter={() => onHover?.(date)}
+              onMouseLeave={() => onHover?.(null)}
               title={`${monthDay(date)} ${count}개`}
               className={cn(
                 'num aspect-square rounded-[5px] border text-[10px] transition-colors',

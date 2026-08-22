@@ -3,8 +3,15 @@ import { screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { defaultFsrs } from '../../src/core/fsrs/fsrs6'
 import { ItemDetailScreen } from '../../src/features/item/ItemDetailScreen'
-import { usePlanner } from '../../src/store/planner'
-import { aGoal, anItem, render, setupApp, teardownApp } from './harness'
+import { stateFromHistory, usePlanner } from '../../src/store/planner'
+import {
+  aGoal,
+  anItem,
+  render,
+  setupApp,
+  shift,
+  teardownApp,
+} from './harness'
 
 const TODAY = '2026-10-01'
 const noop = () => {}
@@ -294,29 +301,38 @@ describe('항목 상세', () => {
     expect(screen.getByText('목표 설정을 따르는 중')).toBeInTheDocument()
   })
 
-  it('S-157 오늘 목록에 없는 항목도 상세에서 바로 기록한다', async () => {
-    // 다음에 볼 날이 아직 안 온 항목이라 오늘 화면에는 안 올라온다.
-    await setupApp(TODAY, {
-      items: [
-        anItem({
-          id: 'i1',
-          title: '미리 본 항목',
-          first_studied_at: TODAY,
-          last_review: TODAY,
-          due: '2026-10-03',
-        }),
-      ],
+
+  it('S-157 적을 때의 첫 평가가 이력에 남는다', async () => {
+    await setupApp(TODAY)
+    const item = await usePlanner.getState().addItem({
+      title: '첫 평가 항목',
+      firstStudiedAt: shift(TODAY, -3),
+      initialGrade: 2,
     })
-    const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)
-    expect(await screen.findByText('봤다고 기록하기')).toBeInTheDocument()
+    render(<ItemDetailScreen itemId={item.id} onBack={noop} />)
+    expect(await screen.findByText('평가 이력')).toBeInTheDocument()
 
-    const panel = screen.getByText('봤다고 기록하기').closest('section')!
-    await user.click(within(panel).getByRole('button', { name: /쉬움/ }))
+    // 한 화면 안에서 본 횟수와 평가 건수가 어긋나면 안 된다.
+    const history = screen.getByRole('table')
+    expect(within(history).getByText('어려움')).toBeInTheDocument()
+    expect(screen.getByText('지금까지 1번 봤어요')).toBeInTheDocument()
+    expect(usePlanner.getState().reviews).toHaveLength(1)
+  })
 
-    const reviews = usePlanner.getState().reviews
-    expect(reviews).toHaveLength(1)
-    expect(reviews[0].reviewed_at).toBe(TODAY)
-    expect(reviews[0].rating).toBe(4)
-    expect(usePlanner.getState().items[0].reps).toBe(2)
+  it('S-158 이력만으로 지금 상태를 다시 만들 수 있다', async () => {
+    await setupApp(TODAY)
+    const item = await usePlanner.getState().addItem({
+      title: '재생 항목',
+      firstStudiedAt: shift(TODAY, -20),
+    })
+    await usePlanner.getState().rateItem(item.id, 4, { reviewedAt: TODAY })
+    render(<ItemDetailScreen itemId={item.id} onBack={noop} />)
+    await screen.findByText('평가 이력')
+
+    const stored = usePlanner.getState().items[0]
+    const replayed = stateFromHistory(usePlanner.getState().reviews, item.id)
+    expect(replayed).not.toBeNull()
+    expect(replayed!.stability).toBeCloseTo(stored.stability!, 9)
+    expect(replayed!.difficulty).toBeCloseTo(stored.difficulty!, 9)
   })
 })

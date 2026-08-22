@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import type { Horizon } from '../../core/horizon/horizon'
-import { ChipLabel } from '../../components/Chip'
+import { INTENSITY_RETENTION } from '../../core/policy/constraints'
+import { Chip, ChipLabel } from '../../components/Chip'
+import type { Intensity } from '../../db/types'
 import { isActive } from '../../lib/domain'
 import { daysLeftLabel, horizonLabel } from '../../lib/format'
+import { INTENSITY_META } from '../../lib/intensity'
 import { usePlanner } from '../../store/planner'
 import { HorizonPicker } from '../newitem/HorizonPicker'
 
@@ -16,15 +19,17 @@ export function GoalListScreen({
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [horizon, setHorizon] = useState<Horizon>({ kind: 'open' })
+  const [intensity, setIntensity] = useState<Intensity>(settings.defaultIntensity)
 
   const active = goals.filter((g) => g.archived_at === null)
 
   async function submit() {
     const trimmed = name.trim()
     if (!trimmed) return
-    const goal = await createGoal({ name: trimmed, horizon })
+    const goal = await createGoal({ name: trimmed, horizon, intensity })
     setName('')
     setHorizon({ kind: 'open' })
+    setIntensity(settings.defaultIntensity)
     setCreating(false)
     onOpenGoal(goal.id)
   }
@@ -74,6 +79,28 @@ export function GoalListScreen({
               onChange={setHorizon}
             />
           </div>
+          <div className="flex flex-col gap-[6px]">
+            <span className="text-[12px] font-medium text-text-2">복습 강도</span>
+            <div className="flex flex-wrap gap-[6px]">
+              {INTENSITY_META.map((meta) => (
+                <Chip
+                  key={meta.key}
+                  active={intensity === meta.key}
+                  onClick={() => setIntensity(meta.key)}
+                  title={`${meta.desc} (기억률 ${Math.round(
+                    INTENSITY_RETENTION[meta.key] * 100
+                  )}% 기준)`}
+                >
+                  {meta.name}
+                </Chip>
+              ))}
+            </div>
+            <p className="text-[11.5px] text-text-3">
+              이 목표에 넣은 항목을 얼마나 자주 볼지예요. 나중에 목표 화면에서
+              바꿀 수 있습니다.
+            </p>
+          </div>
+
           <div>
             <button
               type="button"

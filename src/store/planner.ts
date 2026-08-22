@@ -4,6 +4,7 @@ import type { Grade, MemoryState } from '../core/fsrs/types'
 import { resolveHorizon, type Horizon } from '../core/horizon/horizon'
 import {
   applyReview,
+  DEFAULT_INITIAL_GRADE,
   initialSchedule,
   schedule,
   type Intensity,
@@ -190,12 +191,11 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     }
 
     // 처음 공부한 날에 한 번 본 것으로 친다. 등급을 안 고르면 '무난함' 이다.
+    const grade = draft.initialGrade ?? DEFAULT_INITIAL_GRADE
     const config = effectiveConfig(row, goal, settings)
     const initial = initialSchedule({
       firstStudiedAt,
-      ...(draft.initialGrade !== undefined
-        ? { initialGrade: draft.initialGrade }
-        : {}),
+      initialGrade: grade,
       horizon: config.horizon,
       intensity: config.intensity,
       targetRetention: config.targetRetention,
@@ -211,8 +211,34 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     row.due_source = 'fsrs'
     row.last_review = firstStudiedAt
 
+    // 이 한 번은 실제로 일어난 평가다. 기억 지속력과 본 횟수를 이미 바꿔 놓았으니
+    // 이력에도 남겨야 한다. 안 남기면 "1번 봤어요" 와 "평가 0건" 이 한 화면에 같이 뜨고,
+    // 백업을 되살릴 때 이력만으로는 지금 상태를 다시 만들 수 없다.
+    const firstReview: ReviewRow = {
+      id: newId('rev'),
+      item_id: row.id,
+      reviewed_at: firstStudiedAt,
+      recorded_at: nowIso(),
+      rating: grade,
+      state_before: 'new',
+      s_before: null,
+      d_before: null,
+      s_after: initial.state.stability,
+      d_after: initial.state.difficulty,
+      elapsed_days: 0,
+      scheduled_days: 0,
+      // 처음 보는 것이라 떠올릴 것이 없다. 회상률은 1 로 둔다.
+      r_at_review: 1,
+      next_interval: initial.intervalDays,
+      memo_snapshot: row.memo === '' ? null : row.memo,
+    }
+
     await db.insertItem(row)
-    set({ items: [...get().items, row] })
+    await db.insertReview(firstReview)
+    set({
+      items: [...get().items, row],
+      reviews: [...get().reviews, firstReview],
+    })
     if (goalId) await get().saveSetting('lastGoalId', goalId)
     await get().recomputeAll()
     return get().items.find((i) => i.id === row.id) ?? row

@@ -198,9 +198,9 @@ describe('목표 상세', () => {
       const { user } = render(
         <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
       )
-      await user.click(await screen.findByRole('button', { name: /설정 일괄 수정/ }))
+      await user.click(await screen.findByRole('button', { name: /목표 편집/ }))
       const panel = screen
-        .getByText('여기서 바꾸면 이 목표에 묶인 항목 전부에 적용돼요.')
+        .getByText('이름, 목표 시점, 복습 강도를 여기서 고칩니다. 묶인 항목 전부에 적용돼요.')
         .closest('div')!.parentElement!
       await user.click(within(panel).getByRole('button', { name: label }))
       expect(usePlanner.getState().goals[0].intensity).toBe(key)
@@ -212,7 +212,7 @@ describe('목표 상세', () => {
     const { user } = render(
       <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
     )
-    await user.click(await screen.findByRole('button', { name: /설정 일괄 수정/ }))
+    await user.click(await screen.findByRole('button', { name: /목표 편집/ }))
     await setDateInput(
       user,
       screen.getByLabelText('목표한 날 고르기'),
@@ -231,7 +231,7 @@ describe('목표 상세', () => {
     const { user } = render(
       <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
     )
-    await user.click(await screen.findByRole('button', { name: /설정 일괄 수정/ }))
+    await user.click(await screen.findByRole('button', { name: /목표 편집/ }))
     await user.click(screen.getByRole('button', { name: /고급/ }))
     const before = usePlanner.getState().goals[0].min_reviews
     await user.click(screen.getByRole('button', { name: '+' }))
@@ -271,5 +271,29 @@ describe('목표 상세', () => {
     )
     await user.click(await screen.findByText('문제 1'))
     expect(opened).toBe('i1')
+  })
+
+  it('S-160 목표를 만들 때 복습 강도를 고른다', async () => {
+    await setupApp(TODAY)
+    const { user } = render(<GoalListScreen onOpenGoal={noop} />)
+    await user.click(screen.getByRole('button', { name: '목표 만들기' }))
+    await user.type(screen.getByLabelText('목표 이름'), '자격증 시험')
+    await user.click(screen.getByRole('button', { name: '집중' }))
+    await user.click(screen.getByRole('button', { name: '만들기' }))
+
+    expect(usePlanner.getState().goals[0].intensity).toBe('focus')
+  })
+
+  it('S-161 목표 이름을 고친다', async () => {
+    await setupApp(TODAY, { goals: [aGoal({ id: 'g1', name: '옛 이름' })] })
+    const { user } = render(
+      <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
+    )
+    await user.click(await screen.findByRole('button', { name: /목표 편집/ }))
+    const input = screen.getByLabelText('목표 이름 고치기')
+    await user.tripleClick(input)
+    await user.keyboard('새 이름{Enter}')
+
+    expect(usePlanner.getState().goals[0].name).toBe('새 이름')
   })
 })
