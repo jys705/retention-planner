@@ -382,7 +382,9 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       reviews: backup.reviews,
       settings: backup.settings,
     })
-    set({ ready: false })
+    // 여기서 ready 를 내리면 앱이 "불러오는 중" 화면으로 갈아타면서 설정 화면이 통째로
+    // 사라진다. 그러면 가져오기가 끝났다는 안내도 같이 사라져서 사용자는 아무 일도
+    // 안 일어난 것처럼 본다. load() 가 어차피 전부 다시 채우므로 내릴 필요가 없다.
     await get().load()
   },
 
