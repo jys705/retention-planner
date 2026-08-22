@@ -1,6 +1,5 @@
 import type { Grade } from '../../core/fsrs/types'
 import { AdjustedBadge, Badge } from '../../components/Badge'
-import { DateField } from '../../components/DateField'
 import { RailRow } from '../../components/Rail'
 import type { GoalRow, ItemRow } from '../../db/types'
 import { statusBadgeOf, dueReason } from '../../lib/badge'
@@ -12,7 +11,7 @@ import {
   memoryStateOf,
   splitTitle,
 } from '../../lib/domain'
-import { dueLabel, monthDay, percent, yesterdayOf } from '../../lib/format'
+import { dueLabel, percent } from '../../lib/format'
 import type { Settings } from '../../lib/settings'
 import { defaultFsrs } from '../../core/fsrs/fsrs6'
 import { diffDays } from '../../lib/date'
@@ -28,10 +27,8 @@ export interface TodayRowProps {
   expanded: boolean
   focused: boolean
   showFullGradeHelp: boolean
-  reviewDate: DateOnly
   onToggle: () => void
   onRate: (grade: Grade) => void
-  onPickDate: (date: DateOnly) => void
   onOpen: () => void
 }
 
@@ -44,10 +41,8 @@ export function TodayRow({
   expanded,
   focused,
   showFullGradeHelp,
-  reviewDate,
   onToggle,
   onRate,
-  onPickDate,
   onOpen,
 }: TodayRowProps) {
   const config = effectiveConfig(item, goal, settings)
@@ -60,7 +55,7 @@ export function TodayRow({
     : 1
 
   const options = gradeOptions({
-    reviewedAt: reviewDate,
+    reviewedAt: today,
     lastReview: item.last_review,
     state,
     horizon: config.horizon,
@@ -74,10 +69,6 @@ export function TodayRow({
 
   const badge = statusBadgeOf(item.due_kind, item.goal_risk)
   const parts = splitTitle(item.title)
-  const yesterday = yesterdayOf(today)
-  // 같은 날을 두 번 기록하지는 않으므로 마지막으로 본 날이 곧 고를 수 있는 가장 이른 날이다.
-  const earliest = item.last_review
-  const pickedOther = reviewDate !== today && reviewDate !== yesterday
 
   return (
     <div
@@ -175,55 +166,6 @@ export function TodayRow({
             {dueReason(item.due_kind)}
           </p>
 
-          <div className="flex flex-wrap items-center gap-2 pt-[10px]">
-            <span className="text-[12px] text-text-3">언제 봤나요?</span>
-            {[
-              { label: '오늘', value: today },
-              { label: '어제', value: yesterday },
-            ].map((choice) => {
-              // 마지막으로 본 날보다 앞선 날은 고를 수 없다. 눌러도 되돌려지는 단추를
-              // 열어 두면 화면이 기록하지 않을 날짜를 기록한다고 말하게 된다.
-              const tooEarly = earliest !== null && choice.value < earliest
-              return (
-                <button
-                  key={choice.label}
-                  type="button"
-                  disabled={tooEarly}
-                  title={
-                    tooEarly
-                      ? `${monthDay(earliest!)}에 본 뒤로는 그보다 이른 날로 기록할 수 없어요.`
-                      : undefined
-                  }
-                  onClick={() => onPickDate(choice.value)}
-                  className={cn(
-                    'rounded-ctl border px-[10px] py-[5px] text-[12px]',
-                    tooEarly && 'cursor-not-allowed border-line-2 bg-surface text-text-3 opacity-40',
-                    !tooEarly && reviewDate === choice.value
-                      ? 'border-accent bg-accent-soft font-semibold text-accent'
-                      : !tooEarly &&
-                        'border-line-2 bg-surface text-text-2 hover:bg-hover'
-                  )}
-                >
-                  {choice.label}
-                </button>
-              )
-            })}
-            <DateField
-              value={reviewDate}
-              today={today}
-              min={earliest}
-              max={today}
-              onChange={onPickDate}
-              label="다른 날짜로 기록"
-              active={pickedOther}
-              text={pickedOther ? monthDay(reviewDate) : '다른 날'}
-            />
-            {reviewDate !== today ? (
-              <span className="text-[12px] text-accent">
-                {monthDay(reviewDate)}에 본 것으로 기록해요
-              </span>
-            ) : null}
-          </div>
         </div>
       ) : null}
     </div>

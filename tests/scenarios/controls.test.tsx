@@ -166,13 +166,8 @@ describe('평가 줄의 날짜 단추', () => {
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.click((await screen.findAllByRole('checkbox'))[0])
 
-    const row = screen.getByText('언제 봤나요?').closest('div')!
-    await user.click(within(row).getByRole('button', { name: '어제' }))
-    expect(screen.getByText(/9월 30일에 본 것으로 기록해요/)).toBeInTheDocument()
-
-    await user.click(within(row).getByRole('button', { name: '오늘' }))
-    expect(screen.queryByText(/본 것으로 기록해요/)).toBeNull()
-
+    // 날짜를 고르는 자리는 없다. 이 화면에서 누른 평가는 늘 오늘 것이다.
+    expect(screen.queryByText('언제 봤나요?')).toBeNull()
     await user.click(screen.getByRole('button', { name: /무난함/ }))
     expect(usePlanner.getState().reviews[0].reviewed_at).toBe(TODAY)
   })

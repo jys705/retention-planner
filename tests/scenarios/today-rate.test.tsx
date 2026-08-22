@@ -3,16 +3,7 @@ import { screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { usePlanner } from '../../src/store/planner'
-import {
-  anItem,
-  openCalendar,
-  render,
-  setDateInput,
-  setupApp,
-  shift,
-  teardownApp,
-} from './harness'
-import { fullDate } from '../../src/lib/format'
+import { anItem, render, setupApp, teardownApp } from './harness'
 
 const TODAY = '2026-10-01'
 
@@ -129,64 +120,6 @@ describe('오늘 화면: 평가', () => {
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
   })
 
-  it('S-023 다른 날짜로 기록: 어제', async () => {
-    await oneDueToday()
-    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
-    await expandFirstRow(user)
-    await user.click(screen.getByRole('button', { name: '어제' }))
-    expect(screen.getByText(/9월 30일에 본 것으로 기록해요/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /무난함/ }))
-
-    const review = usePlanner.getState().reviews[0]
-    expect(review.reviewed_at).toBe('2026-09-30')
-    // 9월 29일에 마지막으로 봤으니 하루가 지난 것으로 센다.
-    expect(review.elapsed_days).toBe(1)
-  })
-
-  it('S-024 다른 날짜로 기록: 임의 날짜', async () => {
-    await oneDueToday()
-    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
-    await expandFirstRow(user)
-    await setDateInput(
-      user,
-      screen.getByLabelText('다른 날짜로 기록'),
-      '2026-09-30'
-    )
-    await user.click(screen.getByRole('button', { name: /무난함/ }))
-    expect(usePlanner.getState().reviews[0].reviewed_at).toBe('2026-09-30')
-  })
-
-  it('S-025 미래로는 기록되지 않는다', async () => {
-    await oneDueToday()
-    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
-    await expandFirstRow(user)
-    const grid = await openCalendar(
-      user,
-      screen.getByLabelText('다른 날짜로 기록')
-    )
-    expect(
-      within(grid).getByRole('button', { name: fullDate(shift(TODAY, 1)) })
-    ).toBeDisabled()
-  })
-
-  it('S-026 마지막 복습일보다 이르게는 기록되지 않는다', async () => {
-    await oneDueToday()
-    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
-    await expandFirstRow(user)
-    const grid = await openCalendar(
-      user,
-      screen.getByLabelText('다른 날짜로 기록')
-    )
-    // 달력은 고른 값이 있는 10월로 열린다. 마지막으로 본 9월로 한 칸 되돌린다.
-    await user.click(within(grid).getByRole('button', { name: '지난달' }))
-    expect(
-      within(grid).getByRole('button', { name: fullDate('2026-09-29') })
-    ).toBeEnabled()
-    expect(
-      within(grid).getByRole('button', { name: fullDate('2026-09-28') })
-    ).toBeDisabled()
-  })
-
   it('S-027 같은 날 두 번 평가한다', async () => {
     await oneDueToday()
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
@@ -219,29 +152,20 @@ describe('오늘 화면: 평가', () => {
     ).toBeInTheDocument()
   })
 
-  it('S-152 평가하고 나면 고른 날짜가 오늘로 돌아온다', async () => {
-    // 어제 날짜로 '다시' 를 누르면 다음 날짜가 오늘로 잡혀 같은 항목이 다시 올라온다.
+
+  it('S-023 오늘 화면은 늘 오늘로 기록한다', async () => {
+    // 여기는 '오늘' 화면이라 다른 날짜로 기록하는 자리를 두지 않는다.
     await oneDueToday()
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
-    await user.click(screen.getByRole('button', { name: '어제' }))
-    await user.click(screen.getByRole('button', { name: /다시/ }))
-    expect(usePlanner.getState().reviews[0].reviewed_at).toBe(shift(TODAY, -1))
+    expect(screen.queryByText('언제 봤나요?')).toBeNull()
+    expect(screen.queryByLabelText('다른 날짜로 기록')).toBeNull()
 
-    // 다시 펼쳤을 때 아무도 안 골랐는데 어제가 남아 있으면 안 된다.
-    await expandFirstRow(user)
-    expect(screen.queryByText(/에 본 것으로 기록해요/)).toBeNull()
     await user.click(screen.getByRole('button', { name: /무난함/ }))
-    expect(usePlanner.getState().reviews[1].reviewed_at).toBe(TODAY)
-  })
-
-  it('S-153 마지막으로 본 날이 오늘이면 어제로 기록할 수 없다', async () => {
-    await oneDueToday({ last_review: TODAY })
-    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
-    await expandFirstRow(user)
-    // 눌러도 되돌려질 단추를 열어 두면 화면이 거짓말을 하게 된다.
-    expect(screen.getByRole('button', { name: '어제' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '오늘' })).toBeEnabled()
+    const review = usePlanner.getState().reviews[0]
+    expect(review.reviewed_at).toBe(TODAY)
+    // 9월 29일에 마지막으로 봤으니 이틀이 지난 것으로 센다.
+    expect(review.elapsed_days).toBe(2)
   })
 })
 

@@ -29,7 +29,6 @@ export function TodayScreen({
   // 키보드 단축키는 첫 줄부터 듣지만, 표시는 사람이 실제로 옮겨 다니거나
   // 줄을 누른 뒤에만 켠다. 켜자마자 첫 줄만 유난히 달라 보이면 안 된다.
   const [focusShown, setFocusShown] = useState(false)
-  const [reviewDates, setReviewDates] = useState<Record<string, DateOnly>>({})
   const listRef = useRef<HTMLDivElement>(null)
 
   const { overdue, dueToday } = splitTodayItems({ items, today })
@@ -91,16 +90,9 @@ export function TodayScreen({
   })
 
   async function handleRate(itemId: string, grade: Grade) {
-    const reviewedAt = reviewDates[itemId] ?? today
     setExpandedId(null)
-    // 고른 날짜는 그 한 번의 평가에 붙는 것이다. 남겨 두면 같은 항목이 다시 올라왔을 때
-    // 아무도 고른 적 없는 지난 날짜로 조용히 또 기록된다.
-    setReviewDates((current) => {
-      const next = { ...current }
-      delete next[itemId]
-      return next
-    })
-    await rateItem(itemId, grade, { reviewedAt })
+    // 여기는 '오늘' 화면이다. 오늘 본 것으로만 기록한다.
+    await rateItem(itemId, grade, { reviewedAt: today })
     setFocusIndex((i) => Math.max(0, Math.min(i, todayItems.length - 2)))
   }
 
@@ -160,7 +152,6 @@ export function TodayScreen({
               expanded={expandedId === item.id}
               focused={focusShown && focusIndex === index}
               showFullGradeHelp={showFullGradeHelp}
-              reviewDate={reviewDates[item.id] ?? today}
               onToggle={() => {
                 setFocusShown(true)
                 setFocusIndex(index)
@@ -170,9 +161,6 @@ export function TodayScreen({
               }}
               onRate={(grade) => void handleRate(item.id, grade)}
               onOpen={() => onOpenItem(item.id)}
-              onPickDate={(date) =>
-                setReviewDates((current) => ({ ...current, [item.id]: date }))
-              }
             />
           )
         })}

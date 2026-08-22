@@ -51,7 +51,11 @@ export function MemoryCurveChart({
   return (
     <div className="h-[240px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
+        {/* 위쪽 여백은 '오늘' 과 '목표한 날' 이름이 들어갈 자리다. 좁으면 글자가 잘린다. */}
+        <ComposedChart
+          data={data}
+          margin={{ top: 26, right: 24, bottom: 4, left: 0 }}
+        >
           <CartesianGrid stroke="var(--line)" vertical={false} />
           {readyAt && holdUntil && readyAt !== holdUntil ? (
             <ReferenceArea
