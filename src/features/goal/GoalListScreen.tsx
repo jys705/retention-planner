@@ -61,7 +61,7 @@ export function GoalListScreen({
                 void submit()
               }
             }}
-            placeholder="예: AWS SCS-C03"
+            placeholder="예: 자격증 시험"
             aria-label="목표 이름"
             className="w-full rounded-ctl border border-line-2 bg-surface px-[10px] py-[7px] text-[14px] outline-none"
           />

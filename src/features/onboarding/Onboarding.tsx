@@ -5,7 +5,7 @@ const STEPS = [
   {
     title: '한 일을 한 줄로 적어요',
     body: '복습은 앱 밖에서 합니다. 원래 진행하던 공부를 마친 뒤에 돌아와서 한 줄로 적어두기만 하면 돼요.',
-    example: 'AWS SCS-C03 1~10번 문제 풀이',
+    example: '4장 연습문제 1번에서 10번',
   },
   {
     title: '다시 볼 날을 알려드려요',
@@ -26,17 +26,11 @@ const STEPS = [
  */
 export function Onboarding() {
   const saveSetting = usePlanner((s) => s.saveSetting)
-  const addItem = usePlanner((s) => s.addItem)
-  const today = usePlanner((s) => s.today)
   const [step, setStep] = useState(0)
 
-  async function finish(withSample: boolean) {
-    if (withSample) {
-      await addItem({
-        title: 'AWS SCS-C03 1~10번 문제 풀이',
-        firstStudiedAt: today,
-      })
-    }
+  // 맛보기 항목을 만들어 두지 않는다. 사용자가 안 적은 것이 목록에 있으면
+  // 지워야 할 남의 자국처럼 보인다. 빈 상태 안내가 그 역할을 대신한다.
+  async function finish() {
     await saveSetting('onboardingDone', true)
   }
 
@@ -52,7 +46,7 @@ export function Onboarding() {
           </span>
           <button
             type="button"
-            onClick={() => void finish(false)}
+            onClick={() => void finish()}
             className="text-[12px] text-text-3 hover:text-text-2"
           >
             건너뛰기
@@ -82,12 +76,12 @@ export function Onboarding() {
           <button
             type="button"
             onClick={() => {
-              if (last) void finish(true)
+              if (last) void finish()
               else setStep((s) => s + 1)
             }}
             className="rounded-ctl bg-accent px-[16px] py-[8px] text-[13px] font-semibold text-white"
           >
-            {last ? '샘플 항목 하나로 시작하기' : '다음'}
+            {last ? '시작하기' : '다음'}
           </button>
         </div>
       </div>

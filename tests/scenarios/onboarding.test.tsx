@@ -15,7 +15,7 @@ async function fresh(): Promise<void> {
 }
 
 describe('첫 실행 안내', () => {
-  it('S-096 3단계를 지나 샘플 항목으로 시작한다', async () => {
+  it('S-096 3단계를 지나 빈 상태로 시작한다', async () => {
     await fresh()
     const { user } = render(<Onboarding />)
 
@@ -27,12 +27,10 @@ describe('첫 실행 안내', () => {
     await user.click(screen.getByRole('button', { name: '다음' }))
     expect(screen.getByText('3 / 3')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /샘플 항목/ }))
+    await user.click(screen.getByRole('button', { name: '시작하기' }))
     expect(usePlanner.getState().settings.onboardingDone).toBe(true)
-    expect(usePlanner.getState().items).toHaveLength(1)
-    expect(usePlanner.getState().items[0].title).toBe(
-      'AWS SCS-C03 1~10번 문제 풀이'
-    )
+    // 사용자가 안 적은 항목이 목록에 남아 있으면 안 된다.
+    expect(usePlanner.getState().items).toHaveLength(0)
   })
 
   it('S-096b 이전으로 돌아간다', async () => {
@@ -43,7 +41,7 @@ describe('첫 실행 안내', () => {
     expect(screen.getByText('1 / 3')).toBeInTheDocument()
   })
 
-  it('S-097 건너뛰면 샘플 없이 끝난다', async () => {
+  it('S-097 건너뛰어도 빈 상태로 끝난다', async () => {
     await fresh()
     const { user } = render(<Onboarding />)
     await user.click(screen.getByRole('button', { name: '건너뛰기' }))

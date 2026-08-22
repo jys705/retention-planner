@@ -112,7 +112,7 @@ export function QuickAdd({
               setTitle(lastTitle)
             }
           }}
-          placeholder="예: AWS SCS-C03 1~10번 문제 풀이"
+          placeholder="예: 4장 연습문제 1번에서 10번"
           aria-label="새 항목 제목"
           className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-text-3"
         />
