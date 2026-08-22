@@ -74,6 +74,7 @@ export function TodayRow({
 
   return (
     <div
+      role="listitem"
       className={cn(
         'rounded-card transition-colors',
         focused && 'bg-hover ring-2 ring-accent',

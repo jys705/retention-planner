@@ -3,7 +3,7 @@ import { DEFAULT_W } from '../../core/fsrs/params'
 import { INTENSITY_RETENTION, type Intensity } from '../../core/policy/constraints'
 import { Chip } from '../../components/Chip'
 import { Expand } from '../../components/Expand'
-import { todayLocal } from '../../lib/date'
+import { nowIso, today as clockToday } from '../../lib/clock'
 import { percent } from '../../lib/format'
 import type { ThemePreference } from '../../lib/settings'
 import {
@@ -50,7 +50,7 @@ export function SettingsScreen() {
   }
 
   function exportJson() {
-    const today = todayLocal()
+    const today = clockToday()
     const backup = toBackup(
       {
         goals,
@@ -63,7 +63,7 @@ export function SettingsScreen() {
           ])
         ),
       },
-      new Date().toISOString()
+      nowIso()
     )
     download(
       backupFilename(today),
@@ -74,7 +74,7 @@ export function SettingsScreen() {
   }
 
   function exportCsv() {
-    download(csvFilename(todayLocal()), toCsv(items, goals), 'text/csv')
+    download(csvFilename(clockToday()), toCsv(items, goals), 'text/csv')
     setMessage(`항목 ${items.length}개를 표로 내보냈어요.`)
   }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ItemRow } from '../../src/db/types'
-import { splitTitle, titleStem } from '../../src/lib/domain'
+import { commonTitlePrefix, splitTitle } from '../../src/lib/domain'
 import { findGroupSuggestion } from '../../src/features/today/suggestion'
 
 function item(id: string, title: string, goalId: string | null = null): ItemRow {
@@ -33,16 +33,49 @@ function item(id: string, title: string, goalId: string | null = null): ItemRow 
   }
 }
 
-describe('제목에서 공통 부분 뽑기', () => {
-  it('번호가 시작되기 전까지를 가져온다', () => {
-    expect(titleStem('AWS SCS-C03 1~10번 문제 풀이')).toBe('AWS SCS-C03')
-    expect(titleStem('AWS SCS-C03 11~20번 문제 풀이')).toBe('AWS SCS-C03')
-    expect(titleStem('정보보안기사 3회차 오답')).toBe('정보보안기사')
-    expect(titleStem('네트워크 2장 정리')).toBe('네트워크')
+describe('제목에서 공통 앞부분 뽑기', () => {
+  // 지시서의 검증표를 그대로 옮긴다.
+  it('여러 제목이 앞에서부터 공유하는 부분을 찾는다', () => {
+    expect(
+      commonTitlePrefix([
+        'AWS SCS-C03 1~10번 문제 풀이',
+        'AWS SCS-C03 11~20번 문제 풀이',
+      ])
+    ).toBe('AWS SCS-C03')
+    expect(commonTitlePrefix(['정보보안 개념 1~3', '정보보안 개념 4~6'])).toBe(
+      '정보보안 개념'
+    )
+    expect(
+      commonTitlePrefix(['모의고사 1회차 오답', '모의고사 2회차 오답'])
+    ).toBe('모의고사')
+    expect(commonTitlePrefix(['네트워크 정리', '보안 정리'])).toBe('')
   })
 
-  it('번호가 없으면 제목 그대로다', () => {
-    expect(titleStem('쿠버네티스 보안 심화')).toBe('쿠버네티스 보안 심화')
+  it('미리 정해두지 않은 번호 표기에도 공통 부분을 찾는다', () => {
+    // 한 제목만 보고 정규식으로 짐작하면 '회' 를 몰라서 놓친다.
+    expect(commonTitlePrefix(['모의고사 1회 오답', '모의고사 2회 오답'])).toBe(
+      '모의고사'
+    )
+    expect(commonTitlePrefix(['영어 단어 day1', '영어 단어 day2'])).toBe(
+      '영어 단어'
+    )
+  })
+
+  it('뒤쪽 공통 부분은 접두사가 아니다', () => {
+    expect(
+      commonTitlePrefix(['1~10번 문제 풀이', '11~20번 문제 풀이'])
+    ).toBe('')
+  })
+
+  it('한 글자거나 비면 묶지 않는다', () => {
+    expect(commonTitlePrefix(['가 나', '가 다'])).toBe('')
+    expect(commonTitlePrefix([])).toBe('')
+  })
+
+  it('제목이 하나뿐이면 그 제목 전체가 공통 부분이다', () => {
+    expect(commonTitlePrefix(['쿠버네티스 보안 심화'])).toBe(
+      '쿠버네티스 보안 심화'
+    )
   })
 
   it('제목을 세 조각으로 가른다', () => {

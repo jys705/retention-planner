@@ -43,10 +43,10 @@ export function maxDate(a: DateOnly, b: DateOnly): DateOnly {
   return a >= b ? a : b
 }
 
-/** 로컬 자정 기준의 오늘. core 바깥에서만 부른다. */
-export function todayLocal(now: Date = new Date()): DateOnly {
-  const y = String(now.getFullYear()).padStart(4, '0')
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
+/** 로컬 시각 하나를 날짜로. 시계를 읽는 건 clock 이 한다. */
+export function toDateOnly(instant: Date): DateOnly {
+  const y = String(instant.getFullYear()).padStart(4, '0')
+  const m = String(instant.getMonth() + 1).padStart(2, '0')
+  const d = String(instant.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
 }

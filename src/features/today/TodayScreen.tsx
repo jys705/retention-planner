@@ -7,8 +7,8 @@ import { fullDate, monthDay, percent, shortDate } from '../../lib/format'
 import { GRADE_HELP_THRESHOLD } from '../../lib/settings'
 import {
   selectOverallRetention,
-  selectTodayItems,
   selectUpcoming,
+  splitTodayItems,
   usePlanner,
 } from '../../store/planner'
 import { QuickAdd } from '../newitem/QuickAdd'
@@ -25,7 +25,8 @@ export function TodayScreen() {
   const [reviewDates, setReviewDates] = useState<Record<string, DateOnly>>({})
   const listRef = useRef<HTMLDivElement>(null)
 
-  const todayItems = selectTodayItems({ items, today })
+  const { overdue, dueToday } = splitTodayItems({ items, today })
+  const todayItems = [...overdue, ...dueToday]
   const upcoming = selectUpcoming(items, today)
   const overall = selectOverallRetention(items, today)
   const showFullGradeHelp = settings.ratingCount < GRADE_HELP_THRESHOLD
@@ -93,15 +94,26 @@ export function TodayScreen() {
           <span className="text-[12.5px] text-text-3">{fullDate(today)}</span>
           <div className="flex items-baseline gap-2">
             <span className="font-display text-[52px] font-semibold leading-none tracking-[-0.03em] num">
-              {todayItems.length}
+              {dueToday.length}
             </span>
             <span className="text-[20px] font-semibold tracking-[-0.01em]">
               개
             </span>
             <span className="pb-[3px] text-[15px] text-text-2">
-              오늘 다시 볼 항목
+              오늘 볼 항목
             </span>
           </div>
+          {overdue.length > 0 ? (
+            <div className="flex items-baseline gap-[6px] pt-[2px]">
+              <span className="text-[13px] text-text-2">밀린 것</span>
+              <span className="num text-[13px] font-semibold text-imp-fg">
+                {overdue.length}개
+              </span>
+              <span className="text-[12px] text-text-3">
+                지난 날짜에 잡혀 있던 것들이에요. 오늘 같이 보면 됩니다.
+              </span>
+            </div>
+          ) : null}
         </div>
         <RailPanel>
           <div className="flex flex-col items-end gap-[3px]">
@@ -117,6 +129,7 @@ export function TodayScreen() {
       </header>
 
       <div className="flex flex-col">
+        <div role="list" aria-label="오늘 볼 항목" className="flex flex-col">
         {todayItems.map((item, index) => {
           const goalIndex = goals.findIndex((g) => g.id === item.goal_id)
           return (
@@ -144,6 +157,7 @@ export function TodayScreen() {
             />
           )
         })}
+        </div>
 
         {todayItems.length === 0 && items.length > 0 ? (
           <EmptyToday upcoming={upcoming} today={today} />

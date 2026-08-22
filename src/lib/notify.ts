@@ -43,9 +43,13 @@ function isTauriShell(): boolean {
   )
 }
 
-/** 지금이 알림 시각을 지났는지. 하루에 한 번만 울리게 마지막 날짜와 함께 본다. */
+/**
+ * 지금이 알림 시각을 지났는지. 하루에 한 번만 울리게 마지막 날짜와 함께 본다.
+ *
+ * 시계를 직접 읽지 않고 자정부터의 분을 받는다. 시험에서 시각을 고정할 수 있어야 한다.
+ */
 export function shouldNotify(
-  now: Date,
+  minutesNow: number,
   notifyAt: string | null,
   lastNotifiedDate: string | null,
   today: DateOnly
@@ -54,6 +58,5 @@ export function shouldNotify(
   if (lastNotifiedDate === today) return false
   const [hour, minute] = notifyAt.split(':').map(Number)
   if (!Number.isFinite(hour) || !Number.isFinite(minute)) return false
-  const minutesNow = now.getHours() * 60 + now.getMinutes()
   return minutesNow >= hour * 60 + minute
 }

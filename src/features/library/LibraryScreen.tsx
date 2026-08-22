@@ -10,7 +10,7 @@ import {
   isActive,
   memoryStateOf,
   splitTitle,
-  titleStem,
+  groupByCommonPrefix,
 } from '../../lib/domain'
 import { dueLabel, horizonLabel, percent } from '../../lib/format'
 import { usePlanner } from '../../store/planner'
@@ -173,10 +173,17 @@ function GroupedList({
         const avg =
           goalRows.reduce((s, r) => s + r.retention, 0) / goalRows.length
 
-        const byStem = new Map<string, RowData[]>()
+        // 제목 앞부분이 같은 것끼리 한 번 더 접는다. 이건 보기 편하라고 하는 묶음이고
+        // 목표 소속과는 다른 것이다. 머리글에서 그 차이가 드러나야 한다.
+        const byStem = groupByCommonPrefix(goalRows, (r) => r.item.title)
+        const groupedIds = new Set(
+          [...byStem.values()].flatMap((rows) =>
+            rows.length > 1 ? rows.map((r) => r.item.id) : []
+          )
+        )
         for (const row of goalRows) {
-          const stem = titleStem(row.item.title) || row.item.title
-          byStem.set(stem, [...(byStem.get(stem) ?? []), row])
+          if (groupedIds.has(row.item.id)) continue
+          byStem.set(row.item.title, [row])
         }
 
         return (

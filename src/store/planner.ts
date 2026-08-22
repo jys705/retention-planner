@@ -35,7 +35,6 @@ import {
   fromEpochDay,
   maxDate,
   toEpochDay,
-  todayLocal,
   type DateOnly,
 } from '../lib/date'
 import {
@@ -53,6 +52,7 @@ import {
 } from '../lib/settings'
 import type { Backup } from '../lib/transfer'
 import { newId } from './ids'
+import { nowIso, today as clockToday } from '../lib/clock'
 
 export interface NewItemDraft {
   title: string
@@ -111,13 +111,11 @@ export function resetPlannerForTest(): void {
   repository = null
 }
 
-function nowIso(): string {
-  return new Date().toISOString()
-}
+
 
 export const usePlanner = create<PlannerState>((set, get) => ({
   ready: false,
-  today: todayLocal(),
+  today: clockToday(),
   goals: [],
   items: [],
   reviews: [],
@@ -137,7 +135,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       items,
       reviews,
       settings: parseSettings(rawSettings),
-      today: todayLocal(),
+      today: clockToday(),
       ready: true,
     })
     await get().recomputeAll()
@@ -763,15 +761,47 @@ export function selectTodayItems(state: {
   items: ItemRow[]
   today: DateOnly
 }): ItemRow[] {
-  return state.items
+  const { overdue, dueToday } = splitTodayItems(state)
+  return [...overdue, ...dueToday]
+}
+
+/**
+ * 오늘 목록을 밀린 것과 오늘 것으로 가른다.
+ *
+ * 둘을 한 덩어리로 세면 "오늘 볼 항목 8개" 가 사실이 아니게 된다.
+ * 그중 셋이 지난주에 봤어야 할 것이면 오늘 생긴 일이 아니다.
+ */
+export function splitTodayItems(state: {
+  items: ItemRow[]
+  today: DateOnly
+}): { overdue: ItemRow[]; dueToday: ItemRow[] } {
+  const due = state.items
     .filter(isActive)
     .filter((i) => i.due !== null && i.due <= state.today)
+
+  const overdue = due
+    .filter((i) => i.due! < state.today)
+    // 오래 밀린 것부터. 더 오래 둘수록 급하다.
+    .sort((a, b) =>
+      a.due !== b.due
+        ? a.due! < b.due!
+          ? -1
+          : 1
+        : a.created_at < b.created_at
+          ? -1
+          : 1
+    )
+
+  const dueToday = due
+    .filter((i) => i.due === state.today)
     .sort((a, b) => {
-      const rank = badgeRank(b.due_kind, b.goal_risk) - badgeRank(a.due_kind, a.goal_risk)
+      const rank =
+        badgeRank(b.due_kind, b.goal_risk) - badgeRank(a.due_kind, a.goal_risk)
       if (rank !== 0) return rank
-      if (a.due !== b.due) return (a.due ?? '') < (b.due ?? '') ? -1 : 1
       return a.created_at < b.created_at ? -1 : 1
     })
+
+  return { overdue, dueToday }
 }
 
 function badgeRank(kind: DueKind | null, risk: string | null): number {

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { shouldNotify } from '../../src/lib/notify'
 
-function at(hour: number, minute: number): Date {
-  return new Date(2026, 7, 22, hour, minute, 0)
+/** 자정부터의 분. 시계를 직접 읽지 않는다. */
+function at(hour: number, minute: number): number {
+  return hour * 60 + minute
 }
 
 describe('알림을 보낼 때', () => {

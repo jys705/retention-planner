@@ -1,5 +1,5 @@
 import type { ItemRow } from '../../db/types'
-import { titleStem } from '../../lib/domain'
+import { groupByCommonPrefix } from '../../lib/domain'
 
 export interface GroupSuggestion {
   stem: string
@@ -20,24 +20,16 @@ export function findGroupSuggestion(
   minimumCount = 3
 ): GroupSuggestion | null {
   const dismissed = new Set(dismissedPrefixes)
-  const buckets = new Map<string, string[]>()
-
-  for (const item of items) {
-    if (item.goal_id !== null) continue
-    if (item.archived_at !== null) continue
-    const stem = titleStem(item.title)
-    if (stem.length < 2) continue
-    if (dismissed.has(stem)) continue
-    const list = buckets.get(stem) ?? []
-    list.push(item.id)
-    buckets.set(stem, list)
-  }
+  const loose = items.filter(
+    (item) => item.goal_id === null && item.archived_at === null
+  )
 
   let best: GroupSuggestion | null = null
-  for (const [stem, itemIds] of buckets) {
-    if (itemIds.length < minimumCount) continue
-    if (best === null || itemIds.length > best.itemIds.length) {
-      best = { stem, itemIds }
+  for (const [stem, bucket] of groupByCommonPrefix(loose, (i) => i.title)) {
+    if (dismissed.has(stem)) continue
+    if (bucket.length < minimumCount) continue
+    if (best === null || bucket.length > best.itemIds.length) {
+      best = { stem, itemIds: bucket.map((i) => i.id) }
     }
   }
   return best

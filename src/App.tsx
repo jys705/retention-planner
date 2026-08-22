@@ -30,6 +30,7 @@ const SettingsScreen = lazy(() =>
 )
 import { Onboarding } from './features/onboarding/Onboarding'
 import { isActive } from './lib/domain'
+import { nowMinutes } from './lib/clock'
 import { notifyDueCount, shouldNotify } from './lib/notify'
 import { usePlanner } from './store/planner'
 
@@ -63,7 +64,7 @@ export function App() {
     if (!ready || !settings.onboardingDone) return
     if (
       !shouldNotify(
-        new Date(),
+        nowMinutes(),
         settings.notifyAt,
         settings.lastNotifiedDate,
         today
