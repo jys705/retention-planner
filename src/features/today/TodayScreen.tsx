@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Grade } from '../../core/fsrs/types'
 import { Hint } from '../../components/Chip'
 import { RailPanel } from '../../components/Rail'
+import { cn } from '../../lib/cn'
 import { addDays, type DateOnly } from '../../lib/date'
 import { fullDate, monthDay, percent, shortDate } from '../../lib/format'
 import { GRADE_HELP_THRESHOLD } from '../../lib/settings'
@@ -11,7 +12,7 @@ import {
   splitTodayItems,
   usePlanner,
 } from '../../store/planner'
-import { QuickAdd } from '../newitem/QuickAdd'
+import { QuickAdd, QuickAddHint } from '../newitem/QuickAdd'
 import { GroupSuggestionRow } from './GroupSuggestionRow'
 import { TodayRow } from './TodayRow'
 
@@ -29,6 +30,8 @@ export function TodayScreen({
   // 키보드 단축키는 첫 줄부터 듣지만, 표시는 사람이 실제로 옮겨 다니거나
   // 줄을 누른 뒤에만 켠다. 켜자마자 첫 줄만 유난히 달라 보이면 안 된다.
   const [focusShown, setFocusShown] = useState(false)
+  // 적어두기 줄은 카드 안에 있고 안내문은 카드 밖에 있다. 둘이 같은 상태를 봐야 한다.
+  const [detailOpen, setDetailOpen] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
 
   const { overdue, dueToday } = splitTodayItems({ items, today })
@@ -138,32 +141,69 @@ export function TodayScreen({
       </header>
 
       <div className="flex flex-col">
-        <div role="list" aria-label="오늘 볼 항목" className="flex flex-col">
-        {todayItems.map((item, index) => {
-          const goalIndex = goals.findIndex((g) => g.id === item.goal_id)
-          return (
-            <TodayRow
-              key={item.id}
-              item={item}
-              goal={goals.find((g) => g.id === item.goal_id) ?? null}
-              goalIndex={goalIndex < 0 ? 0 : goalIndex}
-              settings={settings}
-              today={today}
-              expanded={expandedId === item.id}
-              focused={focusShown && focusIndex === index}
-              showFullGradeHelp={showFullGradeHelp}
-              onToggle={() => {
-                setFocusShown(true)
-                setFocusIndex(index)
-                setExpandedId((current) =>
-                  current === item.id ? null : item.id
+        {/*
+          목록과 적어두기 줄이 카드 한 장 안에 있고, 그 안 오른쪽 268px 에 레일 띠가 깔린다.
+          왼쪽은 사람이 쓴 말, 오른쪽은 앱이 계산한 숫자다. 그 경계를 정렬로만 두면
+          줄이 늘어났을 때 눈이 열을 놓친다.
+        */}
+        <div className="relative overflow-hidden rounded-panel border border-line bg-surface shadow-[var(--shadow-sm)]">
+          <div
+            aria-hidden
+            className="absolute bottom-0 right-0 top-0 w-[268px] bg-rail"
+          />
+
+          {todayItems.length > 0 ? (
+            <div
+              role="list"
+              aria-label="오늘 볼 항목"
+              className="relative flex flex-col p-[8px]"
+            >
+              {todayItems.map((item, index) => {
+                const goalIndex = goals.findIndex((g) => g.id === item.goal_id)
+                return (
+                  <TodayRow
+                    key={item.id}
+                    item={item}
+                    goal={goals.find((g) => g.id === item.goal_id) ?? null}
+                    goalIndex={goalIndex < 0 ? 0 : goalIndex}
+                    settings={settings}
+                    today={today}
+                    expanded={expandedId === item.id}
+                    focused={focusShown && focusIndex === index}
+                    showFullGradeHelp={showFullGradeHelp}
+                    onToggle={() => {
+                      setFocusShown(true)
+                      setFocusIndex(index)
+                      setExpandedId((current) =>
+                        current === item.id ? null : item.id
+                      )
+                    }}
+                    onRate={(grade) => void handleRate(item.id, grade)}
+                    onOpen={() => onOpenItem(item.id)}
+                  />
                 )
-              }}
-              onRate={(grade) => void handleRate(item.id, grade)}
-              onOpen={() => onOpenItem(item.id)}
+              })}
+            </div>
+          ) : (
+            <div role="list" aria-label="오늘 볼 항목" className="hidden" />
+          )}
+
+          <div
+            className={cn(
+              'relative',
+              todayItems.length > 0 && 'border-t border-line'
+            )}
+          >
+            <QuickAdd
+              today={today}
+              goals={goals}
+              settings={settings}
+              lastTitle={lastTitle}
+              detailOpen={detailOpen}
+              onDetailOpenChange={setDetailOpen}
+              onAdd={(draft) => void addItem(draft)}
             />
-          )
-        })}
+          </div>
         </div>
 
         {todayItems.length === 0 && items.length > 0 ? (
@@ -172,17 +212,8 @@ export function TodayScreen({
 
         {items.length === 0 ? <EmptyLibrary /> : null}
 
-        <div className="pt-2">
-          <QuickAdd
-            today={today}
-            goals={goals}
-            settings={settings}
-            lastTitle={lastTitle}
-            onAdd={(draft) => void addItem(draft)}
-          />
-        </div>
-
         <GroupSuggestionRow />
+        <QuickAddHint detailOpen={detailOpen} />
       </div>
 
       <footer className="num flex flex-wrap gap-4 pt-6 text-[11px] text-text-3">

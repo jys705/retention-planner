@@ -23,6 +23,9 @@ export interface QuickAddProps {
   goals: GoalRow[]
   settings: Settings
   lastTitle: string | null
+  /** 상세 설정이 펼쳐졌는지. 카드 밖 안내문이 이 값을 같이 본다. */
+  detailOpen: boolean
+  onDetailOpenChange: (open: boolean) => void
   onAdd: (draft: NewItemDraft) => void
 }
 
@@ -37,10 +40,11 @@ export function QuickAdd({
   goals,
   settings,
   lastTitle,
+  detailOpen,
+  onDetailOpenChange: setDetailOpen,
   onAdd,
 }: QuickAddProps) {
   const [title, setTitle] = useState('')
-  const [detailOpen, setDetailOpen] = useState(false)
   const [goalId, setGoalId] = useState<string | null>(null)
   const [firstStudiedAt, setFirstStudiedAt] = useState<DateOnly>(today)
   const [horizon, setHorizon] = useState<Horizon | null>(null)
@@ -85,8 +89,9 @@ export function QuickAdd({
   const backdated = firstStudiedAt !== today
 
   return (
-    <div className="rounded-card border border-dashed border-line-2">
-      <div className="flex h-[52px] items-center gap-3 pl-[14px] pr-[18px]">
+    // 겉껍데기는 오늘 화면이 준다. 여기서는 목록 카드의 마지막 줄로만 그린다.
+    <div>
+      <div className="flex h-[54px] items-center gap-3 pl-[14px] pr-[14px]">
         <span
           aria-hidden
           className="flex h-[17px] w-[17px] flex-none items-center justify-center text-[15px] text-text-3"
@@ -99,7 +104,7 @@ export function QuickAdd({
           onKeyDown={(event) => {
             if (event.key === 'Enter' && event.altKey) {
               event.preventDefault()
-              setDetailOpen((open) => !open)
+              setDetailOpen(!detailOpen)
               return
             }
             if (event.key === 'Enter') {
@@ -128,7 +133,7 @@ export function QuickAdd({
         />
         <button
           type="button"
-          onClick={() => setDetailOpen((open) => !open)}
+          onClick={() => setDetailOpen(!detailOpen)}
           className="flex-none rounded-ctl px-[9px] py-[5px] text-[12px] text-text-3 hover:bg-hover"
         >
           상세 설정 <span className="num">⌥⏎</span>
@@ -261,17 +266,20 @@ export function QuickAdd({
             />
           </Field>
 
-          <p className="text-[12px] text-text-3">
-            한 항목은 20분에서 40분에 훑을 분량이 적당해요.
-          </p>
         </div>
-      ) : (
-        <p className="border-t border-line px-[18px] py-[9px] pl-[40px] text-[12px] text-text-3">
-          제목만 치고 Enter 를 누르면 끝입니다. 목표에 넣거나 날짜를 바꾸려면 상세
-          설정을 펼치세요.
-        </p>
-      )}
+      ) : null}
     </div>
+  )
+}
+
+/** 카드 밖에 한 줄로 두는 안내. */
+export function QuickAddHint({ detailOpen }: { detailOpen: boolean }) {
+  return (
+    <p className="px-[18px] pt-[10px] text-[12px] text-text-3">
+      {detailOpen
+        ? '한 항목은 20분에서 40분에 훑을 분량이 적당해요.'
+        : '제목만 치고 Enter 를 누르면 끝입니다. 목표에 넣거나 날짜를 바꾸려면 상세 설정을 펼치세요.'}
+    </p>
   )
 }
 

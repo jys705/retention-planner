@@ -38,14 +38,19 @@ export function GroupSuggestionRow() {
   }
 
   return (
-    <div className="mt-3 flex items-center gap-3 rounded-card bg-rail px-[14px] py-[10px]">
+    // 배너도 모달도 아니다. 바탕 없이 한 줄로 둔다.
+    <div className="mt-3 flex items-center gap-[10px] px-[18px]">
+      <span
+        aria-hidden
+        className="h-[4px] w-[4px] flex-none rounded-full bg-goal-1"
+      />
       <p className="min-w-0 flex-1 text-[12.5px] text-text-2">
         {`"${suggestion.stem}"으로 시작하는 항목이 ${suggestion.itemIds.length}개예요. 목표로 묶으면 시험 날짜를 한 번만 정하면 돼요.`}
       </p>
       <button
         type="button"
         onClick={() => void accept()}
-        className="flex-none rounded-ctl border border-accent px-[11px] py-[5px] text-[12px] font-semibold text-accent hover:bg-accent-soft"
+        className="flex-none rounded-full border border-line-2 bg-surface px-[11px] py-[4px] text-[11.5px] text-text-2 transition-colors hover:border-accent hover:text-accent-2"
       >
         묶기
       </button>
@@ -53,7 +58,7 @@ export function GroupSuggestionRow() {
         type="button"
         onClick={() => void dismiss()}
         aria-label="제안 닫기"
-        className="flex-none px-1 text-[13px] text-text-3 hover:text-text-2"
+        className="flex-none rounded-ctl px-[6px] py-[4px] text-[12px] text-text-3 transition-colors hover:bg-hover"
       >
         ✕
       </button>

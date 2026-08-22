@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { cn } from '../../lib/cn'
 import { horizonLabel } from '../../lib/format'
 import { usePlanner } from '../../store/planner'
-import { isActive } from '../../lib/domain'
+import { goalColor, isActive } from '../../lib/domain'
 
 export type ScreenKey = 'today' | 'forecast' | 'goals' | 'library' | 'settings'
 
@@ -49,7 +49,17 @@ export function AppShell({
                     : 'text-text-2 hover:bg-hover'
                 )}
               >
-                <span>{entry.label}</span>
+                <span className="flex items-center gap-[8px]">
+                  <span
+                    aria-hidden
+                    className="h-[5px] w-[5px] flex-none rounded-full"
+                    style={{
+                      background:
+                        screen === entry.key ? 'var(--accent)' : 'var(--dot)',
+                    }}
+                  />
+                  {entry.label}
+                </span>
                 {entry.key === 'today' && dueCount > 0 ? (
                   <span className="num text-[12px]">{dueCount}</span>
                 ) : null}
@@ -63,10 +73,19 @@ export function AppShell({
                 </span>
                 {upcomingGoals.map((goal) => (
                   <div key={goal.id} className="px-[10px]">
-                    <div className="truncate text-[12.5px] text-text-2">
-                      {goal.name}
+                    <div className="flex items-center gap-[7px]">
+                      <span
+                        aria-hidden
+                        className="h-[5px] w-[5px] flex-none rounded-full"
+                        style={{
+                          background: goalColor(goal, goals.indexOf(goal)),
+                        }}
+                      />
+                      <span className="truncate text-[12.5px] text-text-2">
+                        {goal.name}
+                      </span>
                     </div>
-                    <div className="num text-[11.5px] text-text-3">
+                    <div className="num pl-[12px] text-[11.5px] text-text-3">
                       {horizonLabel(
                         goal.horizon_kind,
                         goal.ready_at,

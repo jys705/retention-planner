@@ -74,12 +74,12 @@ export function TodayRow({
     <div
       role="listitem"
       className={cn(
-        // 평소에도 줄의 경계가 보여야 어디까지가 한 줄인지 안다. 마우스를 올린 줄과
-        // 키보드로 고른 줄은 같은 모양으로 도드라진다.
-        'rounded-card border bg-surface transition-colors',
+        // 카드 안에 놓이므로 평소에는 바탕이 없다. 마우스를 올린 줄과 키보드로 고른
+        // 줄이 같은 모양으로 도드라진다. 테는 안쪽으로 넣어 줄 높이가 안 흔들린다.
+        'rounded-[9px] transition-colors',
         focused
-          ? 'border-accent'
-          : 'border-line hover:border-accent'
+          ? 'bg-raise shadow-[inset_0_0_0_1.5px_var(--accent)]'
+          : 'hover:bg-raise hover:shadow-[inset_0_0_0_1.5px_var(--accent)]'
       )}
     >
       <div className="flex h-[52px] items-center gap-3 pl-[14px]">
