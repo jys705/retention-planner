@@ -239,7 +239,6 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       items: [...get().items, row],
       reviews: [...get().reviews, firstReview],
     })
-    if (goalId) await get().saveSetting('lastGoalId', goalId)
     await get().recomputeAll()
     return get().items.find((i) => i.id === row.id) ?? row
   },

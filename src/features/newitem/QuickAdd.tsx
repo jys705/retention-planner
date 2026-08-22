@@ -41,7 +41,7 @@ export function QuickAdd({
 }: QuickAddProps) {
   const [title, setTitle] = useState('')
   const [detailOpen, setDetailOpen] = useState(false)
-  const [goalId, setGoalId] = useState<string | null>(settings.lastGoalId)
+  const [goalId, setGoalId] = useState<string | null>(null)
   const [firstStudiedAt, setFirstStudiedAt] = useState<DateOnly>(today)
   const [horizon, setHorizon] = useState<Horizon | null>(null)
   const [intensity, setIntensity] = useState<Intensity | null>(null)
@@ -52,6 +52,8 @@ export function QuickAdd({
     setTitle('')
     setMemo('')
     setDetailOpen(false)
+    // 직전에 쓴 설정을 다음 항목에 물려주지 않는다. 늘 같은 자리에서 시작한다.
+    setGoalId(null)
     setFirstStudiedAt(today)
     setHorizon(null)
     setIntensity(null)
@@ -265,8 +267,8 @@ export function QuickAdd({
         </div>
       ) : (
         <p className="border-t border-line px-[18px] py-[9px] pl-[40px] text-[12px] text-text-3">
-          제목만 치고 Enter 를 누르면 끝입니다. 나머지는 마지막에 쓴 목표 설정을
-          그대로 씁니다.
+          제목만 치고 Enter 를 누르면 끝입니다. 목표에 넣거나 날짜를 바꾸려면 상세
+          설정을 펼치세요.
         </p>
       )}
     </div>

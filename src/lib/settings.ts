@@ -28,8 +28,6 @@ export interface Settings {
   lastNotifiedDate: string | null
   /** 평가한 횟수. 20회를 넘기면 등급 설명을 한 줄로 줄인다. */
   ratingCount: number
-  /** 새 항목의 마지막 설정. 제목만 치고 넘어갈 때 이걸 물려준다. */
-  lastGoalId: string | null
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -48,7 +46,6 @@ export const DEFAULT_SETTINGS: Settings = {
   onboardingDone: false,
   lastNotifiedDate: null,
   ratingCount: 0,
-  lastGoalId: null,
 }
 
 /** 등급 설명을 상시 노출하다가 이 횟수를 넘기면 한 줄로 줄인다. */
@@ -94,7 +91,6 @@ export function parseSettings(raw: Record<string, string>): Settings {
   if (raw.lastSuggestionDate !== undefined) {
     out.lastSuggestionDate = raw.lastSuggestionDate || null
   }
-  if (raw.lastGoalId !== undefined) out.lastGoalId = raw.lastGoalId || null
   if (raw.lastNotifiedDate !== undefined) {
     out.lastNotifiedDate = raw.lastNotifiedDate || null
   }

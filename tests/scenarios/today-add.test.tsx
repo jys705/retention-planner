@@ -135,8 +135,12 @@ describe('오늘 화면: 항목 적기', () => {
     await user.click(screen.getByRole('button', { name: /적어두기/ }))
 
     expect(usePlanner.getState().items[0].goal_id).toBe('g1')
-    // 다음에 적을 때 그 목표가 기본으로 남는다.
-    expect(usePlanner.getState().settings.lastGoalId).toBe('g1')
+
+    // 다음에 적을 때는 그 목표가 안 남아 있어야 한다.
+    await user.type(screen.getByLabelText('새 항목 제목'), '그 다음 것')
+    await openDetail(user)
+    await user.click(screen.getByRole('button', { name: /적어두기/ }))
+    expect(usePlanner.getState().items[1].goal_id).toBeNull()
   })
 
   it('S-010 소속 목표를 없음으로 둔다', async () => {
