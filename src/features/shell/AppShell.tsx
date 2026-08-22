@@ -31,8 +31,10 @@ export function AppShell({
     .slice(0, 3)
 
   return (
-    <div className="flex h-full bg-desk p-5">
-      <div className="mx-auto flex h-full w-full max-w-[1280px] overflow-hidden rounded-panel border border-line bg-bg shadow-md">
+    // macOS 창이 이미 테두리와 그림자와 둥근 모서리를 갖고 있다. 그 안에 같은 것을
+    // 한 겹 더 그리면 창 속에 창이 든 것처럼 보인다. 창을 그대로 채운다.
+    <div className="flex h-full bg-bg">
+      <div className="flex h-full w-full overflow-hidden">
         <nav className="flex w-[196px] flex-none flex-col justify-between border-r border-line bg-surface px-3 py-5">
           <div className="flex flex-col gap-1">
             {NAV.map((entry) => (

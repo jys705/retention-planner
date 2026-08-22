@@ -21,7 +21,9 @@ export function Expand({
         onClick={onToggle}
         className="flex w-full items-center gap-2 px-[13px] py-[10px] text-left"
       >
-        <span className="text-[12px] text-text-3">{open ? '▾' : '▸'}</span>
+        <span className="flex h-[20px] w-[20px] flex-none items-center justify-center rounded-ctl border border-line-2 bg-surface text-[11px] text-text-2">
+          {open ? '▾' : '▸'}
+        </span>
         <span className="text-[13px] font-medium text-text">{label}</span>
         {hint ? (
           <span className="truncate text-[12px] text-text-3">{hint}</span>
