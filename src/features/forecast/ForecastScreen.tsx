@@ -84,30 +84,9 @@ export function ForecastScreen() {
           selected={selected}
         />
         <p className="pt-3 text-[12px] text-text-2">
-          막대에 마우스를 올리면 그날 무엇을 보는지 뜹니다. 누르면 아래에 고정돼요.
+          막대에 마우스를 올리면 그날 무엇을 보는지 그 자리에 뜹니다.
         </p>
       </section>
-
-      {shown ? (
-        <section
-          aria-label="그날 무엇을 보나"
-          className="rounded-card border border-line bg-surface px-[16px] py-[14px]"
-        >
-          <div className="flex items-start justify-between gap-3 pb-1">
-            <h2 className="text-[13px] font-semibold">그날 무엇을 보나</h2>
-            {selected ? (
-              <button
-                type="button"
-                onClick={() => setSelected(null)}
-                className="text-[12px] text-text-3 hover:text-text-2"
-              >
-                고정 해제
-              </button>
-            ) : null}
-          </div>
-          <DayCard date={shown} items={byDate.get(shown) ?? []} />
-        </section>
-      ) : null}
 
       <section className="rounded-card border border-line bg-surface px-[16px] py-[14px]">
         <h2 className="pb-3 text-[13px] font-semibold">달력으로 보기</h2>
@@ -135,9 +114,38 @@ export function ForecastScreen() {
             </div>
           ))}
         </div>
-        <p className="pt-3 text-[12px] text-text-2">
-          {monthSentence(dailyCount, settings.dailyCap)}
-        </p>
+        {/*
+          자리를 늘 잡아 둔다. 이 상자가 나타났다 사라지면서 위 격자를 밀면
+          커서 아래 칸이 달아나고, 그러면 다시 사라지고를 되풀이한다.
+        */}
+        <div className="mt-3 min-h-[94px] rounded-card bg-rail px-[14px] py-[11px]">
+          {shown ? (
+            <section aria-label="그날 무엇을 보나">
+              <div className="flex items-start justify-between gap-3 pb-1">
+                <h2 className="text-[12px] font-medium text-text-3">
+                  그날 무엇을 보나
+                </h2>
+                {selected ? (
+                  <button
+                    type="button"
+                    onClick={() => setSelected(null)}
+                    className="text-[12px] text-text-3 hover:text-text-2"
+                  >
+                    고정 해제
+                  </button>
+                ) : null}
+              </div>
+              <DayCard date={shown} items={byDate.get(shown) ?? []} />
+            </section>
+          ) : (
+            <p className="text-[12px] leading-relaxed text-text-2">
+              {monthSentence(dailyCount, settings.dailyCap)}
+              <br />
+              칸에 마우스를 올리면 그날 무엇을 보는지 여기 나옵니다. 누르면
+              고정돼요.
+            </p>
+          )}
+        </div>
       </section>
 
       {bars.some((b) => b.count > 0) ? (
