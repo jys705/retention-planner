@@ -173,7 +173,7 @@ describe('평가 줄의 날짜 단추', () => {
     await user.click(within(row).getByRole('button', { name: '오늘' }))
     expect(screen.queryByText(/본 것으로 기록해요/)).toBeNull()
 
-    await user.click(screen.getByRole('button', { name: /알맞음/ }))
+    await user.click(screen.getByRole('button', { name: /무난함/ }))
     expect(usePlanner.getState().reviews[0].reviewed_at).toBe(TODAY)
   })
 })

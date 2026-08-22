@@ -26,7 +26,7 @@ describe('경계', () => {
     })
     const { user } = render(<TodayScreen />)
     await user.click((await screen.findAllByRole('checkbox'))[0])
-    await user.click(screen.getByRole('button', { name: /알맞음/ }))
+    await user.click(screen.getByRole('button', { name: /무난함/ }))
 
     const item = usePlanner.getState().items[0]
     expect(item.due).not.toBeNull()
@@ -48,7 +48,7 @@ describe('경계', () => {
     })
     const { user } = render(<TodayScreen />)
     await user.click((await screen.findAllByRole('checkbox'))[0])
-    await user.click(screen.getByRole('button', { name: /알맞음/ }))
+    await user.click(screen.getByRole('button', { name: /무난함/ }))
 
     const item = usePlanner.getState().items[0]
     // 마감선이 지났으니 제약이 풀리고 순수 간격으로 돈다.
@@ -86,7 +86,7 @@ describe('경계', () => {
     expect(boxes).toHaveLength(300)
 
     await user.click(boxes[0])
-    await user.click(screen.getByRole('button', { name: /알맞음/ }))
+    await user.click(screen.getByRole('button', { name: /무난함/ }))
     expect(usePlanner.getState().reviews).toHaveLength(1)
     expect(screen.getAllByRole('checkbox')).toHaveLength(299)
   })

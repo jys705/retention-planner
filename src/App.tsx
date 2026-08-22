@@ -119,6 +119,7 @@ function renderRoute(
       <GoalDetailScreen
         goalId={route.goalId}
         onOpenItem={(itemId) => setRoute({ screen: 'library', itemId })}
+        onDeleted={() => setRoute({ screen: 'goals' })}
       />
     )
   }

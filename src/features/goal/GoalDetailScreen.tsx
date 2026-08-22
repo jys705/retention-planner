@@ -30,12 +30,16 @@ const INTENSITY_META: { key: Intensity; name: string; desc: string }[] = [
 export function GoalDetailScreen({
   goalId,
   onOpenItem,
+  onDeleted,
 }: {
   goalId: string
   onOpenItem: (itemId: string) => void
+  onDeleted: () => void
 }) {
   const { items, goals, settings, today, planned } = usePlanner()
   const updateGoal = usePlanner((s) => s.updateGoal)
+  const deleteGoal = usePlanner((s) => s.deleteGoal)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [showBefore, setShowBefore] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -105,11 +109,50 @@ export function GoalDetailScreen({
             </span>
           ) : null}
         </div>
-        <p className="num pt-1 text-[12.5px] text-text-3">
-          목표 시점:{' '}
-          {horizonLabel(goal.horizon_kind, goal.ready_at, goal.hold_until)}
-        </p>
+        <div className="flex items-center gap-3 pt-1">
+          <p className="num text-[12.5px] text-text-3">
+            목표 시점:{' '}
+            {horizonLabel(goal.horizon_kind, goal.ready_at, goal.hold_until)}
+          </p>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={() => setConfirmingDelete(true)}
+            className="rounded-ctl border border-line-2 px-[10px] py-[5px] text-[12px] text-text-2 hover:bg-hover"
+          >
+            목표 삭제
+          </button>
+        </div>
       </header>
+
+      {confirmingDelete ? (
+        <section className="flex flex-col gap-3 rounded-card border border-imp-fg bg-surface px-[16px] py-[14px]">
+          <h2 className="text-[13px] font-semibold">이 목표를 지울까요?</h2>
+          <p className="text-[12.5px] leading-relaxed text-text-2">
+            {rows.length === 0
+              ? '묶인 항목이 없어서 이 목표만 사라집니다.'
+              : `묶여 있던 항목 ${rows.length}개는 지워지지 않고 소속만 풀립니다. 각 항목은 목표 시점 없이 계속 올라옵니다.`}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                void deleteGoal(goal.id).then(() => onDeleted())
+              }
+              className="rounded-ctl bg-imp-fg px-[14px] py-[7px] text-[13px] font-semibold text-white"
+            >
+              지우기
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(false)}
+              className="rounded-ctl border border-line-2 px-[12px] py-[7px] text-[13px] text-text-2 hover:bg-hover"
+            >
+              취소
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <div className="rail-panel grid grid-cols-4 gap-3 rounded-card bg-rail px-[16px] py-[13px]">
         <Stat label="항목 수" value={`${rows.length}개`} />

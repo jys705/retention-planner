@@ -37,7 +37,7 @@ export interface ProjectItemInput extends ProjectionSettings {
   from: DateOnly
   /** 며칠 앞까지 내다볼지. */
   days: number
-  /** 앞으로의 평가를 몇 점으로 가정할지. 기본은 '알맞음'. */
+  /** 앞으로의 평가를 몇 점으로 가정할지. 기본은 '무난함'. */
   assumedGrade?: Grade
   engine?: Fsrs6
 }
@@ -54,7 +54,7 @@ export interface ProjectedReview {
 /**
  * 앞으로의 복습 일정을 내다본다.
  *
- * 앞으로 계속 '알맞음' 을 누른다고 가정하고 스케줄러를 그대로 돌린다.
+ * 앞으로 계속 '무난함' 을 누른다고 가정하고 스케줄러를 그대로 돌린다.
  * 그래프와 새 항목 미리보기가 이 결과를 쓴다.
  */
 export function projectItem(input: ProjectItemInput): ProjectedReview[] {

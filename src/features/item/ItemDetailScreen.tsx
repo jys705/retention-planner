@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { AdjustedBadge, Badge } from '../../components/Badge'
+import { Chip } from '../../components/Chip'
 import type { ItemRow } from '../../db/types'
 import { dueReason, statusBadgeOf } from '../../lib/badge'
 import { fromEpochDay, type DateOnly } from '../../lib/date'
@@ -14,7 +16,7 @@ import { usePlanner } from '../../store/planner'
 import { MemoryCurveChart } from '../charts/MemoryCurveChart'
 import { buildItemView } from './itemView'
 
-const GRADE_NAME = ['', '다시', '어려움', '알맞음', '쉬움']
+const GRADE_NAME = ['', '다시', '어려움', '무난함', '쉬움']
 
 export function ItemDetailScreen({
   itemId,
@@ -24,6 +26,15 @@ export function ItemDetailScreen({
   onBack: () => void
 }) {
   const { items, goals, reviews, settings, today, planned } = usePlanner()
+  const updateItem = usePlanner((s) => s.updateItem)
+  const deleteItem = usePlanner((s) => s.deleteItem)
+
+  const [editing, setEditing] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [draftTitle, setDraftTitle] = useState('')
+  const [draftMemo, setDraftMemo] = useState('')
+  const [draftGoalId, setDraftGoalId] = useState<string | null>(null)
+
   const item = items.find((i) => i.id === itemId)
   if (!item) {
     return (
@@ -40,6 +51,32 @@ export function ItemDetailScreen({
     .map((p) => p.date)
     .sort()
 
+  const found = item
+
+  function startEditing() {
+    setDraftTitle(found.title)
+    setDraftMemo(found.memo)
+    setDraftGoalId(found.goal_id)
+    setConfirmingDelete(false)
+    setEditing(true)
+  }
+
+  async function saveEdit() {
+    const title = draftTitle.trim()
+    if (title === '') return
+    await updateItem(found.id, {
+      title,
+      memo: draftMemo.trim(),
+      goal_id: draftGoalId,
+    })
+    setEditing(false)
+  }
+
+  async function removeItem() {
+    await deleteItem(found.id)
+    onBack()
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-[940px] flex-col gap-5 px-6 py-7">
       <div>
@@ -54,6 +91,24 @@ export function ItemDetailScreen({
           <h1 className="text-[19px] font-semibold">{item.title}</h1>
           {badge ? <Badge kind={badge} /> : null}
           {item.due_source === 'spread' ? <AdjustedBadge /> : null}
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={startEditing}
+            className="rounded-ctl border border-line-2 px-[10px] py-[5px] text-[12px] text-text-2 hover:bg-hover"
+          >
+            편집
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(false)
+              setConfirmingDelete(true)
+            }}
+            className="rounded-ctl border border-line-2 px-[10px] py-[5px] text-[12px] text-text-2 hover:bg-hover"
+          >
+            삭제
+          </button>
         </div>
         <div className="num flex flex-wrap gap-4 pt-1 text-[12px] text-text-3">
           {goal ? <span>{goal.name}</span> : null}
@@ -67,6 +122,105 @@ export function ItemDetailScreen({
           </span>
         </div>
       </div>
+
+      {editing ? (
+        <section className="flex flex-col gap-4 rounded-card border border-accent bg-surface px-[16px] py-[14px]">
+          <h2 className="text-[13px] font-semibold">항목 고치기</h2>
+
+          <label className="flex flex-col gap-[6px]">
+            <span className="text-[12px] font-medium text-text-2">제목</span>
+            <input
+              value={draftTitle}
+              onChange={(event) => setDraftTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void saveEdit()
+                }
+              }}
+              aria-label="제목 고치기"
+              className="rounded-ctl border border-line-2 bg-surface px-[10px] py-[7px] text-[14px] outline-none"
+            />
+          </label>
+
+          <label className="flex flex-col gap-[6px]">
+            <span className="text-[12px] font-medium text-text-2">메모</span>
+            <input
+              value={draftMemo}
+              onChange={(event) => setDraftMemo(event.target.value)}
+              aria-label="메모 고치기"
+              placeholder="3, 7번 틀림"
+              className="rounded-ctl border border-line-2 bg-surface px-[10px] py-[7px] text-[13px] outline-none"
+            />
+          </label>
+
+          <div className="flex flex-col gap-[6px]">
+            <span className="text-[12px] font-medium text-text-2">소속 목표</span>
+            <div className="flex flex-wrap gap-[6px]">
+              <Chip
+                active={draftGoalId === null}
+                onClick={() => setDraftGoalId(null)}
+              >
+                없음
+              </Chip>
+              {goals
+                .filter((g) => g.archived_at === null)
+                .map((g) => (
+                  <Chip
+                    key={g.id}
+                    active={draftGoalId === g.id}
+                    onClick={() => setDraftGoalId(g.id)}
+                  >
+                    {g.name}
+                  </Chip>
+                ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void saveEdit()}
+              disabled={draftTitle.trim() === ''}
+              className="rounded-ctl bg-accent px-[14px] py-[7px] text-[13px] font-semibold text-white disabled:opacity-35"
+            >
+              저장
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="rounded-ctl border border-line-2 px-[12px] py-[7px] text-[13px] text-text-2 hover:bg-hover"
+            >
+              취소
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {confirmingDelete ? (
+        <section className="flex flex-col gap-3 rounded-card border border-imp-fg bg-surface px-[16px] py-[14px]">
+          <h2 className="text-[13px] font-semibold">이 항목을 지울까요?</h2>
+          <p className="text-[12.5px] leading-relaxed text-text-2">
+            {`"${item.title}"과 지금까지의 평가 ${view.reviews.length}건이 함께 사라집니다. 되돌릴 수 없어요.`}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void removeItem()}
+              className="rounded-ctl bg-imp-fg px-[14px] py-[7px] text-[13px] font-semibold text-white"
+            >
+              지우기
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(false)}
+              className="rounded-ctl border border-line-2 px-[12px] py-[7px] text-[13px] text-text-2 hover:bg-hover"
+            >
+              취소
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <Summary item={item} today={today} retention={view.retention} />
 

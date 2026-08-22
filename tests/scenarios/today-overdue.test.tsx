@@ -81,7 +81,7 @@ describe('오늘 화면: 밀린 항목', () => {
     expect(await screen.findByText('8일 지남')).toBeInTheDocument()
 
     await user.click((await screen.findAllByRole('checkbox'))[0])
-    await user.click(screen.getByRole('button', { name: /알맞음/ }))
+    await user.click(screen.getByRole('button', { name: /무난함/ }))
 
     expect(usePlanner.getState().reviews).toHaveLength(1)
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0)

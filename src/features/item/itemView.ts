@@ -42,7 +42,7 @@ export interface ItemView {
 /**
  * 항목 하나를 그리는 데 필요한 값을 한 번에 만든다.
  *
- * 지난 평가는 이력을 재생해서 얻고, 앞으로는 계속 '알맞음' 을 누른다고 가정해 내다본다.
+ * 지난 평가는 이력을 재생해서 얻고, 앞으로는 계속 '무난함' 을 누른다고 가정해 내다본다.
  */
 export function buildItemView(
   item: ItemRow,
@@ -145,7 +145,7 @@ export function buildItemView(
   }
 }
 
-/** 항목을 만들 때의 첫 평가. '알맞음' 으로 한 번 본 것으로 친다. */
+/** 항목을 만들 때의 첫 평가. '무난함' 으로 한 번 본 것으로 친다. */
 function initialState(): MemoryState {
   return defaultFsrs.nextState(null, 0, 3)
 }

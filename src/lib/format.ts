@@ -80,8 +80,10 @@ export function stabilityLabel(stability: number): string {
  * 5.2 / 10 같은 점수는 그 자체로 뜻이 안 통한다.
  */
 export function difficultyLabel(difficulty: number): string {
-  if (difficulty < 3) return '쉬운 편'
-  if (difficulty < 5) return '무난'
+  // 평가 등급 이름(무난함)과 겹치지 않게 고른 말들이다.
+  // 같은 화면에서 둘이 나란히 나오면 무엇을 가리키는 말인지 헷갈린다.
+  if (difficulty < 3) return '아주 쉬움'
+  if (difficulty < 5) return '쉬운 편'
   if (difficulty < 7) return '보통'
   if (difficulty < 8.5) return '어려운 편'
   return '많이 어려움'

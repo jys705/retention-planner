@@ -42,7 +42,7 @@ describe('오늘 화면: 소급 입력', () => {
 
       const stored = usePlanner.getState().items[0]
       expect(stored.first_studied_at).toBe(firstStudiedAt)
-      // 그 시점에 '알맞음' 으로 한 번 본 것으로 친다.
+      // 그 시점에 '무난함' 으로 한 번 본 것으로 친다.
       expect(stored.last_review).toBe(firstStudiedAt)
       expect(stored.due).toBe(due)
 

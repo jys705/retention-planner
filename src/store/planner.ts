@@ -94,6 +94,7 @@ interface PlannerState {
   updateGoal(id: string, patch: Partial<GoalRow>): Promise<void>
   updateItem(id: string, patch: Partial<ItemRow>): Promise<void>
   deleteItem(id: string): Promise<void>
+  deleteGoal(id: string): Promise<void>
   attachItemsToGoal(goalId: string, itemIds: string[]): Promise<void>
   saveSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void>
   importAll(backup: Backup): Promise<void>
@@ -182,7 +183,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       archived_at: null,
     }
 
-    // 처음 공부한 날에 '알맞음' 으로 한 번 본 것으로 친다.
+    // 처음 공부한 날에 '무난함' 으로 한 번 본 것으로 친다.
     const config = effectiveConfig(row, goal, settings)
     const initial = initialSchedule({
       firstStudiedAt,
@@ -337,6 +338,19 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     set({
       items: get().items.filter((i) => i.id !== id),
       reviews: get().reviews.filter((r) => r.item_id !== id),
+    })
+    await get().recomputeAll()
+  },
+
+  async deleteGoal(id) {
+    const db = await repo()
+    await db.deleteGoal(id)
+    set({
+      goals: get().goals.filter((g) => g.id !== id),
+      // 목표를 지워도 항목은 남는다. 소속만 풀린다.
+      items: get().items.map((i) =>
+        i.goal_id === id ? { ...i, goal_id: null } : i
+      ),
     })
     await get().recomputeAll()
   },

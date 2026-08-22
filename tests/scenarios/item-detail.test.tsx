@@ -173,7 +173,7 @@ describe('항목 상세', () => {
     render(<ItemDetailScreen itemId="i1" onBack={noop} />)
     expect(await screen.findByText('평가 이력')).toBeInTheDocument()
     expect(screen.getByText('9월 29일')).toBeInTheDocument()
-    expect(screen.getByText('알맞음')).toBeInTheDocument()
+    expect(screen.getByText('무난함')).toBeInTheDocument()
     expect(screen.getByText('3번 틀림')).toBeInTheDocument()
   })
 

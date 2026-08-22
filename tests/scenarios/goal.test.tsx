@@ -170,7 +170,7 @@ describe('목표 상세', () => {
 
   it('S-053 요약 한 문장이 남은 날과 기억률을 말한다', async () => {
     await withGoal()
-    render(<GoalDetailScreen goalId="g1" onOpenItem={noop} />)
+    render(<GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />)
     expect((await screen.findAllByText(/44일 남음/)).length).toBeGreaterThan(0)
     expect(
       screen.getByText(/지금 속도면 목표한 날 평균 .*쯤 기억하고 있을 거예요/)
@@ -187,7 +187,7 @@ describe('목표 상세', () => {
       cleanup()
       await withGoal()
       const { user } = render(
-        <GoalDetailScreen goalId="g1" onOpenItem={noop} />
+        <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
       )
       await user.click(await screen.findByRole('button', { name: /설정 일괄 수정/ }))
       const panel = screen
@@ -201,7 +201,7 @@ describe('목표 상세', () => {
   it('S-055 목표 시점을 바꾸면 묶인 항목이 따라온다', async () => {
     await withGoal()
     const { user } = render(
-      <GoalDetailScreen goalId="g1" onOpenItem={noop} />
+      <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
     )
     await user.click(await screen.findByRole('button', { name: /설정 일괄 수정/ }))
     const picker = screen.getByDisplayValue('2026-11-14')
@@ -218,7 +218,7 @@ describe('목표 상세', () => {
   it('S-056 고급에서 최소 복습 횟수를 조절한다', async () => {
     await withGoal()
     const { user } = render(
-      <GoalDetailScreen goalId="g1" onOpenItem={noop} />
+      <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
     )
     await user.click(await screen.findByRole('button', { name: /설정 일괄 수정/ }))
     await user.click(screen.getByRole('button', { name: /고급/ }))
@@ -232,7 +232,7 @@ describe('목표 상세', () => {
   it('S-057 조정 전과 비교를 켠다', async () => {
     await withGoal()
     const { user } = render(
-      <GoalDetailScreen goalId="g1" onOpenItem={noop} />
+      <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
     )
     const toggle = await screen.findByRole('checkbox', { name: /조정 전과 비교/ })
     expect(toggle).not.toBeChecked()
@@ -242,7 +242,7 @@ describe('목표 상세', () => {
 
   it('S-058 목표 시점이 없는 목표는 준비 상태가 필요 없다고 말한다', async () => {
     await withGoal({ horizon_kind: 'open', ready_at: null, hold_until: null })
-    render(<GoalDetailScreen goalId="g1" onOpenItem={noop} />)
+    render(<GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />)
     expect(
       await screen.findByText(/목표한 날이 없어서 준비 상태나 날짜 조정은 필요하지 않아요/)
     ).toBeInTheDocument()
@@ -252,7 +252,11 @@ describe('목표 상세', () => {
     await withGoal()
     let opened: string | null = null
     const { user } = render(
-      <GoalDetailScreen goalId="g1" onOpenItem={(id) => (opened = id)} />
+      <GoalDetailScreen
+        goalId="g1"
+        onOpenItem={(id) => (opened = id)}
+        onDeleted={noop}
+      />
     )
     await user.click(await screen.findByText('문제 1'))
     expect(opened).toBe('i1')

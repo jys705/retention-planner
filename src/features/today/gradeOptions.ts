@@ -35,7 +35,7 @@ const GRADE_META: {
   },
   {
     grade: 3,
-    name: '알맞음',
+    name: '무난함',
     hint: '무난하게 기억났어요',
     color: 'var(--g3)',
   },
@@ -49,7 +49,7 @@ const GRADE_META: {
 
 /** 짧게 줄인 기준. 평가에 익숙해진 뒤에 이걸로 바꾼다. */
 export const GRADE_HINT_SHORT =
-  '다시: 거의 기억 안 남 | 어려움: 여러 번 막힘 | 알맞음: 무난 | 쉬움: 바로 나옴'
+  '다시: 거의 기억 안 남 | 어려움: 여러 번 막힘 | 무난함: 무난하게 기억남 | 쉬움: 바로 나옴'
 
 export interface GradePreviewInput {
   reviewedAt: DateOnly

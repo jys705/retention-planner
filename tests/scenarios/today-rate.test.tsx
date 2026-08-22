@@ -43,7 +43,7 @@ describe('오늘 화면: 평가', () => {
 
     await expandFirstRow(user)
     expect(screen.getByText('얼마나 기억났나요?')).toBeInTheDocument()
-    for (const name of ['다시', '어려움', '알맞음', '쉬움']) {
+    for (const name of ['다시', '어려움', '무난함', '쉬움']) {
       expect(screen.getByRole('button', { name: new RegExp(name) })).toBeInTheDocument()
     }
   })
@@ -71,13 +71,13 @@ describe('오늘 화면: 평가', () => {
     expect(usePlanner.getState().reviews[0].rating).toBe(2)
   })
 
-  it('S-019 알맞음으로 평가하면 단추에 뜬 날짜대로 잡힌다', async () => {
+  it('S-019 무난함으로 평가하면 단추에 뜬 날짜대로 잡힌다', async () => {
     await oneDueToday()
     const { user } = render(<TodayScreen />)
     await expandFirstRow(user)
 
     // 단추에 미리 뜬 '며칠 뒤' 를 읽어 둔다.
-    const button = screen.getByRole('button', { name: /알맞음/ })
+    const button = screen.getByRole('button', { name: /무난함/ })
     const promised = within(button).getByText(/뒤$|^내일$|^오늘$/).textContent!
     await user.click(button)
 
@@ -104,8 +104,8 @@ describe('오늘 화면: 평가', () => {
       if (text === '내일') return 1
       return Number(text.replace('일 뒤', ''))
     }
-    expect(days('쉬움')).toBeGreaterThan(days('알맞음'))
-    expect(days('알맞음')).toBeGreaterThan(days('어려움'))
+    expect(days('쉬움')).toBeGreaterThan(days('무난함'))
+    expect(days('무난함')).toBeGreaterThan(days('어려움'))
     expect(days('어려움')).toBeGreaterThanOrEqual(days('다시'))
   })
 
@@ -122,7 +122,7 @@ describe('오늘 화면: 평가', () => {
     const { user } = render(<TodayScreen />)
     expect(await screen.findAllByRole('checkbox')).toHaveLength(1)
     await expandFirstRow(user)
-    await user.click(screen.getByRole('button', { name: /알맞음/ }))
+    await user.click(screen.getByRole('button', { name: /무난함/ }))
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
   })
 
@@ -132,7 +132,7 @@ describe('오늘 화면: 평가', () => {
     await expandFirstRow(user)
     await user.click(screen.getByRole('button', { name: '어제' }))
     expect(screen.getByText(/9월 30일에 본 것으로 기록해요/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /알맞음/ }))
+    await user.click(screen.getByRole('button', { name: /무난함/ }))
 
     const review = usePlanner.getState().reviews[0]
     expect(review.reviewed_at).toBe('2026-09-30')
@@ -149,7 +149,7 @@ describe('오늘 화면: 평가', () => {
       screen.getByLabelText('다른 날짜로 기록'),
       '2026-09-30'
     )
-    await user.click(screen.getByRole('button', { name: /알맞음/ }))
+    await user.click(screen.getByRole('button', { name: /무난함/ }))
     expect(usePlanner.getState().reviews[0].reviewed_at).toBe('2026-09-30')
   })
 
@@ -179,7 +179,7 @@ describe('오늘 화면: 평가', () => {
     expect(await screen.findAllByRole('checkbox')).toHaveLength(1)
 
     await expandFirstRow(user)
-    await user.click(screen.getByRole('button', { name: /알맞음/ }))
+    await user.click(screen.getByRole('button', { name: /무난함/ }))
     expect(usePlanner.getState().reviews).toHaveLength(2)
     expect(usePlanner.getState().reviews[1].elapsed_days).toBe(0)
   })
@@ -190,7 +190,7 @@ describe('오늘 화면: 평가', () => {
     await expandFirstRow(user)
     // 스무 번 전에는 단추마다 뜻이 붙는다.
     expect(screen.getByText('무난하게 기억났어요')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /알맞음/ }))
+    await user.click(screen.getByRole('button', { name: /무난함/ }))
 
     await usePlanner.getState().saveSetting('ratingCount', 21)
     await setupAgain()
