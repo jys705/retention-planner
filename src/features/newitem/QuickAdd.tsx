@@ -4,7 +4,7 @@ import { INTENSITY_RETENTION, type Intensity } from '../../core/policy/constrain
 import { Chip, Hint } from '../../components/Chip'
 import type { GoalRow } from '../../db/types'
 import { cn } from '../../lib/cn'
-import { addDays, type DateOnly } from '../../lib/date'
+import { addDays, isDateOnly, type DateOnly } from '../../lib/date'
 import { horizonLabel, monthDay } from '../../lib/format'
 import type { Settings } from '../../lib/settings'
 import type { NewItemDraft } from '../../store/planner'
@@ -172,6 +172,7 @@ export function QuickAdd({
                   value={firstStudiedAt}
                   aria-label="처음 공부한 날 고르기"
                   onChange={(event) => {
+                    if (!isDateOnly(event.target.value)) return
                     setFirstStudiedAt(event.target.value)
                     setDateTouched(true)
                   }}

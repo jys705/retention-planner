@@ -10,6 +10,7 @@ import {
 import { Chip } from '../../components/Chip'
 import { cn } from '../../lib/cn'
 import type { DateOnly } from '../../lib/date'
+import { isDateOnly } from '../../lib/date'
 import { monthDay } from '../../lib/format'
 import { MODE_META } from './horizonModes'
 
@@ -88,9 +89,11 @@ export function HorizonPicker({
             type="date"
             value={value.at}
             min={today}
-            onChange={(event) =>
+            onChange={(event) => {
+              // 날짜 칸은 비울 수 있다. 빈 값을 그대로 저장하면 목표 시점이 깨진다.
+              if (!isDateOnly(event.target.value)) return
               onChange({ kind: 'date', at: event.target.value })
-            }
+            }}
             className="num w-[180px] rounded-ctl border border-line-2 bg-surface px-[10px] py-[6px] text-[13px]"
           />
           <p className="text-[12px] text-text-3">

@@ -14,7 +14,7 @@ import {
 import { dueLabel, monthDay, percent, yesterdayOf } from '../../lib/format'
 import type { Settings } from '../../lib/settings'
 import { defaultFsrs } from '../../core/fsrs/fsrs6'
-import { diffDays } from '../../lib/date'
+import { diffDays, isDateOnly } from '../../lib/date'
 import { GRADE_HINT_SHORT, gradeOptions } from './gradeOptions'
 
 export interface TodayRowProps {
@@ -189,7 +189,10 @@ export function TodayRow({
                 max={today}
                 min={item.last_review ?? undefined}
                 value={reviewDate}
-                onChange={(event) => onPickDate(event.target.value)}
+                onChange={(event) => {
+                  if (!isDateOnly(event.target.value)) return
+                  onPickDate(event.target.value)
+                }}
                 className="num rounded-ctl border border-line-2 bg-surface px-[8px] py-[4px] text-[12px]"
               />
             </label>
