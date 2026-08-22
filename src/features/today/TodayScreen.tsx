@@ -26,6 +26,9 @@ export function TodayScreen({
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [focusIndex, setFocusIndex] = useState(0)
+  // 키보드 단축키는 첫 줄부터 듣지만, 표시는 사람이 실제로 옮겨 다니거나
+  // 줄을 누른 뒤에만 켠다. 켜자마자 첫 줄만 유난히 달라 보이면 안 된다.
+  const [focusShown, setFocusShown] = useState(false)
   const [reviewDates, setReviewDates] = useState<Record<string, DateOnly>>({})
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -46,11 +49,13 @@ export function TodayScreen({
 
       if (event.key === 'ArrowDown' || event.key === 'j') {
         event.preventDefault()
+        setFocusShown(true)
         setFocusIndex((i) => Math.min(i + 1, Math.max(0, todayItems.length - 1)))
         return
       }
       if (event.key === 'ArrowUp' || event.key === 'k') {
         event.preventDefault()
+        setFocusShown(true)
         setFocusIndex((i) => Math.max(0, i - 1))
         return
       }
@@ -58,6 +63,7 @@ export function TodayScreen({
         const item = todayItems[focusIndex]
         if (!item) return
         event.preventDefault()
+        setFocusShown(true)
         setExpandedId((current) => (current === item.id ? null : item.id))
         return
       }
@@ -152,10 +158,11 @@ export function TodayScreen({
               settings={settings}
               today={today}
               expanded={expandedId === item.id}
-              focused={focusIndex === index}
+              focused={focusShown && focusIndex === index}
               showFullGradeHelp={showFullGradeHelp}
               reviewDate={reviewDates[item.id] ?? today}
               onToggle={() => {
+                setFocusShown(true)
                 setFocusIndex(index)
                 setExpandedId((current) =>
                   current === item.id ? null : item.id

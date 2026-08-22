@@ -83,12 +83,12 @@ export function TodayRow({
     <div
       role="listitem"
       className={cn(
-        // --hover 는 흰 카드 위에 얹으라고 만든 색이다. 이 목록은 카드 없이
-        // 바탕색 위에 그대로 놓여서, 그 색을 깔면 줄이 밝아지는 게 아니라
-        // 바탕보다 살짝 어두워져 덮인 것처럼 보인다. 흰 면을 깔아 띄운다.
-        'rounded-card transition-colors',
-        focused && 'bg-surface ring-1 ring-accent',
-        !focused && 'hover:bg-surface'
+        // 마우스를 올린 줄과 키보드로 고른 줄이 같은 모양이어야 한다. 둘이 다르면
+        // 아무것도 안 했는데 한 줄만 유난히 달라 보인다.
+        'rounded-card ring-1 ring-transparent transition-colors',
+        focused
+          ? 'bg-surface ring-accent'
+          : 'hover:bg-surface hover:ring-accent'
       )}
     >
       <div className="flex h-[52px] items-center gap-3 pl-[14px]">
