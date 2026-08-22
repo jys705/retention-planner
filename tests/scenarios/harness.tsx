@@ -133,3 +133,21 @@ export function anItem(over: Partial<ItemRow> = {}): ItemRow {
 export function itemsById(): Map<string, ItemRow> {
   return new Map(usePlanner.getState().items.map((i) => [i.id, i]))
 }
+
+/** 날짜를 며칠 옮긴다. 시나리오에서 기대값을 손으로 적을 때 쓴다. */
+export function shift(date: string, days: number): string {
+  const t = new Date(`${date}T00:00:00Z`)
+  t.setUTCDate(t.getUTCDate() + days)
+  return t.toISOString().slice(0, 10)
+}
+
+/** 이미 떠 있는 오늘 화면에서 제목만 치고 Enter 로 적는다. */
+export async function quickAdd(
+  user: ReturnType<typeof screenWithUser>['user'],
+  screenApi: typeof import('@testing-library/react').screen,
+  title: string
+): Promise<void> {
+  const input = screenApi.getByLabelText('새 항목 제목')
+  await user.click(input)
+  await user.type(input, `${title}{Enter}`)
+}

@@ -560,12 +560,19 @@ export function computeSpread(
   }
   for (const item of openItems) {
     if (!item.due || !item.last_review) continue
+    // 오늘이거나 이미 지난 날짜는 흔들지 않는다. 이미 사람 앞에 놓인 것이고,
+    // 여기서 옮기면 앱을 켤 때마다 오늘 할 일이 바뀌고 밀린 사실도 지워진다.
+    if (item.due <= today) continue
     const intervalDays = diffDays(item.last_review, item.due)
     if (intervalDays < 2.5) continue
+    // 자기 자신은 빼고 센다. 안 그러면 제 날짜가 늘 한 칸 무거워 보여서
+    // 몰린 것이 없는데도 이유 없이 옆으로 밀린다.
+    const withoutSelf = { ...load }
+    withoutSelf[item.due] = Math.max(0, (withoutSelf[item.due] ?? 1) - 1)
     const moved = fuzzDue({
       from: item.last_review,
       intervalDays,
-      dailyLoad: load,
+      dailyLoad: withoutSelf,
       notBefore: today,
     })
     if (moved !== item.due) {
@@ -777,10 +784,16 @@ export function splitTodayItems(state: {
 }): { overdue: ItemRow[]; dueToday: ItemRow[] } {
   const due = state.items
     .filter(isActive)
-    .filter((i) => i.due !== null && i.due <= state.today)
+    .filter(
+      (i) =>
+        (i.due !== null && i.due <= state.today) ||
+        // 오늘 '다시' 를 누른 것은 다음 날짜가 내일로 잡혀도 오늘 목록에 남긴다.
+        // 따로 대기열을 두지 않고 이 조건 하나로 처리한다.
+        (i.state === 'relearning' && i.last_review === state.today)
+    )
 
   const overdue = due
-    .filter((i) => i.due! < state.today)
+    .filter((i) => i.due !== null && i.due < state.today)
     // 오래 밀린 것부터. 더 오래 둘수록 급하다.
     .sort((a, b) =>
       a.due !== b.due
@@ -793,7 +806,7 @@ export function splitTodayItems(state: {
     )
 
   const dueToday = due
-    .filter((i) => i.due === state.today)
+    .filter((i) => !(i.due !== null && i.due < state.today))
     .sort((a, b) => {
       const rank =
         badgeRank(b.due_kind, b.goal_risk) - badgeRank(a.due_kind, a.goal_risk)

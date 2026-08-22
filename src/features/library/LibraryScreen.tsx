@@ -128,8 +128,9 @@ export function LibraryScreen({
         </div>
       )}
 
-      <p className="num text-[11px] text-text-3">
-        비슷한 제목은 공통 부분으로 묶여요. 묶음을 접으면 목표당 한 줄이 됩니다.
+      <p className="text-[11px] text-text-3">
+        바깥 묶음은 소속 목표이고, 안쪽 `제목` 묶음은 제목이 비슷해서 보기 좋게 접어둔
+        것이에요. 제목이 비슷하다고 같은 목표에 든 것은 아닙니다.
       </p>
     </div>
   )
@@ -222,6 +223,11 @@ function GroupedList({
               <span className="num text-[12px] text-text-3">
                 {goalRows.length}개
               </span>
+              {goal ? null : (
+                <span className="text-[11.5px] text-text-3">
+                  아직 어느 목표에도 안 넣은 항목이에요
+                </span>
+              )}
               <div className="flex-1" />
               {goal ? (
                 <span className="num text-[11.5px] text-text-3">
@@ -255,10 +261,14 @@ function GroupedList({
                       <button
                         type="button"
                         onClick={() => onToggle(stemKey)}
-                        className="flex w-full items-center gap-2 bg-rail px-[14px] py-[7px] text-left"
+                        title="제목이 비슷해서 보기 좋게 접어둔 것이에요. 목표 소속과는 다릅니다."
+                        className="flex w-full items-center gap-2 bg-rail px-[14px] py-[7px] pl-[26px] text-left"
                       >
                         <span className="text-[11px] text-text-3">
                           {stemCollapsed ? '▸' : '▾'}
+                        </span>
+                        <span className="rounded-[4px] border border-line-2 px-[5px] py-[1px] text-[10px] text-text-3">
+                          제목
                         </span>
                         <span className="text-[12.5px] text-text-2">{stem}</span>
                         <span className="num text-[11.5px] text-text-3">
@@ -327,7 +337,7 @@ function Row({
           {item.due ? dueLabel(today, item.due) : '없음'}
         </span>
         <span className="truncate font-sans text-[11.5px] text-text-3">
-          {goal?.name ?? ''}
+          {goal?.name ?? '목표 없음'}
         </span>
       </span>
     </button>
