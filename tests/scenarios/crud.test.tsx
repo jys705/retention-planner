@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
+import { App } from '../../src/App'
 import { GoalDetailScreen } from '../../src/features/goal/GoalDetailScreen'
 import { ItemDetailScreen } from '../../src/features/item/ItemDetailScreen'
 import { usePlanner } from '../../src/store/planner'
@@ -228,5 +229,71 @@ describe('목표 지우기', () => {
     await user.click(await screen.findByRole('button', { name: '목표 삭제' }))
     await user.click(screen.getByRole('button', { name: '취소' }))
     expect(usePlanner.getState().goals).toHaveLength(1)
+  })
+})
+
+describe('삭제까지 가는 길', () => {
+  it('S-142 오늘 화면에서 제목을 눌러 항목 상세로 간다', async () => {
+    await setupApp(TODAY, {
+      items: [anItem({ id: 'i1', title: '오늘 볼 것', due: TODAY })],
+    })
+    const { user } = render(<App />)
+    await screen.findByText('오늘 볼 항목')
+
+    await user.click(
+      screen.getByRole('button', { name: '오늘 볼 것 자세히 보기' })
+    )
+    // 항목 상세가 열리고 삭제가 바로 보인다.
+    expect(await screen.findByText('기억 곡선')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '삭제' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '편집' })).toBeInTheDocument()
+  })
+
+  it('S-143 오늘 화면에서 연 항목을 그 자리에서 지운다', async () => {
+    await setupApp(TODAY, {
+      items: [anItem({ id: 'i1', title: '지울 것', due: TODAY })],
+    })
+    const { user } = render(<App />)
+    await screen.findByText('오늘 볼 항목')
+    await user.click(screen.getByRole('button', { name: '지울 것 자세히 보기' }))
+    await user.click(await screen.findByRole('button', { name: '삭제' }))
+    await user.click(screen.getByRole('button', { name: '지우기' }))
+    expect(usePlanner.getState().items).toHaveLength(0)
+  })
+
+  it('S-144 체크박스는 여전히 평가를 펼친다', async () => {
+    await setupApp(TODAY, {
+      items: [anItem({ id: 'i1', title: '평가할 것', due: TODAY })],
+    })
+    const { user } = render(<App />)
+    await screen.findByText('오늘 볼 항목')
+    await user.click((await screen.findAllByRole('checkbox'))[0])
+    // 제목을 눌렀을 때와 다른 일이 일어나야 한다.
+    expect(screen.getByText('얼마나 기억났나요?')).toBeInTheDocument()
+    expect(screen.queryByText('기억 곡선')).toBeNull()
+  })
+
+  it('S-145 E 키로 편집을 연다', async () => {
+    await setupApp(TODAY, {
+      items: [anItem({ id: 'i1', title: '단축키 항목', due: TODAY })],
+    })
+    const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)
+    await screen.findByText('기억 곡선')
+    await user.keyboard('e')
+    expect(screen.getByLabelText('제목 고치기')).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByLabelText('제목 고치기')).toBeNull()
+  })
+
+  it('S-146 지우기 키로 삭제를 묻는다', async () => {
+    await setupApp(TODAY, {
+      items: [anItem({ id: 'i1', title: '단축키 항목', due: TODAY })],
+    })
+    const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)
+    await screen.findByText('기억 곡선')
+    await user.keyboard('{Backspace}')
+    expect(screen.getByText('이 항목을 지울까요?')).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByText('이 항목을 지울까요?')).toBeNull()
   })
 })

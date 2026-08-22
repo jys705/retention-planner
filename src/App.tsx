@@ -125,7 +125,11 @@ function renderRoute(
   }
   switch (route.screen) {
     case 'today':
-      return <TodayScreen />
+      return (
+        <TodayScreen
+          onOpenItem={(itemId) => setRoute({ screen: 'library', itemId })}
+        />
+      )
     case 'forecast':
       return <ForecastScreen />
     case 'goals':

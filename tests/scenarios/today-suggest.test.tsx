@@ -25,7 +25,7 @@ function trio(goalId: string | null = null) {
 describe('오늘 화면: 빈 상태와 제안', () => {
   it('S-035 항목이 하나도 없을 때', async () => {
     await setupApp(TODAY)
-    render(<TodayScreen />)
+    render(<TodayScreen onOpenItem={() => {}} />)
     expect(await screen.findByText('아직 적어둔 게 없어요.')).toBeInTheDocument()
     expect(
       screen.getByText(/방금 공부한 걸 아래에 한 줄로 적어보세요/)
@@ -36,14 +36,14 @@ describe('오늘 화면: 빈 상태와 제안', () => {
     await setupApp(TODAY, {
       items: [anItem({ id: 'i1', title: '나중 것', due: '2026-10-09' })],
     })
-    render(<TodayScreen />)
+    render(<TodayScreen onOpenItem={() => {}} />)
     expect(await screen.findByText('오늘 볼 건 다 봤어요.')).toBeInTheDocument()
     expect(screen.getByText(/다음은 10월 9일에 1개예요/)).toBeInTheDocument()
   })
 
   it('S-037 묶기 제안이 조용한 한 줄로 뜬다', async () => {
     await setupApp(TODAY, { items: trio() })
-    render(<TodayScreen />)
+    render(<TodayScreen onOpenItem={() => {}} />)
     expect(
       await screen.findByText(/"AWS SCS-C03"으로 시작하는 항목이 3개예요/)
     ).toBeInTheDocument()
@@ -54,7 +54,7 @@ describe('오늘 화면: 빈 상태와 제안', () => {
 
   it('S-038 묶기를 누르면 목표가 생기고 항목이 묶인다', async () => {
     await setupApp(TODAY, { items: trio() })
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.click(await screen.findByRole('button', { name: '묶기' }))
 
     const goals = usePlanner.getState().goals
@@ -67,7 +67,7 @@ describe('오늘 화면: 빈 상태와 제안', () => {
 
   it('S-039 제안을 닫으면 같은 이름으로 다시 안 뜬다', async () => {
     await setupApp(TODAY, { items: trio() })
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.click(await screen.findByRole('button', { name: '제안 닫기' }))
 
     expect(usePlanner.getState().settings.dismissedPrefixes).toContain(
@@ -78,7 +78,7 @@ describe('오늘 화면: 빈 상태와 제안', () => {
 
   it('S-040 이미 목표에 묶인 항목은 제안하지 않는다', async () => {
     await setupApp(TODAY, { goals: [aGoal({ id: 'g1' })], items: trio('g1') })
-    render(<TodayScreen />)
+    render(<TodayScreen onOpenItem={() => {}} />)
     await screen.findByText('오늘 볼 건 다 봤어요.')
     expect(screen.queryByRole('button', { name: '묶기' })).toBeNull()
   })
@@ -88,7 +88,7 @@ describe('오늘 화면: 빈 상태와 제안', () => {
       items: trio(),
       settings: { lastSuggestionDate: TODAY },
     })
-    render(<TodayScreen />)
+    render(<TodayScreen onOpenItem={() => {}} />)
     await screen.findByText('오늘 볼 건 다 봤어요.')
     expect(screen.queryByRole('button', { name: '묶기' })).toBeNull()
   })

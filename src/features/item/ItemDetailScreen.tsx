@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AdjustedBadge, Badge } from '../../components/Badge'
 import { Chip } from '../../components/Chip'
 import type { ItemRow } from '../../db/types'
@@ -36,6 +36,39 @@ export function ItemDetailScreen({
   const [draftGoalId, setDraftGoalId] = useState<string | null>(null)
 
   const item = items.find((i) => i.id === itemId)
+
+  // 훅은 이른 반환보다 앞에 와야 한다. 항목이 사라지는 순간에도 호출 순서가 같아야 하기 때문이다.
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (!item) return
+      const target = event.target as HTMLElement | null
+      const typing =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement
+      if (typing) {
+        if (event.key === 'Escape') setEditing(false)
+        return
+      }
+      if (event.key === 'e' || event.key === 'E') {
+        event.preventDefault()
+        setDraftTitle(item.title)
+        setDraftMemo(item.memo)
+        setDraftGoalId(item.goal_id)
+        setConfirmingDelete(false)
+        setEditing(true)
+      } else if (event.key === 'Backspace' || event.key === 'Delete') {
+        event.preventDefault()
+        setEditing(false)
+        setConfirmingDelete(true)
+      } else if (event.key === 'Escape') {
+        setEditing(false)
+        setConfirmingDelete(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   if (!item) {
     return (
       <div className="mx-auto w-full max-w-[940px] px-6 py-7 text-[13px] text-text-2">
@@ -43,6 +76,7 @@ export function ItemDetailScreen({
       </div>
     )
   }
+
   const goal = goals.find((g) => g.id === item.goal_id) ?? null
   const view = buildItemView(item, goal, reviews, settings, today)
   const badge = statusBadgeOf(item.due_kind, item.goal_risk)
@@ -310,6 +344,12 @@ export function ItemDetailScreen({
           </table>
         )}
       </Section>
+
+      <footer className="num flex flex-wrap gap-4 text-[11px] text-text-3">
+        <span>E 편집</span>
+        <span>⌫ 삭제</span>
+        <span>Esc 취소</span>
+      </footer>
     </div>
   )
 }

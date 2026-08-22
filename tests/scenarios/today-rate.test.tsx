@@ -38,7 +38,7 @@ async function expandFirstRow(user: ReturnType<typeof render>['user']) {
 describe('오늘 화면: 평가', () => {
   it('S-016 체크하면 그 자리에서 펼쳐진다', async () => {
     await oneDueToday()
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     expect(screen.queryByText('얼마나 기억났나요?')).toBeNull()
 
     await expandFirstRow(user)
@@ -50,7 +50,7 @@ describe('오늘 화면: 평가', () => {
 
   it('S-017 다시로 평가하면 잊음이 하나 는다', async () => {
     await oneDueToday()
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
     const before = usePlanner.getState().items[0].stability!
 
@@ -65,7 +65,7 @@ describe('오늘 화면: 평가', () => {
 
   it('S-018 어려움으로 평가한다', async () => {
     await oneDueToday()
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
     await user.click(screen.getByRole('button', { name: /어려움/ }))
     expect(usePlanner.getState().reviews[0].rating).toBe(2)
@@ -73,7 +73,7 @@ describe('오늘 화면: 평가', () => {
 
   it('S-019 무난함으로 평가하면 단추에 뜬 날짜대로 잡힌다', async () => {
     await oneDueToday()
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
 
     // 단추에 미리 뜬 '며칠 뒤' 를 읽어 둔다.
@@ -93,7 +93,7 @@ describe('오늘 화면: 평가', () => {
 
   it('S-020 쉬움이 가장 멀리 잡힌다', async () => {
     await oneDueToday()
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
 
     const days = (name: string) => {
@@ -111,7 +111,7 @@ describe('오늘 화면: 평가', () => {
 
   it('S-021 단추에 등급 뜻과 다음 날짜가 함께 있다', async () => {
     await oneDueToday()
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
     expect(screen.getByText('거의 기억나지 않아 처음부터 다시 봤어요')).toBeInTheDocument()
     expect(screen.getByText('무난하게 기억났어요')).toBeInTheDocument()
@@ -119,7 +119,7 @@ describe('오늘 화면: 평가', () => {
 
   it('S-022 평가하면 목록에서 사라진다', async () => {
     await oneDueToday()
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     expect(await screen.findAllByRole('checkbox')).toHaveLength(1)
     await expandFirstRow(user)
     await user.click(screen.getByRole('button', { name: /무난함/ }))
@@ -128,7 +128,7 @@ describe('오늘 화면: 평가', () => {
 
   it('S-023 다른 날짜로 기록: 어제', async () => {
     await oneDueToday()
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
     await user.click(screen.getByRole('button', { name: '어제' }))
     expect(screen.getByText(/9월 30일에 본 것으로 기록해요/)).toBeInTheDocument()
@@ -142,7 +142,7 @@ describe('오늘 화면: 평가', () => {
 
   it('S-024 다른 날짜로 기록: 임의 날짜', async () => {
     await oneDueToday()
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
     await setDateInput(
       user,
@@ -155,14 +155,14 @@ describe('오늘 화면: 평가', () => {
 
   it('S-025 미래로는 기록되지 않는다', async () => {
     await oneDueToday()
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
     expect(screen.getByLabelText('다른 날짜로 기록')).toHaveAttribute('max', TODAY)
   })
 
   it('S-026 마지막 복습일보다 이르게는 기록되지 않는다', async () => {
     await oneDueToday()
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
     expect(screen.getByLabelText('다른 날짜로 기록')).toHaveAttribute(
       'min',
@@ -172,7 +172,7 @@ describe('오늘 화면: 평가', () => {
 
   it('S-027 같은 날 두 번 평가한다', async () => {
     await oneDueToday()
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
     await user.click(screen.getByRole('button', { name: /다시/ }))
     // '다시' 를 누르면 오늘 목록에 그대로 남는다.
@@ -186,7 +186,7 @@ describe('오늘 화면: 평가', () => {
 
   it('S-028 평가 20회를 넘기면 등급 설명이 줄어든다', async () => {
     await oneDueToday()
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
     // 스무 번 전에는 단추마다 뜻이 붙는다.
     expect(screen.getByText('무난하게 기억났어요')).toBeInTheDocument()
@@ -194,7 +194,7 @@ describe('오늘 화면: 평가', () => {
 
     await usePlanner.getState().saveSetting('ratingCount', 21)
     await setupAgain()
-    const { user: user2 } = render(<TodayScreen />)
+    const { user: user2 } = render(<TodayScreen onOpenItem={() => {}} />)
     await user2.click((await screen.findAllByRole('checkbox'))[0])
     expect(screen.queryByText('무난하게 기억났어요')).toBeNull()
     expect(

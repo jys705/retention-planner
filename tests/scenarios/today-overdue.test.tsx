@@ -28,7 +28,7 @@ describe('오늘 화면: 밀린 항목', () => {
         overdueItem('c', '오늘 것', TODAY),
       ],
     })
-    render(<TodayScreen />)
+    render(<TodayScreen onOpenItem={() => {}} />)
 
     expect(await screen.findByText('오늘 볼 항목')).toBeInTheDocument()
     expect(screen.getByText('밀린 것')).toBeInTheDocument()
@@ -43,7 +43,7 @@ describe('오늘 화면: 밀린 항목', () => {
 
   it('S-030 밀린 것이 없으면 그 줄이 안 보인다', async () => {
     await setupApp(TODAY, { items: [overdueItem('c', '오늘 것', TODAY)] })
-    render(<TodayScreen />)
+    render(<TodayScreen onOpenItem={() => {}} />)
     expect(await screen.findAllByRole('checkbox')).toHaveLength(1)
     expect(screen.queryByText('밀린 것')).toBeNull()
   })
@@ -56,7 +56,7 @@ describe('오늘 화면: 밀린 항목', () => {
         overdueItem('a', '많이 밀린 것', '2026-09-23'),
       ],
     })
-    render(<TodayScreen />)
+    render(<TodayScreen onOpenItem={() => {}} />)
     const labels = (await screen.findAllByRole('checkbox')).map((c) =>
       c.getAttribute('aria-label')
     )
@@ -67,7 +67,7 @@ describe('오늘 화면: 밀린 항목', () => {
 
   it('S-032 오늘 것에는 지남 표시가 안 붙는다', async () => {
     await setupApp(TODAY, { items: [overdueItem('c', '오늘 것', TODAY)] })
-    render(<TodayScreen />)
+    render(<TodayScreen onOpenItem={() => {}} />)
     const list = await screen.findByRole('list', { name: '오늘 볼 항목' })
     expect(within(list).queryByText(/지남/)).toBeNull()
     expect(within(list).getByText('오늘')).toBeInTheDocument()
@@ -77,7 +77,7 @@ describe('오늘 화면: 밀린 항목', () => {
     await setupApp(TODAY, {
       items: [overdueItem('a', '많이 밀린 것', '2026-09-23')],
     })
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     expect(await screen.findByText('8일 지남')).toBeInTheDocument()
 
     await user.click((await screen.findAllByRole('checkbox'))[0])
@@ -94,7 +94,7 @@ describe('오늘 화면: 밀린 항목', () => {
         overdueItem(`o${i}`, `밀린 것 ${i + 1}`, '2026-09-25')
       ),
     })
-    render(<TodayScreen />)
+    render(<TodayScreen onOpenItem={() => {}} />)
     // 이미 밀린 것을 더 미루지 않는다. 다섯 개가 모두 오늘 목록에 남는다.
     expect(await screen.findAllByRole('checkbox')).toHaveLength(5)
     expect(

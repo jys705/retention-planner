@@ -24,7 +24,7 @@ describe('경계', () => {
       ],
       items: [anItem({ id: 'i1', goal_id: 'g1', title: '오늘이 목표', due: TODAY })],
     })
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.click((await screen.findAllByRole('checkbox'))[0])
     await user.click(screen.getByRole('button', { name: /무난함/ }))
 
@@ -46,7 +46,7 @@ describe('경계', () => {
       ],
       items: [anItem({ id: 'i1', goal_id: 'g1', title: '지난 목표', due: TODAY })],
     })
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.click((await screen.findAllByRole('checkbox'))[0])
     await user.click(screen.getByRole('button', { name: /무난함/ }))
 
@@ -61,7 +61,7 @@ describe('경계', () => {
     await setupApp(TODAY, {
       items: [anItem({ id: 'i1', title: long, due: TODAY })],
     })
-    render(<TodayScreen />)
+    render(<TodayScreen onOpenItem={() => {}} />)
     const box = (await screen.findAllByRole('checkbox'))[0]
     expect(box.getAttribute('aria-label')).toContain('아주 긴 제목')
     // 잘려서 보이도록 처리돼 있어야 한다.
@@ -81,7 +81,7 @@ describe('경계', () => {
         })
       ),
     })
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     const boxes = await screen.findAllByRole('checkbox')
     expect(boxes).toHaveLength(300)
 

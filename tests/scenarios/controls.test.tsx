@@ -30,7 +30,7 @@ async function openDetail(user: ReturnType<typeof render>['user']) {
 describe('새 항목: 목표 시점 3모드', () => {
   it('S-104 정해두지 않음을 고른다', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '무기한')
     await openDetail(user)
     await user.click(screen.getByRole('button', { name: '정해두지 않음' }))
@@ -43,7 +43,7 @@ describe('새 항목: 목표 시점 3모드', () => {
 
   it('S-105 정확한 날짜를 고른다', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '날짜 있음')
     await openDetail(user)
     await user.click(screen.getByRole('button', { name: '정확한 날짜' }))
@@ -56,7 +56,7 @@ describe('새 항목: 목표 시점 3모드', () => {
 
   it('S-106 대략을 고르면 구간이 설명된다', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '대략')
     await openDetail(user)
     await user.click(screen.getByRole('button', { name: '대략' }))
@@ -72,7 +72,7 @@ describe('새 항목: 목표 시점 3모드', () => {
 
   it('S-107 대략 프리셋 9개가 모두 눌린다', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '프리셋')
     await openDetail(user)
     await user.click(screen.getByRole('button', { name: '대략' }))
@@ -106,7 +106,7 @@ describe('새 항목: 목표 시점 3모드', () => {
     ] as const) {
       cleanup()
       await setupApp(TODAY)
-      const { user } = render(<TodayScreen />)
+      const { user } = render(<TodayScreen onOpenItem={() => {}} />)
       await user.type(screen.getByLabelText('새 항목 제목'), `강도 ${label}`)
       await openDetail(user)
       const panel = screen.getByText('복습 강도').closest('div')!.parentElement!
@@ -120,7 +120,7 @@ describe('새 항목: 목표 시점 3모드', () => {
 describe('새 항목: 입력창 단축키', () => {
   it('S-109 Alt+Enter 로 상세 설정을 연다', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     const input = screen.getByLabelText('새 항목 제목')
     await user.click(input)
     await user.keyboard('{Alt>}{Enter}{/Alt}')
@@ -129,7 +129,7 @@ describe('새 항목: 입력창 단축키', () => {
 
   it('S-110 Esc 로 상세 설정을 닫는다', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     const input = screen.getByLabelText('새 항목 제목')
     await user.click(input)
     await user.keyboard('{Alt>}{Enter}{/Alt}')
@@ -142,7 +142,7 @@ describe('새 항목: 입력창 단축키', () => {
     await setupApp(TODAY, {
       items: [anItem({ id: 'i1', title: '직전에 적은 것', due: '2026-10-09' })],
     })
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     const input = screen.getByLabelText('새 항목 제목')
     await user.click(input)
     await user.keyboard('{ArrowUp}')
@@ -163,7 +163,7 @@ describe('평가 줄의 날짜 단추', () => {
         }),
       ],
     })
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.click((await screen.findAllByRole('checkbox'))[0])
 
     const row = screen.getByText('언제 봤나요?').closest('div')!

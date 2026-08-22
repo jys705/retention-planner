@@ -28,7 +28,7 @@ describe('오늘 화면: 소급 입력', () => {
   for (const { id, back, due, overdue } of cases) {
     it(`${id} ${back}일 전으로 적으면 due 가 ${due} 이고 ${overdue}일 지남이다`, async () => {
       await setupApp(TODAY)
-      const { user } = render(<TodayScreen />)
+      const { user } = render(<TodayScreen onOpenItem={() => {}} />)
       const firstStudiedAt = shift(TODAY, -back)
 
       await user.type(screen.getByLabelText('새 항목 제목'), '소급 항목')

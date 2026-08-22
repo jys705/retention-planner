@@ -24,7 +24,7 @@ async function openDetail(user: ReturnType<typeof render>['user']) {
 describe('오늘 화면: 항목 적기', () => {
   it('S-001 제목만 치고 Enter 로 적는다', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     const input = screen.getByLabelText('새 항목 제목')
     await user.type(input, 'AWS SCS-C03 1~10번 문제 풀이{Enter}')
 
@@ -38,7 +38,7 @@ describe('오늘 화면: 항목 적기', () => {
 
   it('S-002 적어두기 단추로 적는다', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '단추로 적기')
     await user.click(screen.getByRole('button', { name: /적어두기/ }))
     expect(usePlanner.getState().items[0].title).toBe('단추로 적기')
@@ -46,7 +46,7 @@ describe('오늘 화면: 항목 적기', () => {
 
   it('S-003 제목이 비면 적히지 않는다', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '{Enter}')
     expect(usePlanner.getState().items).toHaveLength(0)
 
@@ -56,7 +56,7 @@ describe('오늘 화면: 항목 적기', () => {
 
   it('S-004 상세 설정을 펼치고 접는다', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     expect(screen.queryByText('처음 공부한 날')).toBeNull()
 
     await user.click(screen.getByRole('button', { name: /상세 설정/ }))
@@ -71,7 +71,7 @@ describe('오늘 화면: 항목 적기', () => {
 
   it('S-005 처음 공부한 날 오늘', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '오늘 것')
     await openDetail(user)
     await user.click(screen.getByRole('button', { name: '오늘' }))
@@ -83,7 +83,7 @@ describe('오늘 화면: 항목 적기', () => {
 
   it('S-006 처음 공부한 날 어제', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '어제 것')
     await openDetail(user)
     await user.click(screen.getByRole('button', { name: '어제' }))
@@ -95,7 +95,7 @@ describe('오늘 화면: 항목 적기', () => {
 
   it('S-007 처음 공부한 날 다른 날', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '다른 날 것')
     await openDetail(user)
     // 고르기 전에는 날짜가 아니라 '다른 날' 이라고 적혀 있어야 한다.
@@ -115,7 +115,7 @@ describe('오늘 화면: 항목 적기', () => {
 
   it('S-008 메모를 붙여 적는다', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '메모 있는 것')
     await openDetail(user)
     await user.type(screen.getByPlaceholderText('3, 7번 틀림'), '3, 7번 틀림')
@@ -125,7 +125,7 @@ describe('오늘 화면: 항목 적기', () => {
 
   it('S-009 소속 목표를 골라 적는다', async () => {
     await setupApp(TODAY, { goals: [aGoal({ id: 'g1', name: 'AWS SCS-C03' })] })
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '목표에 넣기')
     await openDetail(user)
     await user.click(screen.getByRole('button', { name: 'AWS SCS-C03' }))
@@ -138,7 +138,7 @@ describe('오늘 화면: 항목 적기', () => {
 
   it('S-010 소속 목표를 없음으로 둔다', async () => {
     await setupApp(TODAY, { goals: [aGoal({ id: 'g1', name: 'AWS SCS-C03' })] })
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '목표 없이')
     await openDetail(user)
     await user.click(screen.getByRole('button', { name: '없음' }))
@@ -148,7 +148,7 @@ describe('오늘 화면: 항목 적기', () => {
 
   it('S-015 처음 공부한 날은 미래로 못 고른다', async () => {
     await setupApp(TODAY)
-    const { user } = render(<TodayScreen />)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await openDetail(user)
     expect(screen.getByLabelText('처음 공부한 날 고르기')).toHaveAttribute(
       'max',

@@ -15,7 +15,11 @@ import { QuickAdd } from '../newitem/QuickAdd'
 import { GroupSuggestionRow } from './GroupSuggestionRow'
 import { TodayRow } from './TodayRow'
 
-export function TodayScreen() {
+export function TodayScreen({
+  onOpenItem,
+}: {
+  onOpenItem: (itemId: string) => void
+}) {
   const { items, goals, settings, today } = usePlanner()
   const rateItem = usePlanner((s) => s.rateItem)
   const addItem = usePlanner((s) => s.addItem)
@@ -151,6 +155,7 @@ export function TodayScreen() {
                 )
               }}
               onRate={(grade) => void handleRate(item.id, grade)}
+              onOpen={() => onOpenItem(item.id)}
               onPickDate={(date) =>
                 setReviewDates((current) => ({ ...current, [item.id]: date }))
               }

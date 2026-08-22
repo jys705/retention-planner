@@ -30,6 +30,7 @@ export interface TodayRowProps {
   onToggle: () => void
   onRate: (grade: Grade) => void
   onPickDate: (date: DateOnly) => void
+  onOpen: () => void
 }
 
 export function TodayRow({
@@ -45,6 +46,7 @@ export function TodayRow({
   onToggle,
   onRate,
   onPickDate,
+  onOpen,
 }: TodayRowProps) {
   const config = effectiveConfig(item, goal, settings)
   const state = memoryStateOf(item)
@@ -94,14 +96,17 @@ export function TodayRow({
           )}
         />
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div
-            title={item.title}
-            className="min-w-0 truncate text-[15px] font-medium tracking-[-0.005em]"
+          <button
+            type="button"
+            onClick={onOpen}
+            title={`${item.title} 자세히 보기`}
+            aria-label={`${item.title} 자세히 보기`}
+            className="min-w-0 truncate text-left text-[15px] font-medium tracking-[-0.005em] hover:text-accent"
           >
             <span className="text-text-2">{parts.pre}</span>
             <span className="num text-[14px] font-medium">{parts.num}</span>
             <span className="text-text-2">{parts.post}</span>
-          </div>
+          </button>
           {badge ? <Badge kind={badge} /> : null}
           {item.due_source === 'spread' ? (
             <AdjustedBadge hint="하루에 볼 게 많아서 날짜를 옮겼어요." />
