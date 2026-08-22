@@ -115,10 +115,12 @@ export function ForecastScreen() {
           ))}
         </div>
         {/*
-          자리를 늘 잡아 둔다. 이 상자가 나타났다 사라지면서 위 격자를 밀면
-          커서 아래 칸이 달아나고, 그러면 다시 사라지고를 되풀이한다.
+          높이를 고정한다. 최소 높이만 두면 담긴 항목 수에 따라 상자가 늘었다 줄고,
+          그때마다 문서 전체 높이가 바뀐다. 아래쪽까지 굴려 놓고 보는 중이면
+          브라우저가 스크롤을 되당겨서 커서 밑 칸이 달아나고, 그러면 상자가 다시
+          줄어들기를 되풀이한다. 넘치는 것은 상자 안에서 굴린다.
         */}
-        <div className="mt-3 min-h-[94px] rounded-card bg-rail px-[14px] py-[11px]">
+        <div className="mt-3 h-[168px] overflow-y-auto rounded-card bg-rail px-[14px] py-[11px]">
           {shown ? (
             <section aria-label="그날 무엇을 보나">
               <div className="flex items-start justify-between gap-3 pb-1">

@@ -13,6 +13,12 @@ afterEach(teardownApp)
  * 화면 하나만 그리는 시험은 앱 전체가 갈아끼워질 때 생기는 일을 못 잡는다.
  * 여기서는 App 을 통째로 그려서 화면 사이를 오가며 확인한다.
  */
+/**
+ * 차트를 쓰는 화면은 따로 떼어 놨다. 처음 열 때 그 조각을 받아오는 시간이 있어서
+ * 기본 대기 시간으로는 시험이 들쭉날쭉해진다.
+ */
+const LAZY = { timeout: 5000 }
+
 describe('앱 전체', () => {
   it('S-136 켜면 오늘 화면이 뜬다', async () => {
     await setupApp(TODAY, {
@@ -32,7 +38,9 @@ describe('앱 전체', () => {
     await screen.findByText('오늘 볼 항목')
 
     await user.click(screen.getByRole('button', { name: '예보' }))
-    expect((await screen.findAllByText('앞으로 60일')).length).toBeGreaterThan(0)
+    expect(
+      (await screen.findAllByText('앞으로 60일', undefined, LAZY)).length
+    ).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: '목표' }))
     expect(await screen.findByText(/목표는 폴더가 아니라/)).toBeInTheDocument()
@@ -41,7 +49,9 @@ describe('앱 전체', () => {
     expect(await screen.findByLabelText('항목 찾기')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '설정' }))
-    expect(await screen.findByText('이 앱이 쓰는 방식')).toBeInTheDocument()
+    expect(
+      await screen.findByText('이 앱이 쓰는 방식', undefined, LAZY)
+    ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^오늘/ }))
     expect(await screen.findByText('오늘 볼 항목')).toBeInTheDocument()
@@ -54,7 +64,7 @@ describe('앱 전체', () => {
     const { user } = render(<App />)
     await screen.findByText('오늘 볼 항목')
     await user.click(screen.getByRole('button', { name: '설정' }))
-    await screen.findByText('이 앱이 쓰는 방식')
+    await screen.findByText('이 앱이 쓰는 방식', undefined, LAZY)
 
     const backup = JSON.stringify({
       version: 1,
