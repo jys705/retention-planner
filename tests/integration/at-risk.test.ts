@@ -8,7 +8,7 @@ import { addDays, toEpochDay } from '../../src/lib/date'
 import { resetPlannerForTest, usePlanner } from '../../src/store/planner'
 
 const TODAY = '2026-08-22'
-const EXAM = addDays(TODAY, 3)
+const EXAM = addDays(TODAY, 5)
 
 /** 막 '다시' 를 누른 항목. 기억 지속력이 0.212일뿐이라 한 번으로는 목표한 날을 못 맞춘다. */
 const WEAK = defaultFsrs.nextState(null, 0, 1)
@@ -39,7 +39,7 @@ function makeItem(): ItemRow {
     memo: '',
     tags: '[]',
     created_at: '2026-08-01T00:00:00.000Z',
-    first_studied_at: TODAY,
+    first_studied_at: addDays(TODAY, -1),
     horizon_kind: null,
     ready_at: null,
     hold_until: null,
@@ -52,7 +52,8 @@ function makeItem(): ItemRow {
     due: addDays(TODAY, 1),
     due_kind: 'deadline_pull',
     due_source: 'fsrs',
-    last_review: TODAY,
+    // 어제 봤으니 오늘부터 마감선 전까지 사흘이 남는다.
+    last_review: addDays(TODAY, -1),
     reps: 1,
     lapses: 1,
     reps_since_goal: 1,
@@ -61,7 +62,7 @@ function makeItem(): ItemRow {
   }
 }
 
-async function setup(bufferDays = 2): Promise<void> {
+async function setup(bufferDays = 3): Promise<void> {
   resetRepositoryForTest()
   resetPlannerForTest()
   usePlanner.setState({

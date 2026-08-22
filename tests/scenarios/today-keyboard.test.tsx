@@ -3,7 +3,7 @@ import { screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { usePlanner } from '../../src/store/planner'
-import { anItem, screenWithUser, setupApp, teardownApp } from './harness'
+import { anItem, render, setupApp, teardownApp } from './harness'
 
 const TODAY = '2026-10-01'
 
@@ -25,7 +25,7 @@ function three() {
 describe('오늘 화면: 키보드', () => {
   it('S-042 위아래로 옮겨 다닌다', async () => {
     await setupApp(TODAY, { items: three() })
-    const { user } = screenWithUser(<TodayScreen />)
+    const { user } = render(<TodayScreen />)
     await screen.findAllByRole('checkbox')
 
     // 아래로 두 번 간 뒤 Enter 로 펼치면 세 번째 항목이 열린다.
@@ -37,7 +37,7 @@ describe('오늘 화면: 키보드', () => {
 
   it('S-043 Enter 로 펼치고 Enter 로 접는다', async () => {
     await setupApp(TODAY, { items: three() })
-    const { user } = screenWithUser(<TodayScreen />)
+    const { user } = render(<TodayScreen />)
     await screen.findAllByRole('checkbox')
 
     await user.keyboard('{Enter}')
@@ -54,7 +54,7 @@ describe('오늘 화면: 키보드', () => {
       ['4', 4],
     ] as const) {
       await setupApp(TODAY, { items: three() })
-      const { user } = screenWithUser(<TodayScreen />)
+      const { user } = render(<TodayScreen />)
       await screen.findAllByRole('checkbox')
       await user.keyboard(`{Enter}${key}`)
       expect(usePlanner.getState().reviews[0].rating).toBe(rating)
@@ -63,7 +63,7 @@ describe('오늘 화면: 키보드', () => {
 
   it('S-044b 펼치지 않았으면 숫자 키가 아무 일도 안 한다', async () => {
     await setupApp(TODAY, { items: three() })
-    const { user } = screenWithUser(<TodayScreen />)
+    const { user } = render(<TodayScreen />)
     await screen.findAllByRole('checkbox')
     await user.keyboard('3')
     expect(usePlanner.getState().reviews).toHaveLength(0)
@@ -71,7 +71,7 @@ describe('오늘 화면: 키보드', () => {
 
   it('S-045 N 으로 새 항목 입력창에 간다', async () => {
     await setupApp(TODAY, { items: three() })
-    const { user } = screenWithUser(<TodayScreen />)
+    const { user } = render(<TodayScreen />)
     await screen.findAllByRole('checkbox')
     await user.keyboard('n')
     expect(document.activeElement).toBe(screen.getByLabelText('새 항목 제목'))
@@ -79,7 +79,7 @@ describe('오늘 화면: 키보드', () => {
 
   it('S-046 Esc 로 닫는다', async () => {
     await setupApp(TODAY, { items: three() })
-    const { user } = screenWithUser(<TodayScreen />)
+    const { user } = render(<TodayScreen />)
     await screen.findAllByRole('checkbox')
     await user.keyboard('{Enter}')
     expect(screen.getByText('얼마나 기억났나요?')).toBeInTheDocument()

@@ -197,7 +197,9 @@ function GroupedList({
                 type="button"
                 onClick={() => onToggle(goalKey)}
                 className="text-[12px] text-text-3"
-                aria-label={goalCollapsed ? '펼치기' : '접기'}
+                aria-label={`${goal?.name ?? '목표 없음'} ${
+                  goalCollapsed ? '펼치기' : '접기'
+                }`}
               >
                 {goalCollapsed ? '▸' : '▾'}
               </button>
@@ -261,6 +263,7 @@ function GroupedList({
                       <button
                         type="button"
                         onClick={() => onToggle(stemKey)}
+                        aria-label={`제목 묶음 ${stem}`}
                         title="제목이 비슷해서 보기 좋게 접어둔 것이에요. 목표 소속과는 다릅니다."
                         className="flex w-full items-center gap-2 bg-rail px-[14px] py-[7px] pl-[26px] text-left"
                       >
@@ -320,6 +323,8 @@ function Row({
     <button
       type="button"
       onClick={onClick}
+      // 제목이 등폭 숫자 때문에 여러 조각으로 나뉘어 있어서 이름을 따로 붙인다.
+      aria-label={item.title}
       className={cn(
         'flex w-full items-center gap-3 border-b border-line px-[14px] py-[9px] text-left last:border-b-0 hover:bg-hover',
         indent && 'pl-[32px]'

@@ -1,7 +1,7 @@
 import type { MemoryState } from '../core/fsrs/types'
 import type { Horizon } from '../core/horizon/horizon'
 import type { Intensity } from '../core/policy/constraints'
-import type { GoalRow, ItemRow } from '../db/types'
+import type { GoalRow, ItemRow, PostGoalMode } from '../db/types'
 import type { Settings } from './settings'
 
 /**
@@ -16,6 +16,8 @@ export interface EffectiveConfig {
   targetRetention: number
   minReviews: number
   maxIntervalDays: number | null
+  /** 목표 시점을 지난 뒤에 보관할지 계속 볼지. */
+  postGoalMode: PostGoalMode
   /** 항목이 목표와 다른 설정을 쓰고 있는지. 화면에 그렇다고 알려준다. */
   overridden: boolean
 }
@@ -56,6 +58,8 @@ export function effectiveConfig(
       item.target_retention ?? goal?.target_retention ?? settings.targetRetention,
     minReviews: item.min_reviews ?? goal?.min_reviews ?? settings.minReviews,
     maxIntervalDays: goal?.max_interval_days ?? settings.maxIntervalDays,
+    // 목표마다 다르게 정할 수 있다. 목표가 정한 것이 전역 기본값보다 앞선다.
+    postGoalMode: goal?.post_goal_mode ?? settings.postGoalMode,
     overridden:
       own !== null ||
       item.intensity !== null ||

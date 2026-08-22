@@ -29,6 +29,7 @@ import type {
   ReviewRow,
   DueKind,
   DueSource,
+  PostGoalMode,
 } from '../db/types'
 import {
   diffDays,
@@ -266,9 +267,14 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       reps: item.reps + 1,
       lapses: item.lapses + (grade === 1 ? 1 : 0),
       reps_since_goal: item.reps_since_goal + 1,
-      state: nextItemState(applied.inPlateau, applied.postGoalReached, grade, settings),
+      state: nextItemState(
+        applied.inPlateau,
+        applied.postGoalReached,
+        grade,
+        config.postGoalMode
+      ),
       ...(options.memo ? { memo: options.memo } : {}),
-      ...(applied.postGoalReached && settings.postGoalMode === 'archive'
+      ...(applied.postGoalReached && config.postGoalMode === 'archive'
         ? { archived_at: nowIso() }
         : {}),
     }
@@ -419,10 +425,10 @@ function nextItemState(
   inPlateau: boolean,
   postGoalReached: boolean,
   grade: Grade,
-  settings: Settings
+  postGoalMode: PostGoalMode
 ): ItemRow['state'] {
   if (postGoalReached) {
-    return settings.postGoalMode === 'archive' ? 'archived' : 'maintaining'
+    return postGoalMode === 'archive' ? 'archived' : 'maintaining'
   }
   if (inPlateau) return 'holding'
   return grade === 1 ? 'relearning' : 'review'
@@ -452,6 +458,13 @@ function naturalScheduleOf(
     bufferDays: settings.bufferDays,
     maxIntervalDays: config.maxIntervalDays,
   })
+}
+
+/** 이 항목을 다시 잡을 수 있는 가장 이른 날. 마지막으로 본 날 다음 날부터다. */
+function nextOpenDay(item: ItemRow, today: DateOnly): DateOnly {
+  return item.last_review
+    ? maxDate(today, fromEpochDay(toEpochDay(item.last_review) + 1))
+    : today
 }
 
 /**
@@ -508,11 +521,15 @@ export function computeSpread(
       itemId: item.id,
       state,
       anchor: item.last_review ?? item.first_studied_at,
+      // 마지막으로 본 날에 또 잡으면 같은 날 두 번이 된다. 그 다음 날부터 본다.
+      notBefore: nextOpenDay(item, today),
       readyAt: key,
-      notBefore: today,
       bufferDays: settings.bufferDays,
       targetRetention: config.targetRetention,
     })
+
+    // 마감선 안에 잡을 수 있는 날이 없으면 옮겨서 나아질 게 없다. FSRS 에 맡긴다.
+    if (!interval.hasRoomBeforeGoal) continue
 
     // 옮길 수 있는 구간은 마무리 복습에 대한 것이다.
     // 아직 평소 간격으로 도는 항목은 건드리지 않는다. 그쪽은 몰림의 원인이 아니다.
@@ -750,11 +767,12 @@ export function spreadPreview(
       itemId: item.id,
       state,
       anchor: item.last_review ?? item.first_studied_at,
+      notBefore: nextOpenDay(item, today),
       readyAt,
-      notBefore: today,
       bufferDays: settings.bufferDays,
       targetRetention: config.targetRetention,
     })
+    if (!interval.hasRoomBeforeGoal) continue
     const natural = naturalScheduleOf(item, config, state, settings)
     if (!isPulledByDeadline(natural.dueKind) && !interval.atRisk) continue
     candidates.push({ interval, naturalDue: natural.due })

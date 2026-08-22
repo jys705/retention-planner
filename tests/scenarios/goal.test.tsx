@@ -4,14 +4,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { GoalDetailScreen } from '../../src/features/goal/GoalDetailScreen'
 import { GoalListScreen } from '../../src/features/goal/GoalListScreen'
 import { usePlanner } from '../../src/store/planner'
-import { aGoal, anItem, screenWithUser, setupApp, teardownApp } from './harness'
+import { aGoal, anItem, render, setupApp, teardownApp } from './harness'
 
 const TODAY = '2026-10-01'
 const noop = () => {}
 
 afterEach(teardownApp)
 
-async function newGoal(user: ReturnType<typeof screenWithUser>['user'], name: string) {
+async function newGoal(user: ReturnType<typeof render>['user'], name: string) {
   await user.click(screen.getByRole('button', { name: '목표 만들기' }))
   await user.type(screen.getByLabelText('목표 이름'), name)
 }
@@ -19,7 +19,7 @@ async function newGoal(user: ReturnType<typeof screenWithUser>['user'], name: st
 describe('목표 만들기', () => {
   it('S-047 정해두지 않음', async () => {
     await setupApp(TODAY)
-    const { user } = screenWithUser(<GoalListScreen onOpenGoal={noop} />)
+    const { user } = render(<GoalListScreen onOpenGoal={noop} />)
     await newGoal(user, '쿠버네티스')
     await user.click(screen.getByRole('button', { name: '정해두지 않음' }))
     await user.click(screen.getByRole('button', { name: '만들기' }))
@@ -32,7 +32,7 @@ describe('목표 만들기', () => {
 
   it('S-048 정확한 날짜', async () => {
     await setupApp(TODAY)
-    const { user } = screenWithUser(<GoalListScreen onOpenGoal={noop} />)
+    const { user } = render(<GoalListScreen onOpenGoal={noop} />)
     await newGoal(user, 'AWS SCS-C03')
     await user.click(screen.getByRole('button', { name: '정확한 날짜' }))
     const picker = screen.getByDisplayValue(TODAY)
@@ -48,7 +48,7 @@ describe('목표 만들기', () => {
 
   it('S-049 대략', async () => {
     await setupApp(TODAY)
-    const { user } = screenWithUser(<GoalListScreen onOpenGoal={noop} />)
+    const { user } = render(<GoalListScreen onOpenGoal={noop} />)
     await newGoal(user, '개념 정리')
     await user.click(screen.getByRole('button', { name: '대략' }))
     await user.click(screen.getByRole('button', { name: '만들기' }))
@@ -73,7 +73,7 @@ describe('목표 만들기', () => {
     for (const [label, readyAt, holdUntil] of table) {
       cleanup()
       await setupApp(TODAY)
-      const { user } = screenWithUser(<GoalListScreen onOpenGoal={noop} />)
+      const { user } = render(<GoalListScreen onOpenGoal={noop} />)
       await newGoal(user, `목표 ${label}`)
       await user.click(screen.getByRole('button', { name: '대략' }))
       await user.click(screen.getByRole('button', { name: label }))
@@ -88,7 +88,7 @@ describe('목표 만들기', () => {
 
   it('S-051 직접 입력으로 임의 구간을 만든다', async () => {
     await setupApp(TODAY)
-    const { user } = screenWithUser(<GoalListScreen onOpenGoal={noop} />)
+    const { user } = render(<GoalListScreen onOpenGoal={noop} />)
     await newGoal(user, '6주쯤 목표')
     await user.click(screen.getByRole('button', { name: '대략' }))
     await user.click(screen.getByRole('button', { name: '직접' }))
@@ -113,7 +113,7 @@ describe('목표 만들기', () => {
     ] as const) {
       cleanup()
       await setupApp(TODAY)
-      const { user } = screenWithUser(<GoalListScreen onOpenGoal={noop} />)
+      const { user } = render(<GoalListScreen onOpenGoal={noop} />)
       await newGoal(user, `단위 ${unit}`)
       await user.click(screen.getByRole('button', { name: '대략' }))
       await user.click(screen.getByRole('button', { name: '직접' }))
@@ -130,14 +130,14 @@ describe('목표 만들기', () => {
 
   it('S-052 목표 이름이 비면 안 만들어진다', async () => {
     await setupApp(TODAY)
-    const { user } = screenWithUser(<GoalListScreen onOpenGoal={noop} />)
+    const { user } = render(<GoalListScreen onOpenGoal={noop} />)
     await user.click(screen.getByRole('button', { name: '목표 만들기' }))
     expect(screen.getByRole('button', { name: '만들기' })).toBeDisabled()
   })
 
   it('S-052b 목표가 없으면 빈 상태를 안내한다', async () => {
     await setupApp(TODAY)
-    screenWithUser(<GoalListScreen onOpenGoal={noop} />)
+    render(<GoalListScreen onOpenGoal={noop} />)
     expect(await screen.findByText('아직 목표가 없어요.')).toBeInTheDocument()
   })
 })
@@ -170,7 +170,7 @@ describe('목표 상세', () => {
 
   it('S-053 요약 한 문장이 남은 날과 기억률을 말한다', async () => {
     await withGoal()
-    screenWithUser(<GoalDetailScreen goalId="g1" onOpenItem={noop} />)
+    render(<GoalDetailScreen goalId="g1" onOpenItem={noop} />)
     expect((await screen.findAllByText(/44일 남음/)).length).toBeGreaterThan(0)
     expect(
       screen.getByText(/지금 속도면 목표한 날 평균 .*쯤 기억하고 있을 거예요/)
@@ -186,7 +186,7 @@ describe('목표 상세', () => {
     ] as const) {
       cleanup()
       await withGoal()
-      const { user } = screenWithUser(
+      const { user } = render(
         <GoalDetailScreen goalId="g1" onOpenItem={noop} />
       )
       await user.click(await screen.findByRole('button', { name: /설정 일괄 수정/ }))
@@ -200,7 +200,7 @@ describe('목표 상세', () => {
 
   it('S-055 목표 시점을 바꾸면 묶인 항목이 따라온다', async () => {
     await withGoal()
-    const { user } = screenWithUser(
+    const { user } = render(
       <GoalDetailScreen goalId="g1" onOpenItem={noop} />
     )
     await user.click(await screen.findByRole('button', { name: /설정 일괄 수정/ }))
@@ -217,7 +217,7 @@ describe('목표 상세', () => {
 
   it('S-056 고급에서 최소 복습 횟수를 조절한다', async () => {
     await withGoal()
-    const { user } = screenWithUser(
+    const { user } = render(
       <GoalDetailScreen goalId="g1" onOpenItem={noop} />
     )
     await user.click(await screen.findByRole('button', { name: /설정 일괄 수정/ }))
@@ -231,7 +231,7 @@ describe('목표 상세', () => {
 
   it('S-057 조정 전과 비교를 켠다', async () => {
     await withGoal()
-    const { user } = screenWithUser(
+    const { user } = render(
       <GoalDetailScreen goalId="g1" onOpenItem={noop} />
     )
     const toggle = await screen.findByRole('checkbox', { name: /조정 전과 비교/ })
@@ -242,7 +242,7 @@ describe('목표 상세', () => {
 
   it('S-058 목표 시점이 없는 목표는 준비 상태가 필요 없다고 말한다', async () => {
     await withGoal({ horizon_kind: 'open', ready_at: null, hold_until: null })
-    screenWithUser(<GoalDetailScreen goalId="g1" onOpenItem={noop} />)
+    render(<GoalDetailScreen goalId="g1" onOpenItem={noop} />)
     expect(
       await screen.findByText(/목표한 날이 없어서 준비 상태나 날짜 조정은 필요하지 않아요/)
     ).toBeInTheDocument()
@@ -251,7 +251,7 @@ describe('목표 상세', () => {
   it('S-059 항목별 상태 표에서 항목으로 간다', async () => {
     await withGoal()
     let opened: string | null = null
-    const { user } = screenWithUser(
+    const { user } = render(
       <GoalDetailScreen goalId="g1" onOpenItem={(id) => (opened = id)} />
     )
     await user.click(await screen.findByText('문제 1'))

@@ -72,6 +72,8 @@ export function MemoryCurveChart({
           <YAxis
             domain={[min, 1]}
             ticks={ticks}
+            // 눈금을 우리가 정해서 넘기므로 하나도 빼지 않고 그린다.
+            interval={0}
             tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
             tick={{ fill: 'var(--text-3)', fontSize: 11 }}
             stroke="var(--line-2)"

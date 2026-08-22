@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { render as rtlRender } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
 import { freezeToday, unfreezeToday } from '../../src/lib/clock'
@@ -71,10 +71,15 @@ export function teardownApp(): void {
   unfreezeToday()
 }
 
-/** 화면 하나를 그리고 사람 노릇을 할 손을 함께 돌려준다. */
-export function screenWithUser(node: ReactElement) {
+/**
+ * 화면 하나를 그리고 사람 노릇을 할 손을 함께 돌려준다.
+ *
+ * 시나리오 시험은 전부 이걸로 시작한다. 함수를 직접 부르지 않고
+ * 실제 화면을 그린 뒤 눌러서 확인한다.
+ */
+export function render(node: ReactElement) {
   const user = userEvent.setup()
-  const utils = render(node)
+  const utils = rtlRender(node)
   return { user, ...utils }
 }
 
@@ -143,11 +148,26 @@ export function shift(date: string, days: number): string {
 
 /** 이미 떠 있는 오늘 화면에서 제목만 치고 Enter 로 적는다. */
 export async function quickAdd(
-  user: ReturnType<typeof screenWithUser>['user'],
+  user: ReturnType<typeof render>['user'],
   screenApi: typeof import('@testing-library/react').screen,
   title: string
 ): Promise<void> {
   const input = screenApi.getByLabelText('새 항목 제목')
   await user.click(input)
   await user.type(input, `${title}{Enter}`)
+}
+
+/**
+ * 날짜 칸에 값을 넣는다.
+ *
+ * 지우고 다시 치면 중간에 빈 값이 생겨서 화면이 그걸 되돌린다.
+ * 사람이 하듯 전체를 고른 뒤 덮어쓴다.
+ */
+export async function setDateInput(
+  user: ReturnType<typeof render>['user'],
+  input: HTMLElement,
+  value: string
+): Promise<void> {
+  await user.tripleClick(input)
+  await user.keyboard(value)
 }

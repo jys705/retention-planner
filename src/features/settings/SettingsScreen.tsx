@@ -350,7 +350,7 @@ function Row({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-[6px]">
+    <div role="group" aria-label={label} className="flex flex-col gap-[6px]">
       <span className="text-[13px] font-medium">{label}</span>
       {note ? (
         <span className="text-[12px] leading-relaxed text-text-3">{note}</span>
