@@ -8,10 +8,10 @@ import {
   type Horizon,
 } from '../../core/horizon/horizon'
 import { Chip } from '../../components/Chip'
+import { DateField } from '../../components/DateField'
 import { cn } from '../../lib/cn'
 import type { DateOnly } from '../../lib/date'
-import { isDateOnly } from '../../lib/date'
-import { monthDay } from '../../lib/format'
+import { fullDate, monthDay } from '../../lib/format'
 import { MODE_META } from './horizonModes'
 
 export interface HorizonPickerProps {
@@ -84,17 +84,15 @@ export function HorizonPicker({
       ) : null}
 
       {value.kind === 'date' ? (
-        <div className="flex flex-col gap-[6px]">
-          <input
-            type="date"
+        <div className="flex flex-col items-start gap-[6px]">
+          <DateField
             value={value.at}
+            today={today}
             min={today}
-            onChange={(event) => {
-              // 날짜 칸은 비울 수 있다. 빈 값을 그대로 저장하면 목표 시점이 깨진다.
-              if (!isDateOnly(event.target.value)) return
-              onChange({ kind: 'date', at: event.target.value })
-            }}
-            className="num w-[180px] rounded-ctl border border-line-2 bg-surface px-[10px] py-[6px] text-[13px]"
+            onChange={(at) => onChange({ kind: 'date', at })}
+            label="목표한 날 고르기"
+            text={fullDate(value.at)}
+            active
           />
           <p className="text-[12px] text-text-3">
             그날까지 기억이 가장 높게 올라오도록 잡아요.

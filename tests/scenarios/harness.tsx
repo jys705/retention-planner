@@ -1,7 +1,8 @@
-import { render as rtlRender } from '@testing-library/react'
+import { render as rtlRender, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
 import { freezeToday, unfreezeToday } from '../../src/lib/clock'
+import { fullDate } from '../../src/lib/format'
 import { resetRepositoryForTest } from '../../src/db'
 import type { GoalRow, ItemRow, ReviewRow } from '../../src/db/types'
 import {
@@ -158,16 +159,46 @@ export async function quickAdd(
 }
 
 /**
- * 날짜 칸에 값을 넣는다.
+ * 날짜 고르기 단추를 눌러 달력을 연다.
  *
- * 지우고 다시 치면 중간에 빈 값이 생겨서 화면이 그걸 되돌린다.
- * 사람이 하듯 전체를 고른 뒤 덮어쓴다.
+ * 앱은 브라우저가 주는 달력을 안 쓰고 제 달력을 팝오버로 띄운다.
+ * 시험도 사람과 같은 길로 간다.
+ */
+export function openCalendar(
+  user: ReturnType<typeof render>['user'],
+  trigger: HTMLElement
+): Promise<HTMLElement> {
+  const open = trigger.getAttribute('aria-expanded') === 'true'
+  const label = `${trigger.getAttribute('aria-label') ?? ''} 달력`
+  const show = open ? Promise.resolve() : user.click(trigger)
+  return show.then(() => screen.getByRole('group', { name: label }))
+}
+
+/**
+ * 날짜를 고른다.
+ *
+ * 달력을 열고, 그 달까지 넘긴 다음, 그 날 칸을 누른다.
  */
 export async function setDateInput(
   user: ReturnType<typeof render>['user'],
-  input: HTMLElement,
+  trigger: HTMLElement,
   value: string
 ): Promise<void> {
-  await user.tripleClick(input)
-  await user.keyboard(value)
+  const grid = await openCalendar(user, trigger)
+  const want = monthIndex(value)
+  // 달을 한 칸씩 옮긴다. 20년치면 어떤 시험도 닿는다.
+  for (let step = 0; step < 240; step += 1) {
+    const title = within(grid).getByText(/^\d{4}년 \d+월$/).textContent ?? ''
+    const shown =
+      Number(title.slice(0, 4)) * 12 + Number(title.slice(6, title.length - 1)) - 1
+    if (shown === want) break
+    await user.click(
+      within(grid).getByRole('button', { name: shown > want ? '지난달' : '다음달' })
+    )
+  }
+  await user.click(within(grid).getByRole('button', { name: fullDate(value) }))
+}
+
+function monthIndex(date: string): number {
+  return Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7)) - 1
 }

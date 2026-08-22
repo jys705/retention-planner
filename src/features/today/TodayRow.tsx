@@ -1,5 +1,6 @@
 import type { Grade } from '../../core/fsrs/types'
 import { AdjustedBadge, Badge } from '../../components/Badge'
+import { DateField } from '../../components/DateField'
 import { RailRow } from '../../components/Rail'
 import type { GoalRow, ItemRow } from '../../db/types'
 import { statusBadgeOf, dueReason } from '../../lib/badge'
@@ -14,8 +15,9 @@ import {
 import { dueLabel, monthDay, percent, yesterdayOf } from '../../lib/format'
 import type { Settings } from '../../lib/settings'
 import { defaultFsrs } from '../../core/fsrs/fsrs6'
-import { diffDays, isDateOnly } from '../../lib/date'
-import { GRADE_HINT_SHORT, gradeOptions } from './gradeOptions'
+import { diffDays } from '../../lib/date'
+import { GRADE_HINT_SHORT } from '../../lib/grade'
+import { gradeOptions } from './gradeOptions'
 
 export interface TodayRowProps {
   item: ItemRow
@@ -73,6 +75,9 @@ export function TodayRow({
   const badge = statusBadgeOf(item.due_kind, item.goal_risk)
   const parts = splitTitle(item.title)
   const yesterday = yesterdayOf(today)
+  // 같은 날을 두 번 기록하지는 않으므로 마지막으로 본 날이 곧 고를 수 있는 가장 이른 날이다.
+  const earliest = item.last_review
+  const pickedOther = reviewDate !== today && reviewDate !== yesterday
 
   return (
     <div
@@ -172,35 +177,44 @@ export function TodayRow({
             {[
               { label: '오늘', value: today },
               { label: '어제', value: yesterday },
-            ].map((choice) => (
-              <button
-                key={choice.label}
-                type="button"
-                onClick={() => onPickDate(choice.value)}
-                className={cn(
-                  'rounded-ctl border px-[10px] py-[5px] text-[12px]',
-                  reviewDate === choice.value
-                    ? 'border-accent bg-accent-soft font-semibold text-accent'
-                    : 'border-line-2 bg-surface text-text-2 hover:bg-hover'
-                )}
-              >
-                {choice.label}
-              </button>
-            ))}
-            <label className="flex items-center gap-1 text-[12px] text-text-2">
-              <span className="sr-only">다른 날짜로 기록</span>
-              <input
-                type="date"
-                max={today}
-                min={item.last_review ?? undefined}
-                value={reviewDate}
-                onChange={(event) => {
-                  if (!isDateOnly(event.target.value)) return
-                  onPickDate(event.target.value)
-                }}
-                className="num rounded-ctl border border-line-2 bg-surface px-[8px] py-[4px] text-[12px]"
-              />
-            </label>
+            ].map((choice) => {
+              // 마지막으로 본 날보다 앞선 날은 고를 수 없다. 눌러도 되돌려지는 단추를
+              // 열어 두면 화면이 기록하지 않을 날짜를 기록한다고 말하게 된다.
+              const tooEarly = earliest !== null && choice.value < earliest
+              return (
+                <button
+                  key={choice.label}
+                  type="button"
+                  disabled={tooEarly}
+                  title={
+                    tooEarly
+                      ? `${monthDay(earliest!)}에 본 뒤로는 그보다 이른 날로 기록할 수 없어요.`
+                      : undefined
+                  }
+                  onClick={() => onPickDate(choice.value)}
+                  className={cn(
+                    'rounded-ctl border px-[10px] py-[5px] text-[12px]',
+                    tooEarly && 'cursor-not-allowed border-line-2 bg-surface text-text-3 opacity-40',
+                    !tooEarly && reviewDate === choice.value
+                      ? 'border-accent bg-accent-soft font-semibold text-accent'
+                      : !tooEarly &&
+                        'border-line-2 bg-surface text-text-2 hover:bg-hover'
+                  )}
+                >
+                  {choice.label}
+                </button>
+              )
+            })}
+            <DateField
+              value={reviewDate}
+              today={today}
+              min={earliest}
+              max={today}
+              onChange={onPickDate}
+              label="다른 날짜로 기록"
+              active={pickedOther}
+              text={pickedOther ? monthDay(reviewDate) : '다른 날'}
+            />
             {reviewDate !== today ? (
               <span className="text-[12px] text-accent">
                 {monthDay(reviewDate)}에 본 것으로 기록해요

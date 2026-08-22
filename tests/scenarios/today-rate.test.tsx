@@ -5,11 +5,14 @@ import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { usePlanner } from '../../src/store/planner'
 import {
   anItem,
+  openCalendar,
   render,
   setDateInput,
   setupApp,
+  shift,
   teardownApp,
 } from './harness'
+import { fullDate } from '../../src/lib/format'
 
 const TODAY = '2026-10-01'
 
@@ -157,17 +160,31 @@ describe('오늘 화면: 평가', () => {
     await oneDueToday()
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
-    expect(screen.getByLabelText('다른 날짜로 기록')).toHaveAttribute('max', TODAY)
+    const grid = await openCalendar(
+      user,
+      screen.getByLabelText('다른 날짜로 기록')
+    )
+    expect(
+      within(grid).getByRole('button', { name: fullDate(shift(TODAY, 1)) })
+    ).toBeDisabled()
   })
 
   it('S-026 마지막 복습일보다 이르게는 기록되지 않는다', async () => {
     await oneDueToday()
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
-    expect(screen.getByLabelText('다른 날짜로 기록')).toHaveAttribute(
-      'min',
-      '2026-09-29'
+    const grid = await openCalendar(
+      user,
+      screen.getByLabelText('다른 날짜로 기록')
     )
+    // 달력은 고른 값이 있는 10월로 열린다. 마지막으로 본 9월로 한 칸 되돌린다.
+    await user.click(within(grid).getByRole('button', { name: '지난달' }))
+    expect(
+      within(grid).getByRole('button', { name: fullDate('2026-09-29') })
+    ).toBeEnabled()
+    expect(
+      within(grid).getByRole('button', { name: fullDate('2026-09-28') })
+    ).toBeDisabled()
   })
 
   it('S-027 같은 날 두 번 평가한다', async () => {
@@ -200,6 +217,31 @@ describe('오늘 화면: 평가', () => {
     expect(
       screen.getByText(/다시: 거의 기억 안 남 \| 어려움: 여러 번 막힘/)
     ).toBeInTheDocument()
+  })
+
+  it('S-152 평가하고 나면 고른 날짜가 오늘로 돌아온다', async () => {
+    // 어제 날짜로 '다시' 를 누르면 다음 날짜가 오늘로 잡혀 같은 항목이 다시 올라온다.
+    await oneDueToday()
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
+    await expandFirstRow(user)
+    await user.click(screen.getByRole('button', { name: '어제' }))
+    await user.click(screen.getByRole('button', { name: /다시/ }))
+    expect(usePlanner.getState().reviews[0].reviewed_at).toBe(shift(TODAY, -1))
+
+    // 다시 펼쳤을 때 아무도 안 골랐는데 어제가 남아 있으면 안 된다.
+    await expandFirstRow(user)
+    expect(screen.queryByText(/에 본 것으로 기록해요/)).toBeNull()
+    await user.click(screen.getByRole('button', { name: /무난함/ }))
+    expect(usePlanner.getState().reviews[1].reviewed_at).toBe(TODAY)
+  })
+
+  it('S-153 마지막으로 본 날이 오늘이면 어제로 기록할 수 없다', async () => {
+    await oneDueToday({ last_review: TODAY })
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
+    await expandFirstRow(user)
+    // 눌러도 되돌려질 단추를 열어 두면 화면이 거짓말을 하게 된다.
+    expect(screen.getByRole('button', { name: '어제' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '오늘' })).toBeEnabled()
   })
 })
 

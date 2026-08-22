@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { DEFAULT_W } from '../../core/fsrs/params'
-import { INTENSITY_RETENTION, type Intensity } from '../../core/policy/constraints'
+import { INTENSITY_RETENTION } from '../../core/policy/constraints'
 import { Chip } from '../../components/Chip'
 import { Expand } from '../../components/Expand'
 import { nowIso, today as clockToday } from '../../lib/clock'
@@ -15,13 +15,7 @@ import {
   toCsv,
 } from '../../lib/transfer'
 import { usePlanner } from '../../store/planner'
-
-const INTENSITY_META: { key: Intensity; name: string; desc: string }[] = [
-  { key: 'easy', name: '여유', desc: '가끔만 볼게요' },
-  { key: 'standard', name: '표준', desc: '알맞게 볼게요' },
-  { key: 'focus', name: '집중', desc: '자주 볼게요' },
-  { key: 'max', name: '최대', desc: '아주 자주 볼게요' },
-]
+import { INTENSITY_META } from '../../lib/intensity'
 
 const THEMES: { key: ThemePreference; name: string }[] = [
   { key: 'system', name: '시스템' },

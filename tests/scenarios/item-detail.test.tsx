@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { defaultFsrs } from '../../src/core/fsrs/fsrs6'
 import { ItemDetailScreen } from '../../src/features/item/ItemDetailScreen'
@@ -172,9 +172,11 @@ describe('항목 상세', () => {
     })
     render(<ItemDetailScreen itemId="i1" onBack={noop} />)
     expect(await screen.findByText('평가 이력')).toBeInTheDocument()
-    expect(screen.getByText('9월 29일')).toBeInTheDocument()
-    expect(screen.getByText('무난함')).toBeInTheDocument()
-    expect(screen.getByText('3번 틀림')).toBeInTheDocument()
+    // 화면에 '봤다고 기록하기' 의 등급 단추도 같이 있으니 표 안으로 좁혀서 본다.
+    const history = screen.getByRole('table')
+    expect(within(history).getByText('9월 29일')).toBeInTheDocument()
+    expect(within(history).getByText('무난함')).toBeInTheDocument()
+    expect(within(history).getByText('3번 틀림')).toBeInTheDocument()
   })
 
   it('S-065 평가한 적 없으면 그렇다고 말한다', async () => {
@@ -189,5 +191,132 @@ describe('항목 상세', () => {
     await setupApp(TODAY)
     render(<ItemDetailScreen itemId="없음" onBack={noop} />)
     expect(await screen.findByText('항목을 찾을 수 없어요.')).toBeInTheDocument()
+  })
+
+  it('S-154 소속 목표를 고르면 그 설정을 보여주기만 한다', async () => {
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({
+          id: 'g1',
+          name: '자격증 시험',
+          horizon_kind: 'date',
+          ready_at: '2026-11-14',
+          hold_until: '2026-11-14',
+          intensity: 'focus',
+        }),
+      ],
+      items: [anItem({ id: 'i1', title: '묶인 항목', goal_id: 'g1' })],
+    })
+    const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)
+    await user.click(await screen.findByRole('button', { name: '편집' }))
+
+    const panel = screen.getByText('항목 고치기').closest('section')!
+    expect(within(panel).getByText('11월 14일')).toBeInTheDocument()
+    expect(within(panel).getByText('집중')).toBeInTheDocument()
+    // 목표에 속한 동안에는 고치는 칸이 없다.
+    expect(within(panel).queryByRole('button', { name: '정해두지 않음' })).toBeNull()
+    expect(within(panel).getByText(/목표 화면에서 고치세요/)).toBeInTheDocument()
+  })
+
+  it('S-155 소속 목표를 없음으로 바꾸면 목표 시점과 강도를 정할 수 있다', async () => {
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({
+          id: 'g1',
+          name: '자격증 시험',
+          horizon_kind: 'date',
+          ready_at: '2026-11-14',
+          hold_until: '2026-11-14',
+          intensity: 'focus',
+        }),
+      ],
+      items: [anItem({ id: 'i1', title: '떼어낼 항목', goal_id: 'g1' })],
+    })
+    const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)
+    await user.click(await screen.findByRole('button', { name: '편집' }))
+
+    const panel = screen.getByText('항목 고치기').closest('section')!
+    await user.click(within(panel).getByRole('button', { name: '없음' }))
+    // 따르던 목표 값이 그대로 채워져 있어야 일정이 갑자기 안 달라진다.
+    expect(
+      within(panel).getByRole('button', { name: '정확한 날짜' })
+    ).toBeInTheDocument()
+    expect(within(panel).getByLabelText('목표한 날 고르기')).toHaveTextContent(
+      '11월 14일'
+    )
+
+    await user.click(within(panel).getByRole('button', { name: '여유' }))
+    await user.click(within(panel).getByRole('button', { name: '저장' }))
+
+    const item = usePlanner.getState().items[0]
+    expect(item.goal_id).toBeNull()
+    // 고른 값이 항목 제 값으로 남는다.
+    expect(item.horizon_kind).toBe('date')
+    expect(item.ready_at).toBe('2026-11-14')
+    expect(item.intensity).toBe('easy')
+  })
+
+  it('S-156 목표와 다르게 설정된 항목은 저장하면 목표를 따른다', async () => {
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({
+          id: 'g1',
+          name: '자격증 시험',
+          horizon_kind: 'date',
+          ready_at: '2026-11-14',
+          hold_until: '2026-11-14',
+          intensity: 'focus',
+        }),
+      ],
+      items: [
+        anItem({
+          id: 'i1',
+          title: '따로 노는 항목',
+          goal_id: 'g1',
+          horizon_kind: 'open',
+          intensity: 'easy',
+        }),
+      ],
+    })
+    const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)
+    expect(
+      await screen.findByText('목표와 다른 설정을 쓰는 중')
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '편집' }))
+    const panel = screen.getByText('항목 고치기').closest('section')!
+    expect(within(panel).getByText(/저장하면 목표 설정을 따라갑니다/)).toBeInTheDocument()
+    await user.click(within(panel).getByRole('button', { name: '저장' }))
+
+    const item = usePlanner.getState().items[0]
+    expect(item.horizon_kind).toBeNull()
+    expect(item.intensity).toBeNull()
+    expect(screen.getByText('목표 설정을 따르는 중')).toBeInTheDocument()
+  })
+
+  it('S-157 오늘 목록에 없는 항목도 상세에서 바로 기록한다', async () => {
+    // 다음에 볼 날이 아직 안 온 항목이라 오늘 화면에는 안 올라온다.
+    await setupApp(TODAY, {
+      items: [
+        anItem({
+          id: 'i1',
+          title: '미리 본 항목',
+          first_studied_at: TODAY,
+          last_review: TODAY,
+          due: '2026-10-03',
+        }),
+      ],
+    })
+    const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)
+    expect(await screen.findByText('봤다고 기록하기')).toBeInTheDocument()
+
+    const panel = screen.getByText('봤다고 기록하기').closest('section')!
+    await user.click(within(panel).getByRole('button', { name: /쉬움/ }))
+
+    const reviews = usePlanner.getState().reviews
+    expect(reviews).toHaveLength(1)
+    expect(reviews[0].reviewed_at).toBe(TODAY)
+    expect(reviews[0].rating).toBe(4)
+    expect(usePlanner.getState().items[0].reps).toBe(2)
   })
 })

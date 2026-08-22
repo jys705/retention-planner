@@ -1,7 +1,8 @@
 import type { MemoryState } from '../core/fsrs/types'
 import type { Horizon } from '../core/horizon/horizon'
 import type { Intensity } from '../core/policy/constraints'
-import type { GoalRow, ItemRow, PostGoalMode } from '../db/types'
+import type { DateOnly } from './date'
+import type { GoalRow, HorizonKind, ItemRow, PostGoalMode } from '../db/types'
 import type { Settings } from './settings'
 
 /**
@@ -33,6 +34,30 @@ function horizonFrom(
     return { kind: 'window', readyAt, holdUntil }
   }
   return null
+}
+
+/**
+ * 목표 시점을 저장 칸 셋으로 편다.
+ *
+ * 목표와 항목이 같은 세 칸(`horizon_kind`, `ready_at`, `hold_until`)을 쓴다.
+ * 펴는 자리가 여러 군데면 한 곳만 고쳐지고 나머지가 남는다.
+ */
+export function horizonFields(horizon: Horizon): {
+  horizon_kind: HorizonKind
+  ready_at: DateOnly | null
+  hold_until: DateOnly | null
+} {
+  if (horizon.kind === 'date') {
+    return { horizon_kind: 'date', ready_at: horizon.at, hold_until: horizon.at }
+  }
+  if (horizon.kind === 'window') {
+    return {
+      horizon_kind: 'window',
+      ready_at: horizon.readyAt,
+      hold_until: horizon.holdUntil,
+    }
+  }
+  return { horizon_kind: 'open', ready_at: null, hold_until: null }
 }
 
 export function goalHorizon(goal: GoalRow): Horizon {

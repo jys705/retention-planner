@@ -35,11 +35,13 @@ import {
   diffDays,
   fromEpochDay,
   maxDate,
+  minDate,
   toEpochDay,
   type DateOnly,
 } from '../lib/date'
 import {
   effectiveConfig,
+  horizonFields,
   isActive,
   memoryStateOf,
   spreadGroupKey,
@@ -62,6 +64,8 @@ export interface NewItemDraft {
   firstStudiedAt?: DateOnly
   horizon?: Horizon | null
   intensity?: Intensity | number | null
+  /** 처음 공부한 날 얼마나 기억했는지. 지난 날짜로 적을 때 고른다. */
+  initialGrade?: Grade
 }
 
 export interface NewGoalDraft {
@@ -152,7 +156,9 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const { settings, today } = get()
     const goalId = draft.goalId ?? null
     const goal = goalId ? (get().goals.find((g) => g.id === goalId) ?? null) : null
-    const firstStudiedAt = draft.firstStudiedAt ?? today
+    // 아직 안 온 날에 공부했을 수는 없다. 화면의 max 속성은 값이 들어오는 걸 막지 못하므로
+    // 평가와 마찬가지로 저장 직전에 한 번 더 자른다.
+    const firstStudiedAt = minDate(draft.firstStudiedAt ?? today, today)
 
     const row: ItemRow = {
       id: newId('itm'),
@@ -183,10 +189,13 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       archived_at: null,
     }
 
-    // 처음 공부한 날에 '무난함' 으로 한 번 본 것으로 친다.
+    // 처음 공부한 날에 한 번 본 것으로 친다. 등급을 안 고르면 '무난함' 이다.
     const config = effectiveConfig(row, goal, settings)
     const initial = initialSchedule({
       firstStudiedAt,
+      ...(draft.initialGrade !== undefined
+        ? { initialGrade: draft.initialGrade }
+        : {}),
       horizon: config.horizon,
       intensity: config.intensity,
       targetRetention: config.targetRetention,
@@ -413,17 +422,11 @@ export const usePlanner = create<PlannerState>((set, get) => ({
 }))
 
 function horizonReadyAt(horizon: Horizon | null): DateOnly | null {
-  if (!horizon) return null
-  if (horizon.kind === 'date') return horizon.at
-  if (horizon.kind === 'window') return horizon.readyAt
-  return null
+  return horizon ? horizonFields(horizon).ready_at : null
 }
 
 function horizonHoldUntil(horizon: Horizon | null): DateOnly | null {
-  if (!horizon) return null
-  if (horizon.kind === 'date') return horizon.at
-  if (horizon.kind === 'window') return horizon.holdUntil
-  return null
+  return horizon ? horizonFields(horizon).hold_until : null
 }
 
 /** 이력 순서를 보존하고 미래로는 기록하지 못하게 막는다. */

@@ -1,15 +1,18 @@
 // @vitest-environment happy-dom
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { usePlanner } from '../../src/store/planner'
 import {
   aGoal,
+  openCalendar,
   render,
   setDateInput,
   setupApp,
+  shift,
   teardownApp,
 } from './harness'
+import { fullDate } from '../../src/lib/format'
 
 const TODAY = '2026-10-01'
 
@@ -150,9 +153,110 @@ describe('오늘 화면: 항목 적기', () => {
     await setupApp(TODAY)
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await openDetail(user)
-    expect(screen.getByLabelText('처음 공부한 날 고르기')).toHaveAttribute(
-      'max',
+    const grid = await openCalendar(
+      user,
+      screen.getByLabelText('처음 공부한 날 고르기')
+    )
+    expect(within(grid).getByRole('button', { name: fullDate(TODAY) })).toBeEnabled()
+    expect(
+      within(grid).getByRole('button', { name: fullDate(shift(TODAY, 1)) })
+    ).toBeDisabled()
+  })
+
+  it('S-147 소속 목표를 고르면 목표 시점과 강도를 못 만진다', async () => {
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({
+          id: 'g1',
+          name: '자격증 시험',
+          horizon_kind: 'date',
+          ready_at: '2026-11-14',
+          hold_until: '2026-11-14',
+          intensity: 'focus',
+        }),
+      ],
+    })
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
+    await openDetail(user)
+    await user.click(screen.getByRole('button', { name: '자격증 시험' }))
+
+    // 고를 수 있는 칸은 사라지고 목표가 정한 값이 그대로 보인다.
+    expect(screen.queryByText('정해두지 않음')).toBeNull()
+    expect(screen.getByText('11월 14일')).toBeInTheDocument()
+    expect(screen.getByText('집중')).toBeInTheDocument()
+    expect(screen.getByText(/목표 화면에서 고치세요/)).toBeInTheDocument()
+
+    // 없음으로 되돌리면 다시 고를 수 있다.
+    await user.click(screen.getByRole('button', { name: '없음' }))
+    expect(screen.getByRole('button', { name: '정해두지 않음' })).toBeInTheDocument()
+  })
+
+  it('S-148 목표에 넣은 항목은 제 설정을 갖지 않는다', async () => {
+    await setupApp(TODAY, {
+      goals: [aGoal({ id: 'g1', name: '자격증 시험', intensity: 'focus' })],
+    })
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
+    await user.type(screen.getByLabelText('새 항목 제목'), '목표에 넣는 것')
+    await openDetail(user)
+    await user.click(screen.getByRole('button', { name: '자격증 시험' }))
+    await user.click(screen.getByRole('button', { name: /적어두기/ }))
+
+    const item = usePlanner.getState().items[0]
+    expect(item.goal_id).toBe('g1')
+    // 비어 있어야 목표를 고쳤을 때 이 항목도 따라온다.
+    expect(item.horizon_kind).toBeNull()
+    expect(item.intensity).toBeNull()
+  })
+
+  it('S-149 지난 날짜로 적을 때 그날 등급을 고른다', async () => {
+    await setupApp(TODAY)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
+    await user.type(screen.getByLabelText('새 항목 제목'), '어제 본 것')
+    await openDetail(user)
+    // 오늘로 적을 때는 물어보지 않는다.
+    expect(screen.queryByText('그날 얼마나 기억났나요?')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: '어제' }))
+    expect(screen.getByText('그날 얼마나 기억났나요?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '어려움' }))
+    await user.click(screen.getByRole('button', { name: /적어두기/ }))
+
+    const item = usePlanner.getState().items[0]
+    expect(item.first_studied_at).toBe(shift(TODAY, -1))
+    // 무난함으로 적었을 때보다 기억 지속력이 낮게 잡힌다.
+    expect(item.stability).toBeLessThan(2.4)
+  })
+
+  it('S-150 달력으로 오늘을 고르면 오늘 칩이 켜진다', async () => {
+    await setupApp(TODAY)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
+    await openDetail(user)
+    await user.click(screen.getByRole('button', { name: '어제' }))
+    await setDateInput(
+      user,
+      screen.getByLabelText('처음 공부한 날 고르기'),
       TODAY
     )
+    // 두 표시가 어긋나면 안 된다. 오늘을 골랐으면 날짜 단추는 '다른 날' 로 돌아가고
+    // 지난 날짜에만 나오는 등급 칸도 사라져야 한다.
+    expect(screen.getByLabelText('처음 공부한 날 고르기')).toHaveTextContent(
+      '다른 날'
+    )
+    expect(screen.queryByText('그날 얼마나 기억났나요?')).toBeNull()
+    await user.type(screen.getByLabelText('새 항목 제목'), '오늘로 되돌린 것')
+    await user.click(screen.getByRole('button', { name: /적어두기/ }))
+    expect(usePlanner.getState().items[0].first_studied_at).toBe(TODAY)
+  })
+
+  it('S-151 미래 날짜는 오늘로 잘려서 저장된다', async () => {
+    await setupApp(TODAY)
+    await usePlanner.getState().addItem({
+      title: '미래에서 온 것',
+      firstStudiedAt: shift(TODAY, 30),
+    })
+    render(<TodayScreen onOpenItem={() => {}} />)
+    const item = usePlanner.getState().items[0]
+    expect(item.first_studied_at).toBe(TODAY)
+    expect(item.last_review).toBe(TODAY)
   })
 })

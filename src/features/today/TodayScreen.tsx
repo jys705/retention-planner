@@ -87,6 +87,13 @@ export function TodayScreen({
   async function handleRate(itemId: string, grade: Grade) {
     const reviewedAt = reviewDates[itemId] ?? today
     setExpandedId(null)
+    // 고른 날짜는 그 한 번의 평가에 붙는 것이다. 남겨 두면 같은 항목이 다시 올라왔을 때
+    // 아무도 고른 적 없는 지난 날짜로 조용히 또 기록된다.
+    setReviewDates((current) => {
+      const next = { ...current }
+      delete next[itemId]
+      return next
+    })
     await rateItem(itemId, grade, { reviewedAt })
     setFocusIndex((i) => Math.max(0, Math.min(i, todayItems.length - 2)))
   }

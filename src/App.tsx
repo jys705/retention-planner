@@ -30,7 +30,7 @@ const SettingsScreen = lazy(() =>
 )
 import { Onboarding } from './features/onboarding/Onboarding'
 import { isActive } from './lib/domain'
-import { nowMinutes } from './lib/clock'
+import { nowMinutes, today as clockToday } from './lib/clock'
 import { notifyDueCount, shouldNotify } from './lib/notify'
 import { usePlanner } from './store/planner'
 
@@ -51,6 +51,21 @@ export function App() {
 
   useEffect(() => {
     void load()
+  }, [load])
+
+  // 오늘은 앱을 켤 때 한 번만 읽힌다. 창을 띄워 둔 채 자정을 넘기면 '오늘' 칩이
+  // 어제를 가리키고 진짜 오늘은 고를 수 없게 된다. 창이 다시 앞으로 나올 때 확인한다.
+  useEffect(() => {
+    function refresh() {
+      const now = clockToday()
+      if (now !== usePlanner.getState().today) void load()
+    }
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+    }
   }, [load])
 
   useEffect(() => {

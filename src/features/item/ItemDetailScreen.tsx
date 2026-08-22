@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
+import type { Grade } from '../../core/fsrs/types'
+import type { Horizon } from '../../core/horizon/horizon'
+import { INTENSITY_RETENTION } from '../../core/policy/constraints'
 import { AdjustedBadge, Badge } from '../../components/Badge'
 import { Chip } from '../../components/Chip'
-import type { ItemRow } from '../../db/types'
+import { DateField } from '../../components/DateField'
+import type { GoalRow, Intensity, ItemRow } from '../../db/types'
 import { dueReason, statusBadgeOf } from '../../lib/badge'
 import { fromEpochDay, type DateOnly } from '../../lib/date'
 import {
@@ -12,11 +16,16 @@ import {
   percent,
   stabilityLabel,
 } from '../../lib/format'
+import { effectiveConfig, horizonFields, memoryStateOf } from '../../lib/domain'
+import { gradeName } from '../../lib/grade'
+import { INTENSITY_META, intensityName } from '../../lib/intensity'
+import type { Settings } from '../../lib/settings'
 import { usePlanner } from '../../store/planner'
 import { MemoryCurveChart } from '../charts/MemoryCurveChart'
+import { GoalSettingsReadout } from '../goal/GoalSettingsReadout'
+import { gradeOptions } from '../today/gradeOptions'
+import { HorizonPicker } from '../newitem/HorizonPicker'
 import { buildItemView } from './itemView'
-
-const GRADE_NAME = ['', '다시', '어려움', '무난함', '쉬움']
 
 export function ItemDetailScreen({
   itemId,
@@ -28,14 +37,34 @@ export function ItemDetailScreen({
   const { items, goals, reviews, settings, today, planned } = usePlanner()
   const updateItem = usePlanner((s) => s.updateItem)
   const deleteItem = usePlanner((s) => s.deleteItem)
+  const rateItem = usePlanner((s) => s.rateItem)
 
   const [editing, setEditing] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [draftTitle, setDraftTitle] = useState('')
   const [draftMemo, setDraftMemo] = useState('')
   const [draftGoalId, setDraftGoalId] = useState<string | null>(null)
+  const [draftHorizon, setDraftHorizon] = useState<Horizon>({ kind: 'open' })
+  const [draftIntensity, setDraftIntensity] = useState<Intensity>('standard')
+  const [reviewDate, setReviewDate] = useState<DateOnly | null>(null)
 
   const item = items.find((i) => i.id === itemId)
+
+  /**
+   * 편집 칸을 지금 실제로 쓰고 있는 값으로 채운다.
+   *
+   * 항목 고유값이 아니라 적용 중인 값을 넣는다. 목표에서 풀었을 때 일정이 갑자기
+   * 달라지지 않고, 사용자가 본 그대로 이어진다.
+   */
+  function seed(target: ItemRow) {
+    const config = seedConfig(target, goals, settings)
+    setDraftTitle(target.title)
+    setDraftMemo(target.memo)
+    setDraftGoalId(target.goal_id)
+    setDraftHorizon(config.horizon)
+    setDraftIntensity(config.intensity)
+    setConfirmingDelete(false)
+  }
 
   // 훅은 이른 반환보다 앞에 와야 한다. 항목이 사라지는 순간에도 호출 순서가 같아야 하기 때문이다.
   useEffect(() => {
@@ -51,10 +80,7 @@ export function ItemDetailScreen({
       }
       if (event.key === 'e' || event.key === 'E') {
         event.preventDefault()
-        setDraftTitle(item.title)
-        setDraftMemo(item.memo)
-        setDraftGoalId(item.goal_id)
-        setConfirmingDelete(false)
+        seed(item)
         setEditing(true)
       } else if (event.key === 'Backspace' || event.key === 'Delete') {
         event.preventDefault()
@@ -86,24 +112,54 @@ export function ItemDetailScreen({
     .sort()
 
   const found = item
+  // 마지막으로 본 날보다 앞으로는 기록할 수 없다. 저장 계층도 같은 규칙으로 자른다.
+  const recordedAt =
+    reviewDate !== null && reviewDate >= (item.last_review ?? '') && reviewDate <= today
+      ? reviewDate
+      : today
+  const rateOptions = gradeOptions({
+    reviewedAt: recordedAt,
+    lastReview: item.last_review,
+    state: memoryStateOf(item),
+    horizon: view.config.horizon,
+    intensity: view.config.intensity,
+    targetRetention: view.config.targetRetention,
+    minReviews: view.config.minReviews,
+    repsSinceGoal: item.reps_since_goal,
+    bufferDays: settings.bufferDays,
+    maxIntervalDays: view.config.maxIntervalDays,
+  })
+  const draftGoal =
+    goals.find((g) => g.id === draftGoalId && g.archived_at === null) ?? null
 
   function startEditing() {
-    setDraftTitle(found.title)
-    setDraftMemo(found.memo)
-    setDraftGoalId(found.goal_id)
-    setConfirmingDelete(false)
+    seed(found)
     setEditing(true)
   }
 
   async function saveEdit() {
     const title = draftTitle.trim()
     if (title === '') return
+    // 목표에 속하면 시점과 강도는 목표 것이다. 항목 쪽 칸을 비워야 목표를 고쳤을 때 따라온다.
+    const own = draftGoalId === null
     await updateItem(found.id, {
       title,
       memo: draftMemo.trim(),
       goal_id: draftGoalId,
+      horizon_kind: own ? horizonFields(draftHorizon).horizon_kind : null,
+      ready_at: own ? horizonFields(draftHorizon).ready_at : null,
+      hold_until: own ? horizonFields(draftHorizon).hold_until : null,
+      intensity: own ? draftIntensity : null,
+      // 목표 기억률과 최소 복습 횟수도 항목 쪽에 남으면 목표를 안 따르는 셈이 된다.
+      ...(own ? {} : { target_retention: null, min_reviews: null }),
     })
     setEditing(false)
+  }
+
+  async function record(grade: Grade) {
+    await rateItem(found.id, grade, { reviewedAt: recordedAt })
+    // 고른 날짜는 그 한 번의 기록에 붙는다. 다음에는 다시 오늘부터 시작한다.
+    setReviewDate(null)
   }
 
   async function removeItem() {
@@ -154,6 +210,14 @@ export function ItemDetailScreen({
               view.holdUntil
             )}
           </span>
+          <span>복습 강도 {intensityName(view.config.intensity)}</span>
+          {goal ? (
+            view.config.overridden ? (
+              <span className="text-imp-fg">목표와 다른 설정을 쓰는 중</span>
+            ) : (
+              <span>목표 설정을 따르는 중</span>
+            )
+          ) : null}
         </div>
       </div>
 
@@ -211,6 +275,55 @@ export function ItemDetailScreen({
             </div>
           </div>
 
+          {draftGoal ? (
+            <div className="flex flex-col gap-[6px]">
+              <span className="text-[12px] font-medium text-text-2">
+                목표 시점과 복습 강도
+              </span>
+              <GoalSettingsReadout goal={draftGoal} />
+              {view.config.overridden ? (
+                <p className="text-[11.5px] leading-relaxed text-imp-fg">
+                  지금 이 항목은 목표와 다른 설정을 쓰고 있어요. 저장하면 목표 설정을
+                  따라갑니다.
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-[6px]">
+                <span className="text-[12px] font-medium text-text-2">
+                  목표 시점
+                </span>
+                <HorizonPicker
+                  today={today}
+                  uncertainty={settings.uncertainty}
+                  value={draftHorizon}
+                  onChange={setDraftHorizon}
+                />
+              </div>
+
+              <div className="flex flex-col gap-[6px]">
+                <span className="text-[12px] font-medium text-text-2">
+                  복습 강도
+                </span>
+                <div className="flex flex-wrap gap-[6px]">
+                  {INTENSITY_META.map((meta) => (
+                    <Chip
+                      key={meta.key}
+                      active={draftIntensity === meta.key}
+                      onClick={() => setDraftIntensity(meta.key)}
+                      title={`${meta.desc} (기억률 ${Math.round(
+                        INTENSITY_RETENTION[meta.key] * 100
+                      )}% 기준)`}
+                    >
+                      {meta.name}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -257,6 +370,49 @@ export function ItemDetailScreen({
       ) : null}
 
       <Summary item={item} today={today} retention={view.retention} />
+
+      <Section title="봤다고 기록하기">
+        <p className="pb-3 text-[12.5px] text-text-2">
+          오늘 목록에 없어도 방금 본 것을 여기서 바로 기록할 수 있어요.
+        </p>
+        <div className="grid grid-cols-[repeat(4,minmax(0,168px))] gap-2">
+          {rateOptions.map((option) => (
+            <button
+              key={option.grade}
+              type="button"
+              onClick={() => void record(option.grade)}
+              className="flex flex-col gap-[3px] rounded-[9px] border border-line-2 bg-surface px-[11px] pb-[10px] pt-[9px] text-left transition-colors hover:bg-raise"
+              style={{ borderTopColor: option.color, borderTopWidth: 2 }}
+            >
+              <span className="text-[13.5px] font-semibold text-text">
+                {option.name}
+              </span>
+              <span className="text-[11.5px] leading-snug text-text-3">
+                {option.hint}
+              </span>
+              <span className="num text-[12px] text-accent">{option.next}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 pt-[10px]">
+          <span className="text-[12px] text-text-3">언제 봤나요?</span>
+          <DateField
+            value={recordedAt}
+            today={today}
+            min={item.last_review}
+            max={today}
+            onChange={setReviewDate}
+            label="본 날짜 고르기"
+            text={recordedAt === today ? '오늘' : monthDay(recordedAt)}
+            active={recordedAt !== today}
+          />
+          {recordedAt !== today ? (
+            <span className="text-[12px] text-accent">
+              {monthDay(recordedAt)}에 본 것으로 기록해요
+            </span>
+          ) : null}
+        </div>
+      </Section>
 
       <Section title="기억 곡선">
         <MemoryCurveChart
@@ -327,7 +483,7 @@ export function ItemDetailScreen({
                 return (
                   <tr key={review.id} className="border-b border-line">
                     <td className="num py-2">{monthDay(review.reviewed_at)}</td>
-                    <td className="py-2">{GRADE_NAME[review.rating]}</td>
+                    <td className="py-2">{gradeName(review.rating)}</td>
                     <td className="py-2 text-text-3">
                       {review.memo_snapshot ?? ''}
                     </td>
@@ -438,4 +594,26 @@ function curveSentence(
     today,
     due
   )} 다시 보면 곡선이 100%로 올라갑니다.`
+}
+
+/**
+ * 편집 칸에 채울 값.
+ *
+ * 항목이 제 값을 가지고 있으면 그걸, 없으면 소속 목표 것을, 그것도 없으면 전역 기본값을 준다.
+ */
+function seedConfig(
+  item: ItemRow,
+  goals: readonly GoalRow[],
+  settings: Settings
+): { horizon: Horizon; intensity: Intensity } {
+  const goal = goals.find((g) => g.id === item.goal_id) ?? null
+  const config = effectiveConfig(item, goal, settings)
+  return {
+    horizon: config.horizon,
+    // 강도는 화면에서 늘 네 단계 중 하나다. 숫자로 들어오는 건 계산 쪽 표현이다.
+    intensity:
+      typeof config.intensity === 'string'
+        ? config.intensity
+        : settings.defaultIntensity,
+  }
 }

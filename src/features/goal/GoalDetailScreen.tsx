@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { defaultFsrs } from '../../core/fsrs/fsrs6'
 import type { Horizon } from '../../core/horizon/horizon'
-import { INTENSITY_RETENTION, type Intensity } from '../../core/policy/constraints'
+import { INTENSITY_RETENTION } from '../../core/policy/constraints'
 import { Badge } from '../../components/Badge'
 import { Chip, Hint } from '../../components/Chip'
 import { Expand } from '../../components/Expand'
@@ -15,17 +15,11 @@ import {
   horizonLabel,
   percent,
 } from '../../lib/format'
+import { INTENSITY_META } from '../../lib/intensity'
 import { spreadPreview, usePlanner } from '../../store/planner'
 import type { SpreadResult } from '../../core/spread/assign'
 import { LoadBars, type LoadBar } from '../charts/LoadBars'
 import { HorizonPicker } from '../newitem/HorizonPicker'
-
-const INTENSITY_META: { key: Intensity; name: string; desc: string }[] = [
-  { key: 'easy', name: '여유', desc: '가끔만 볼게요' },
-  { key: 'standard', name: '표준', desc: '알맞게 볼게요' },
-  { key: 'focus', name: '집중', desc: '자주 볼게요' },
-  { key: 'max', name: '최대', desc: '아주 자주 볼게요' },
-]
 
 export function GoalDetailScreen({
   goalId,

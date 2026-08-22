@@ -4,7 +4,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { GoalDetailScreen } from '../../src/features/goal/GoalDetailScreen'
 import { GoalListScreen } from '../../src/features/goal/GoalListScreen'
 import { usePlanner } from '../../src/store/planner'
-import { aGoal, anItem, render, setupApp, teardownApp } from './harness'
+import {
+  aGoal,
+  anItem,
+  render,
+  setDateInput,
+  setupApp,
+  teardownApp,
+} from './harness'
 
 const TODAY = '2026-10-01'
 const noop = () => {}
@@ -35,9 +42,11 @@ describe('목표 만들기', () => {
     const { user } = render(<GoalListScreen onOpenGoal={noop} />)
     await newGoal(user, 'AWS SCS-C03')
     await user.click(screen.getByRole('button', { name: '정확한 날짜' }))
-    const picker = screen.getByDisplayValue(TODAY)
-    await user.tripleClick(picker)
-    await user.keyboard('2026-11-14')
+    await setDateInput(
+      user,
+      screen.getByLabelText('목표한 날 고르기'),
+      '2026-11-14'
+    )
     await user.click(screen.getByRole('button', { name: '만들기' }))
 
     const goal = usePlanner.getState().goals[0]
@@ -204,9 +213,11 @@ describe('목표 상세', () => {
       <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
     )
     await user.click(await screen.findByRole('button', { name: /설정 일괄 수정/ }))
-    const picker = screen.getByDisplayValue('2026-11-14')
-    await user.tripleClick(picker)
-    await user.keyboard('2026-10-20')
+    await setDateInput(
+      user,
+      screen.getByLabelText('목표한 날 고르기'),
+      '2026-10-20'
+    )
 
     expect(usePlanner.getState().goals[0].ready_at).toBe('2026-10-20')
     // 묶인 항목들이 새 마감선을 넘지 않는다.
