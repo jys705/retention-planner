@@ -77,7 +77,19 @@ export function CalendarHeatmap({
           )
         })}
       </div>
-      <div className="flex items-center gap-2 text-[10.5px] text-text-3">
+    </div>
+  )
+}
+
+/**
+ * 색이 무엇을 뜻하는지.
+ *
+ * 달마다 붙이면 두 달을 나란히 놓았을 때 같은 범례가 두 번 선다.
+ * 격자 밖에서 한 번만 그린다.
+ */
+export function CalendarLegend({ cap }: { cap?: number | null }) {
+  return (
+    <div className="flex items-center gap-2 text-[10.5px] text-text-3">
         <span>적음</span>
         <span className="h-[9px] w-[9px] rounded-[3px] bg-rail" />
         <span
@@ -95,7 +107,6 @@ export function CalendarHeatmap({
           </>
         ) : null}
       </div>
-    </div>
   )
 }
 

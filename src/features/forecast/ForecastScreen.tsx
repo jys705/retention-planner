@@ -5,7 +5,10 @@ import { fullDate, monthDay, percent } from '../../lib/format'
 import { cn } from '../../lib/cn'
 import { goalColor } from '../../lib/domain'
 import { usePlanner } from '../../store/planner'
-import { CalendarHeatmap } from '../charts/CalendarHeatmap'
+import {
+  CalendarHeatmap,
+  CalendarLegend,
+} from '../charts/CalendarHeatmap'
 import { monthKey, monthLabel } from '../charts/calendar'
 import { LoadBars, type LoadBar } from '../charts/LoadBars'
 import { LOAD_SERIES } from '../charts/loadSeries'
@@ -228,6 +231,10 @@ export function ForecastScreen() {
                   />
                 </div>
               ))}
+            </div>
+            {/* 범례는 두 달을 통틀어 한 번만 선다. */}
+            <div className="pt-3">
+              <CalendarLegend cap={settings.dailyCap} />
             </div>
           </div>
 
