@@ -38,6 +38,7 @@ type Route =
   | { screen: ScreenKey }
   | { screen: 'goals'; goalId: string }
   | { screen: 'library'; itemId: string }
+  | { screen: 'library'; looseOnly: true }
 
 export function App() {
   const ready = usePlanner((s) => s.ready)
@@ -109,6 +110,8 @@ export function App() {
     <AppShell
       screen={route.screen}
       onNavigate={(screen) => setRoute({ screen })}
+      onOpenGoal={(goalId) => setRoute({ screen: 'goals', goalId })}
+      onOpenLoose={() => setRoute({ screen: 'library', looseOnly: true })}
     >
       <Suspense fallback={<ScreenLoading />}>
         {renderRoute(route, setRoute)}
@@ -156,6 +159,7 @@ function renderRoute(
     case 'library':
       return (
         <LibraryScreen
+          initialLooseOnly={'looseOnly' in route}
           onOpenItem={(itemId) => setRoute({ screen: 'library', itemId })}
           onOpenGoal={(goalId) => setRoute({ screen: 'goals', goalId })}
         />

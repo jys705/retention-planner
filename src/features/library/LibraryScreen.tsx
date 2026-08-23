@@ -25,19 +25,27 @@ const SORTS: { key: SortKey; name: string }[] = [
 export function LibraryScreen({
   onOpenItem,
   onOpenGoal,
+  initialLooseOnly = false,
 }: {
   onOpenItem: (id: string) => void
   onOpenGoal: (id: string) => void
+  /** 옆줄에서 '목표에 안 넣은 것' 을 눌러 들어왔을 때. */
+  initialLooseOnly?: boolean
 }) {
   const { items, goals, today } = usePlanner()
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortKey>('title')
   const [grouped, setGrouped] = useState(true)
+  const [looseOnly, setLooseOnly] = useState(initialLooseOnly)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
-  const active = items.filter(isActive)
+  const active = items
+    .filter(isActive)
+    .filter((i) => (looseOnly ? i.goal_id === null : true))
   const matched = query.trim()
-    ? active.filter((i) => i.title.toLowerCase().includes(query.trim().toLowerCase()))
+    ? active.filter((i) =>
+        i.title.toLowerCase().includes(query.trim().toLowerCase())
+      )
     : active
 
   const rows = matched.map((item) => ({
@@ -51,10 +59,13 @@ export function LibraryScreen({
     return a.item.title < b.item.title ? -1 : 1
   })
 
+  // 부제는 서재 전체를 말한다. 걸러진 것만 세면 걸개를 켤 때마다 '목표 0개' 가 된다.
+  const whole = items.filter(isActive)
   const goalCount = new Set(
-    matched.map((i) => i.goal_id).filter((id): id is string => id !== null)
+    whole.map((i) => i.goal_id).filter((id): id is string => id !== null)
   ).size
-  const looseCount = matched.filter((i) => i.goal_id === null).length
+  const looseCount = whole.filter((i) => i.goal_id === null).length
+  const narrowed = matched.length !== whole.length
 
   return (
     <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 py-7">
@@ -63,9 +74,15 @@ export function LibraryScreen({
           <div className="flex items-baseline gap-3">
             <h1 className="text-[22px] font-semibold">서재</h1>
             <span className="text-[13px] text-text-3">
-              항목 <span className="num">{matched.length}</span>개, 목표{' '}
+              항목 <span className="num">{whole.length}</span>개, 목표{' '}
               <span className="num">{goalCount}</span>개와 낱개{' '}
               <span className="num">{looseCount}</span>개
+              {narrowed ? (
+                <span className="text-accent">
+                  {' '}
+                  (지금 <span className="num">{matched.length}</span>개 보는 중)
+                </span>
+              ) : null}
             </span>
           </div>
           <input
@@ -94,9 +111,14 @@ export function LibraryScreen({
           </div>
           <div className="flex flex-col items-end gap-[7px]">
             <span className="text-[11.5px] text-text-3">보기</span>
-            <Chip active={grouped} onClick={() => setGrouped((g) => !g)}>
-              목표별로 묶기
-            </Chip>
+            <div className="flex gap-[6px]">
+              <Chip active={grouped} onClick={() => setGrouped((g) => !g)}>
+                목표별로 묶기
+              </Chip>
+              <Chip active={looseOnly} onClick={() => setLooseOnly((v) => !v)}>
+                목표 없는 것만
+              </Chip>
+            </div>
           </div>
         </div>
       </header>

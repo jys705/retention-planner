@@ -37,18 +37,18 @@ describe('앱 전체', () => {
     const { user } = render(<App />)
     await screen.findByText('오늘 볼 항목')
 
-    await user.click(screen.getByRole('button', { name: '예보' }))
+    await user.click(screen.getByRole('button', { name: '예보 화면' }))
     expect(
       (await screen.findAllByText('앞으로 60일', undefined, LAZY)).length
     ).toBeGreaterThan(0)
 
-    await user.click(screen.getByRole('button', { name: '목표' }))
+    await user.click(screen.getByRole('button', { name: '목표 화면' }))
     expect(await screen.findByText(/목표는 폴더가 아니라/)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '서재' }))
+    await user.click(screen.getByRole('button', { name: '서재 화면' }))
     expect(await screen.findByLabelText('항목 찾기')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '설정' }))
+    await user.click(screen.getByRole('button', { name: '설정 화면' }))
     expect(
       await screen.findByText('이 앱이 쓰는 방식', undefined, LAZY)
     ).toBeInTheDocument()
@@ -63,7 +63,7 @@ describe('앱 전체', () => {
     })
     const { user } = render(<App />)
     await screen.findByText('오늘 볼 항목')
-    await user.click(screen.getByRole('button', { name: '설정' }))
+    await user.click(screen.getByRole('button', { name: '설정 화면' }))
     await screen.findByText('이 앱이 쓰는 방식', undefined, LAZY)
 
     const backup = JSON.stringify({
@@ -96,7 +96,7 @@ describe('앱 전체', () => {
     })
     const { user } = render(<App />)
     await screen.findByText('오늘 볼 항목')
-    await user.click(screen.getByRole('button', { name: '서재' }))
+    await user.click(screen.getByRole('button', { name: '서재 화면' }))
     await user.click(await screen.findByRole('button', { name: '지울 것' }))
 
     await pickFromMenu(user, '이 항목 더보기', '삭제')
@@ -112,7 +112,7 @@ describe('앱 전체', () => {
     })
     const { user } = render(<App />)
     await screen.findByText('오늘 볼 항목')
-    await user.click(screen.getByRole('button', { name: '목표' }))
+    await user.click(screen.getByRole('button', { name: '목표 화면' }))
     await user.click(await screen.findByRole('button', { name: /지울 목표/ }))
 
     await user.click(await screen.findByRole('button', { name: '목표 삭제' }))
@@ -128,7 +128,7 @@ describe('앱 전체', () => {
     const { user } = render(<App />)
     expect(await screen.findByText('1 / 3')).toBeInTheDocument()
     // 온보딩 중에는 왼쪽 차림표가 없다.
-    expect(screen.queryByRole('button', { name: '서재' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '서재 화면' })).toBeNull()
 
     await user.click(screen.getByRole('button', { name: '건너뛰기' }))
     expect(await screen.findByText('오늘 볼 항목')).toBeInTheDocument()

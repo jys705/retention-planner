@@ -152,6 +152,24 @@ describe('서재', () => {
     expect(within(row).getByText('목표 없음')).toBeInTheDocument()
   })
 
+  it('S-079b 목표 없는 것만 걸러 본다', async () => {
+    await setupApp(TODAY, mixed())
+    const { user } = render(
+      <LibraryScreen onOpenItem={noop} onOpenGoal={noop} initialLooseOnly />
+    )
+    // 옆줄에서 눌러 들어오면 걸러진 채로 열린다.
+    expect(
+      await screen.findByRole('button', { name: '정보보안 개념 1~3' })
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '가나다 문제' })).toBeNull()
+
+    // 걸개를 다시 눌러 풀 수 있다.
+    await user.click(screen.getByRole('button', { name: '목표 없는 것만' }))
+    expect(
+      screen.getByRole('button', { name: '가나다 문제' })
+    ).toBeInTheDocument()
+  })
+
   it('S-080 항목을 눌러 상세로 간다', async () => {
     await setupApp(TODAY, mixed())
     let opened: string | null = null

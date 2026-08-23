@@ -214,14 +214,71 @@ describe('나머지 조작 요소', () => {
     await setupApp(TODAY, { items: [anItem({ id: 'i1', due: TODAY })] })
     const picked: string[] = []
     const { user } = render(
-      <AppShell screen="today" onNavigate={(k) => picked.push(k)}>
+      <AppShell
+        screen="today"
+        onNavigate={(k) => picked.push(k)}
+        onOpenGoal={noop}
+        onOpenLoose={noop}
+      >
         <p>본문</p>
       </AppShell>
     )
     for (const label of ['오늘', '예보', '목표', '서재', '설정']) {
-      await user.click(screen.getByRole('button', { name: new RegExp(label) }))
+      await user.click(screen.getByRole('button', { name: `${label} 화면` }))
     }
     expect(picked).toEqual(['today', 'forecast', 'goals', 'library', 'settings'])
+  })
+
+  it('S-117b 옆줄의 목표를 눌러 목표 상세로 간다', async () => {
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({
+          id: 'g1',
+          name: 'AWS SCS-C03',
+          horizon_kind: 'date',
+          ready_at: '2026-11-14',
+          hold_until: '2026-11-14',
+        }),
+      ],
+      items: [anItem({ id: 'i1', goal_id: 'g1' })],
+    })
+    let opened: string | null = null
+    const { user } = render(
+      <AppShell
+        screen="today"
+        onNavigate={noop}
+        onOpenGoal={(id) => (opened = id)}
+        onOpenLoose={noop}
+      >
+        <p>본문</p>
+      </AppShell>
+    )
+    await user.click(screen.getByRole('button', { name: /AWS SCS-C03/ }))
+    expect(opened).toBe('g1')
+  })
+
+  it('S-117c 목표에 안 넣은 항목은 개수 한 줄로만 선다', async () => {
+    // 스무 개가 되든 옆줄은 한 줄이다. 늘어놓으면 옆줄이 그것만으로 채워진다.
+    await setupApp(TODAY, {
+      items: Array.from({ length: 20 }, (_, i) =>
+        anItem({ id: `n${i}`, title: `낱개 ${i}`, goal_id: null })
+      ),
+    })
+    let opened = false
+    const { user } = render(
+      <AppShell
+        screen="today"
+        onNavigate={noop}
+        onOpenGoal={noop}
+        onOpenLoose={() => (opened = true)}
+      >
+        <p>본문</p>
+      </AppShell>
+    )
+    const row = screen.getByRole('button', { name: /목표에 안 넣은 것/ })
+    expect(within(row).getByText('20')).toBeInTheDocument()
+    await user.click(row)
+    expect(opened).toBe(true)
   })
 
   it('S-118 오늘 볼 개수가 왼쪽에 뜬다', async () => {
@@ -232,11 +289,16 @@ describe('나머지 조작 요소', () => {
       ],
     })
     render(
-      <AppShell screen="today" onNavigate={noop}>
+      <AppShell
+        screen="today"
+        onNavigate={noop}
+        onOpenGoal={noop}
+        onOpenLoose={noop}
+      >
         <p>본문</p>
       </AppShell>
     )
-    const today = screen.getByRole('button', { name: /오늘/ })
+    const today = screen.getByRole('button', { name: '오늘 화면' })
     expect(within(today).getByText('2')).toBeInTheDocument()
   })
 
@@ -253,7 +315,12 @@ describe('나머지 조작 요소', () => {
       ],
     })
     render(
-      <AppShell screen="today" onNavigate={noop}>
+      <AppShell
+        screen="today"
+        onNavigate={noop}
+        onOpenGoal={noop}
+        onOpenLoose={noop}
+      >
         <p>본문</p>
       </AppShell>
     )
