@@ -11,6 +11,7 @@ import { usePlanner } from '../../src/store/planner'
 import {
   aGoal,
   anItem,
+  pickCard,
   render,
   setupApp,
   teardownApp,
@@ -33,7 +34,7 @@ describe('새 항목: 목표 시점 3모드', () => {
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '무기한')
     await openDetail(user)
-    await user.click(screen.getByRole('button', { name: '정해두지 않음' }))
+    await user.click(screen.getByRole('radio', { name: '정해두지 않음' }))
     expect(
       screen.getByText(/마감 없이, 잊을 만할 때마다 계속 올려드릴게요/)
     ).toBeInTheDocument()
@@ -46,7 +47,7 @@ describe('새 항목: 목표 시점 3모드', () => {
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '날짜 있음')
     await openDetail(user)
-    await user.click(screen.getByRole('button', { name: '정확한 날짜' }))
+    await user.click(screen.getByRole('radio', { name: '정확한 날짜' }))
     expect(
       screen.getByText('그날까지 기억이 가장 높게 올라오도록 잡아요.')
     ).toBeInTheDocument()
@@ -59,7 +60,7 @@ describe('새 항목: 목표 시점 3모드', () => {
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '대략')
     await openDetail(user)
-    await user.click(screen.getByRole('button', { name: '대략' }))
+    await user.click(screen.getByRole('radio', { name: '대략' }))
     expect(
       screen.getByText(/이른 쪽\(/)
     ).toBeInTheDocument()
@@ -75,7 +76,7 @@ describe('새 항목: 목표 시점 3모드', () => {
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '프리셋')
     await openDetail(user)
-    await user.click(screen.getByRole('button', { name: '대략' }))
+    await user.click(screen.getByRole('radio', { name: '대략' }))
 
     for (const label of [
       '1주쯤',
@@ -109,8 +110,7 @@ describe('새 항목: 목표 시점 3모드', () => {
       const { user } = render(<TodayScreen onOpenItem={() => {}} />)
       await user.type(screen.getByLabelText('새 항목 제목'), `강도 ${label}`)
       await openDetail(user)
-      const panel = screen.getByText('복습 강도').closest('div')!.parentElement!
-      await user.click(within(panel).getByRole('button', { name: label }))
+      await pickCard(user, '복습 강도', label)
       await user.click(screen.getByRole('button', { name: /적어두기/ }))
       expect(usePlanner.getState().items[0].intensity).toBe(key)
     }

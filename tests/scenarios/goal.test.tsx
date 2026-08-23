@@ -28,7 +28,7 @@ describe('목표 만들기', () => {
     await setupApp(TODAY)
     const { user } = render(<GoalListScreen onOpenGoal={noop} />)
     await newGoal(user, '쿠버네티스')
-    await user.click(screen.getByRole('button', { name: '정해두지 않음' }))
+    await user.click(screen.getByRole('radio', { name: '정해두지 않음' }))
     await user.click(screen.getByRole('button', { name: '만들기' }))
 
     const goal = usePlanner.getState().goals[0]
@@ -41,7 +41,7 @@ describe('목표 만들기', () => {
     await setupApp(TODAY)
     const { user } = render(<GoalListScreen onOpenGoal={noop} />)
     await newGoal(user, 'AWS SCS-C03')
-    await user.click(screen.getByRole('button', { name: '정확한 날짜' }))
+    await user.click(screen.getByRole('radio', { name: '정확한 날짜' }))
     await setDateInput(
       user,
       screen.getByLabelText('목표한 날 고르기'),
@@ -59,7 +59,7 @@ describe('목표 만들기', () => {
     await setupApp(TODAY)
     const { user } = render(<GoalListScreen onOpenGoal={noop} />)
     await newGoal(user, '개념 정리')
-    await user.click(screen.getByRole('button', { name: '대략' }))
+    await user.click(screen.getByRole('radio', { name: '대략' }))
     await user.click(screen.getByRole('button', { name: '만들기' }))
 
     const goal = usePlanner.getState().goals[0]
@@ -84,7 +84,7 @@ describe('목표 만들기', () => {
       await setupApp(TODAY)
       const { user } = render(<GoalListScreen onOpenGoal={noop} />)
       await newGoal(user, `목표 ${label}`)
-      await user.click(screen.getByRole('button', { name: '대략' }))
+      await user.click(screen.getByRole('radio', { name: '대략' }))
       await user.click(screen.getByRole('button', { name: label }))
       await user.click(screen.getByRole('button', { name: '만들기' }))
 
@@ -99,7 +99,7 @@ describe('목표 만들기', () => {
     await setupApp(TODAY)
     const { user } = render(<GoalListScreen onOpenGoal={noop} />)
     await newGoal(user, '6주쯤 목표')
-    await user.click(screen.getByRole('button', { name: '대략' }))
+    await user.click(screen.getByRole('radio', { name: '대략' }))
     await user.click(screen.getByRole('button', { name: '직접' }))
 
     const amount = screen.getByRole('spinbutton')
@@ -124,7 +124,7 @@ describe('목표 만들기', () => {
       await setupApp(TODAY)
       const { user } = render(<GoalListScreen onOpenGoal={noop} />)
       await newGoal(user, `단위 ${unit}`)
-      await user.click(screen.getByRole('button', { name: '대략' }))
+      await user.click(screen.getByRole('radio', { name: '대략' }))
       await user.click(screen.getByRole('button', { name: '직접' }))
       const amount = screen.getByRole('spinbutton')
       await user.tripleClick(amount)

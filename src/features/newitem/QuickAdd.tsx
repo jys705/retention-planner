@@ -3,20 +3,23 @@ import type { Grade } from '../../core/fsrs/types'
 import type { Horizon } from '../../core/horizon/horizon'
 import {
   DEFAULT_INITIAL_GRADE,
-  INTENSITY_RETENTION,
   type Intensity,
 } from '../../core/policy/constraints'
 import { Chip, Hint } from '../../components/Chip'
+import { OptionCards } from '../../components/OptionCards'
+import { SelectField } from '../../components/SelectField'
 import { DateField } from '../../components/DateField'
 import type { GoalRow } from '../../db/types'
 import { GoalSettingsReadout } from '../goal/GoalSettingsReadout'
 import { addDays, type DateOnly } from '../../lib/date'
+import { goalColor } from '../../lib/domain'
 import { horizonLabel, monthDay } from '../../lib/format'
 import { GRADE_META } from '../../lib/grade'
-import { INTENSITY_META } from '../../lib/intensity'
+import { INTENSITY_META, intensityName } from '../../lib/intensity'
 import type { Settings } from '../../lib/settings'
 import type { NewItemDraft } from '../../store/planner'
 import { HorizonPicker } from './HorizonPicker'
+import { PlanPreview } from './PlanPreview'
 
 export interface QuickAddProps {
   today: DateOnly
@@ -127,123 +130,133 @@ export function QuickAdd({
       </div>
 
       {detailOpen ? (
-        <div className="flex flex-col gap-[14px] border-t border-line px-[18px] py-[14px] pl-[40px]">
-          <Field label="처음 공부한 날">
-            <div className="flex flex-wrap items-center gap-[6px]">
-              <Chip
-                active={firstStudiedAt === today}
-                onClick={() => setFirstStudiedAt(today)}
-              >
-                오늘
-              </Chip>
-              <Chip
-                active={firstStudiedAt === yesterday}
-                onClick={() => setFirstStudiedAt(yesterday)}
-              >
-                어제
-              </Chip>
-              <DateField
-                value={firstStudiedAt}
-                today={today}
-                max={today}
-                onChange={setFirstStudiedAt}
-                label="처음 공부한 날 고르기"
-                text={pickedOther ? monthDay(firstStudiedAt) : '다른 날'}
-                active={pickedOther}
-              />
-            </div>
-          </Field>
-
-          <Field
-            label="소속 목표"
-            hint="목표에 넣으면 목표 시점과 강도를 목표에서 한 번만 정하면 돼요. 없음을 고르면 이 항목만의 설정을 여기서 정합니다."
-          >
-            <div className="flex flex-wrap gap-[6px]">
-              <Chip active={goalId === null} onClick={() => setGoalId(null)}>
-                없음
-              </Chip>
-              {goals.map((goal) => (
+        <div className="grid grid-cols-[1fr_268px] border-t border-line">
+          <div className="flex flex-col gap-[14px] py-[14px] pl-[43px] pr-[20px]">
+            <Field label="처음 공부한 날">
+              <div className="flex flex-wrap items-center gap-[6px]">
                 <Chip
-                  key={goal.id}
-                  active={goalId === goal.id}
-                  onClick={() => setGoalId(goal.id)}
-                  title={horizonLabel(
-                    goal.horizon_kind,
-                    goal.ready_at,
-                    goal.hold_until
-                  )}
+                  active={firstStudiedAt === today}
+                  onClick={() => setFirstStudiedAt(today)}
                 >
-                  {goal.name}
+                  오늘
                 </Chip>
-              ))}
-            </div>
-          </Field>
-
-          {selectedGoal ? (
-            <Field label="목표 시점과 복습 강도">
-              <GoalSettingsReadout goal={selectedGoal} />
-            </Field>
-          ) : (
-            <>
-              <Field label="목표 시점">
-                <HorizonPicker
+                <Chip
+                  active={firstStudiedAt === yesterday}
+                  onClick={() => setFirstStudiedAt(yesterday)}
+                >
+                  어제
+                </Chip>
+                <DateField
+                  value={firstStudiedAt}
                   today={today}
-                  uncertainty={settings.uncertainty}
-                  value={horizon ?? { kind: 'open' }}
-                  onChange={setHorizon}
+                  max={today}
+                  onChange={setFirstStudiedAt}
+                  label="처음 공부한 날 고르기"
+                  text={pickedOther ? monthDay(firstStudiedAt) : '다른 날'}
+                  active={pickedOther}
+                />
+              </div>
+            </Field>
+
+            {/* 목표가 하나도 없으면 고를 것이 '없음' 뿐이다. 그 칸은 안 보여준다. */}
+            {goals.length > 0 ? (
+              <Field
+                label="소속 목표"
+                hint="목표에 넣으면 목표 시점과 강도를 목표에서 한 번만 정하면 돼요. 없음을 고르면 이 항목만의 설정을 여기서 정합니다."
+              >
+                <SelectField
+                  label="소속 목표"
+                  value={goalId}
+                  onChange={setGoalId}
+                  options={[
+                    { value: null, label: '없음' },
+                    ...goals.map((goal, index) => ({
+                      value: goal.id,
+                      label: goal.name,
+                      dot: goalColor(goal, index),
+                      note: horizonLabel(
+                        goal.horizon_kind,
+                        goal.ready_at,
+                        goal.hold_until
+                      ),
+                    })),
+                  ]}
                 />
               </Field>
+            ) : null}
 
-              <Field label="복습 강도">
+            {selectedGoal ? (
+              <Field label="목표 시점과 복습 강도">
+                <GoalSettingsReadout goal={selectedGoal} />
+              </Field>
+            ) : (
+              <>
+                <Field label="목표 시점">
+                  <HorizonPicker
+                    today={today}
+                    uncertainty={settings.uncertainty}
+                    value={horizon ?? { kind: 'open' }}
+                    onChange={setHorizon}
+                  />
+                </Field>
+
+                <Field
+                  label="복습 강도"
+                  aside={`기본값 ${intensityName(settings.defaultIntensity)}`}
+                >
+                  <OptionCards
+                    label="복습 강도"
+                    value={intensity ?? settings.defaultIntensity}
+                    options={INTENSITY_META.map((meta) => ({
+                      key: meta.key,
+                      name: meta.name,
+                      desc: meta.desc,
+                    }))}
+                    onChange={setIntensity}
+                  />
+                </Field>
+              </>
+            )}
+
+            {backdated ? (
+              <Field
+                label="그날 얼마나 기억났나요?"
+                hint="지난 날짜로 적으면 그날 한 번 본 것으로 칩니다. 이 등급이 다음 복습일을 계산하는 출발점이에요."
+              >
                 <div className="flex flex-wrap gap-[6px]">
-                  {INTENSITY_META.map((meta) => (
+                  {GRADE_META.map((meta) => (
                     <Chip
-                      key={meta.key}
-                      active={
-                        (intensity ?? settings.defaultIntensity) === meta.key
-                      }
-                      onClick={() => setIntensity(meta.key)}
-                      title={`${meta.desc} (기억률 ${Math.round(
-                        INTENSITY_RETENTION[meta.key] * 100
-                      )}% 기준)`}
+                      key={meta.grade}
+                      active={initialGrade === meta.grade}
+                      onClick={() => setInitialGrade(meta.grade)}
+                      title={meta.hint}
                     >
                       {meta.name}
                     </Chip>
                   ))}
                 </div>
               </Field>
-            </>
-          )}
+            ) : null}
 
-          {backdated ? (
-            <Field
-              label="그날 얼마나 기억났나요?"
-              hint="지난 날짜로 적으면 그날 한 번 본 것으로 칩니다. 이 등급이 다음 복습일을 계산하는 출발점이에요."
-            >
-              <div className="flex flex-wrap gap-[6px]">
-                {GRADE_META.map((meta) => (
-                  <Chip
-                    key={meta.grade}
-                    active={initialGrade === meta.grade}
-                    onClick={() => setInitialGrade(meta.grade)}
-                    title={meta.hint}
-                  >
-                    {meta.name}
-                  </Chip>
-                ))}
-              </div>
+            <Field label="메모 (선택)">
+              <input
+                value={memo}
+                onChange={(event) => setMemo(event.target.value)}
+                placeholder="3, 7번 틀림"
+                className="w-full rounded-ctl border border-line-2 bg-surface px-[10px] py-[6px] text-[13px] outline-none"
+              />
             </Field>
-          ) : null}
+          </div>
 
-          <Field label="메모 (선택)">
-            <input
-              value={memo}
-              onChange={(event) => setMemo(event.target.value)}
-              placeholder="3, 7번 틀림"
-              className="w-full rounded-ctl border border-line-2 bg-surface px-[10px] py-[6px] text-[13px] outline-none"
-            />
-          </Field>
-
+          <PlanPreview
+            today={today}
+            goal={selectedGoal}
+            settings={settings}
+            firstStudiedAt={firstStudiedAt}
+            horizon={horizon}
+            intensity={intensity}
+            initialGrade={initialGrade}
+          />
         </div>
       ) : null}
     </div>
@@ -264,10 +277,13 @@ export function QuickAddHint({ detailOpen }: { detailOpen: boolean }) {
 function Field({
   label,
   hint,
+  aside,
   children,
 }: {
   label: string
   hint?: string | undefined
+  /** 이름 줄 오른쪽 끝에 작게 붙는 말. 기본값이 무엇인지 같은 것. */
+  aside?: string | undefined
   children: React.ReactNode
 }) {
   return (
@@ -275,6 +291,9 @@ function Field({
       <div className="flex items-center gap-[5px]">
         <span className="text-[12px] font-medium text-text-2">{label}</span>
         {hint ? <Hint text={hint} /> : null}
+        {aside ? (
+          <span className="ml-auto text-[11.5px] text-text-3">{aside}</span>
+        ) : null}
       </div>
       {children}
     </div>

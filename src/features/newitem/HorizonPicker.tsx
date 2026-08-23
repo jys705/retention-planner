@@ -8,6 +8,7 @@ import {
   type Horizon,
 } from '../../core/horizon/horizon'
 import { Chip } from '../../components/Chip'
+import { OptionCards } from '../../components/OptionCards'
 import { DateField } from '../../components/DateField'
 import { cn } from '../../lib/cn'
 import type { DateOnly } from '../../lib/date'
@@ -59,23 +60,20 @@ export function HorizonPicker({
 
   return (
     <div className="flex flex-col gap-[10px]">
-      <div className="flex flex-wrap gap-[6px]">
-        {MODE_META.map((meta) => (
-          <Chip
-            key={meta.mode}
-            active={value.kind === meta.mode}
-            title={meta.desc}
-            onClick={() => {
-              if (meta.mode === 'open') onChange({ kind: 'open' })
-              else if (meta.mode === 'date') {
-                onChange({ kind: 'date', at: today })
-              } else pickPreset(30)
-            }}
-          >
-            {meta.name}
-          </Chip>
-        ))}
-      </div>
+      <OptionCards
+        label="목표 시점"
+        value={value.kind}
+        options={MODE_META.map((meta) => ({
+          key: meta.mode,
+          name: meta.name,
+          desc: meta.desc,
+        }))}
+        onChange={(mode) => {
+          if (mode === 'open') onChange({ kind: 'open' })
+          else if (mode === 'date') onChange({ kind: 'date', at: today })
+          else pickPreset(30)
+        }}
+      />
 
       {value.kind === 'open' ? (
         <p className="text-[12px] leading-relaxed text-text-3">
@@ -102,7 +100,7 @@ export function HorizonPicker({
 
       {value.kind === 'window' ? (
         <div className="flex flex-col gap-[8px]">
-          <div className="flex flex-wrap gap-[6px]">
+          <div className="flex flex-wrap gap-[5px]">
             {APPROX_PRESETS.map((preset) => {
               const w = relativeWindow(today, preset.centerDays, uncertainty)
               const active =
@@ -112,6 +110,7 @@ export function HorizonPicker({
               return (
                 <Chip
                   key={preset.id}
+                  compact
                   active={active}
                   onClick={() => pickPreset(preset.centerDays)}
                 >
@@ -120,6 +119,7 @@ export function HorizonPicker({
               )
             })}
             <Chip
+              compact
               active={customOpen}
               onClick={() => {
                 setCustomOpen(true)

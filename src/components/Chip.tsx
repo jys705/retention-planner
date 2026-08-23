@@ -6,11 +6,14 @@ export function Chip({
   onClick,
   children,
   title,
+  compact = false,
 }: {
   active?: boolean
   onClick?: () => void
   children: ReactNode
   title?: string
+  /** 여럿이 한 줄에 서야 할 때. 좌우를 좁힌다. */
+  compact?: boolean
 }) {
   return (
     <button
@@ -18,7 +21,8 @@ export function Chip({
       onClick={onClick}
       title={title}
       className={cn(
-        'rounded-ctl border px-[11px] py-[6px] text-[13px] transition-colors',
+        'rounded-ctl border py-[6px] text-[13px] transition-colors',
+        compact ? 'px-[8px]' : 'px-[11px]',
         active
           ? 'border-accent bg-accent-soft font-semibold text-accent'
           : 'border-line-2 bg-surface text-text-2 hover:bg-hover'

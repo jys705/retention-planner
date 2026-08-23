@@ -218,3 +218,26 @@ export async function pickFromMenu(
     within(screen.getByRole('menu')).getByRole('menuitem', { name: itemLabel })
   )
 }
+
+/** 설명이 붙은 고르기 칸에서 하나를 누른다. */
+export async function pickCard(
+  user: ReturnType<typeof render>['user'],
+  groupLabel: string,
+  name: string
+): Promise<void> {
+  const group = await screen.findByRole('radiogroup', { name: groupLabel })
+  await user.click(within(group).getByRole('radio', { name }))
+}
+
+/** 접힌 고르기 칸을 열고 하나를 누른다. */
+export async function pickSelect(
+  user: ReturnType<typeof render>['user'],
+  fieldLabel: string,
+  name: string
+): Promise<void> {
+  await user.click(await screen.findByRole('button', { name: fieldLabel }))
+  const list = screen.getByRole('listbox', { name: fieldLabel })
+  await user.click(
+    within(list).getByRole('option', { name: new RegExp(`^${name}`) })
+  )
+}

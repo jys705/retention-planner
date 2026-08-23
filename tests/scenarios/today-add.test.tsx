@@ -11,6 +11,7 @@ import {
   setupApp,
   shift,
   teardownApp,
+  pickSelect,
 } from './harness'
 import { fullDate } from '../../src/lib/format'
 
@@ -58,7 +59,7 @@ describe('오늘 화면: 항목 적기', () => {
   })
 
   it('S-004 상세 설정을 펼치고 접는다', async () => {
-    await setupApp(TODAY)
+    await setupApp(TODAY, { goals: [aGoal({ id: 'g1', name: 'AWS SCS-C03' })] })
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     expect(screen.queryByText('처음 공부한 날')).toBeNull()
 
@@ -70,6 +71,17 @@ describe('오늘 화면: 항목 적기', () => {
 
     await user.click(screen.getByRole('button', { name: /상세 설정/ }))
     expect(screen.queryByText('처음 공부한 날')).toBeNull()
+  })
+
+  it('S-004b 목표가 하나도 없으면 소속 목표 칸을 안 보여준다', async () => {
+    // 고를 것이 '없음' 뿐인 칸은 자리만 차지하고 아무것도 정해 주지 않는다.
+    await setupApp(TODAY)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
+    await user.click(screen.getByRole('button', { name: /상세 설정/ }))
+
+    expect(screen.getByText('처음 공부한 날')).toBeInTheDocument()
+    expect(screen.queryByText('소속 목표')).toBeNull()
+    expect(screen.getByText('목표 시점')).toBeInTheDocument()
   })
 
   it('S-005 처음 공부한 날 오늘', async () => {
@@ -131,7 +143,7 @@ describe('오늘 화면: 항목 적기', () => {
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '목표에 넣기')
     await openDetail(user)
-    await user.click(screen.getByRole('button', { name: 'AWS SCS-C03' }))
+    await pickSelect(user, '소속 목표', 'AWS SCS-C03')
     await user.click(screen.getByRole('button', { name: /적어두기/ }))
 
     expect(usePlanner.getState().items[0].goal_id).toBe('g1')
@@ -148,7 +160,7 @@ describe('오늘 화면: 항목 적기', () => {
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '목표 없이')
     await openDetail(user)
-    await user.click(screen.getByRole('button', { name: '없음' }))
+    await pickSelect(user, '소속 목표', '없음')
     await user.click(screen.getByRole('button', { name: /적어두기/ }))
     expect(usePlanner.getState().items[0].goal_id).toBeNull()
   })
@@ -182,7 +194,7 @@ describe('오늘 화면: 항목 적기', () => {
     })
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await openDetail(user)
-    await user.click(screen.getByRole('button', { name: '자격증 시험' }))
+    await pickSelect(user, '소속 목표', '자격증 시험')
 
     // 고를 수 있는 칸은 사라지고 목표가 정한 값이 그대로 보인다.
     expect(screen.queryByText('정해두지 않음')).toBeNull()
@@ -191,8 +203,8 @@ describe('오늘 화면: 항목 적기', () => {
     expect(screen.getByText(/목표 화면에서 고치세요/)).toBeInTheDocument()
 
     // 없음으로 되돌리면 다시 고를 수 있다.
-    await user.click(screen.getByRole('button', { name: '없음' }))
-    expect(screen.getByRole('button', { name: '정해두지 않음' })).toBeInTheDocument()
+    await pickSelect(user, '소속 목표', '없음')
+    expect(screen.getByRole('radio', { name: '정해두지 않음' })).toBeInTheDocument()
   })
 
   it('S-148 목표에 넣은 항목은 제 설정을 갖지 않는다', async () => {
@@ -202,7 +214,7 @@ describe('오늘 화면: 항목 적기', () => {
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '목표에 넣는 것')
     await openDetail(user)
-    await user.click(screen.getByRole('button', { name: '자격증 시험' }))
+    await pickSelect(user, '소속 목표', '자격증 시험')
     await user.click(screen.getByRole('button', { name: /적어두기/ }))
 
     const item = usePlanner.getState().items[0]

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { Horizon } from '../../core/horizon/horizon'
-import { INTENSITY_RETENTION } from '../../core/policy/constraints'
 import { AdjustedBadge, Badge } from '../../components/Badge'
 import { Chip } from '../../components/Chip'
 import { InlineText } from '../../components/InlineText'
+import { OptionCards } from '../../components/OptionCards'
 import { MoreMenu } from '../../components/MoreMenu'
 import type { GoalRow, Intensity, ItemRow } from '../../db/types'
 import { dueReason, statusBadgeOf } from '../../lib/badge'
@@ -300,20 +300,16 @@ export function ItemDetailScreen({
                 <span className="text-[12px] font-medium text-text-2">
                   복습 강도
                 </span>
-                <div className="flex flex-wrap gap-[6px]">
-                  {INTENSITY_META.map((meta) => (
-                    <Chip
-                      key={meta.key}
-                      active={draftIntensity === meta.key}
-                      onClick={() => setDraftIntensity(meta.key)}
-                      title={`${meta.desc} (기억률 ${Math.round(
-                        INTENSITY_RETENTION[meta.key] * 100
-                      )}% 기준)`}
-                    >
-                      {meta.name}
-                    </Chip>
-                  ))}
-                </div>
+                <OptionCards
+                  label="복습 강도"
+                  value={draftIntensity}
+                  options={INTENSITY_META.map((meta) => ({
+                    key: meta.key,
+                    name: meta.name,
+                    desc: meta.desc,
+                  }))}
+                  onChange={setDraftIntensity}
+                />
               </div>
             </>
           )}

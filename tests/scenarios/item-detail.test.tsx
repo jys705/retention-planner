@@ -204,7 +204,7 @@ describe('항목 상세', () => {
     expect(within(panel).getByText('11월 14일')).toBeInTheDocument()
     expect(within(panel).getByText('집중')).toBeInTheDocument()
     // 목표에 속한 동안에는 고치는 칸이 없다.
-    expect(within(panel).queryByRole('button', { name: '정해두지 않음' })).toBeNull()
+    expect(within(panel).queryByRole('radio', { name: '정해두지 않음' })).toBeNull()
     expect(within(panel).getByText(/목표 화면에서 고치세요/)).toBeInTheDocument()
   })
 
@@ -229,13 +229,13 @@ describe('항목 상세', () => {
     await user.click(within(panel).getByRole('button', { name: '없음' }))
     // 따르던 목표 값이 그대로 채워져 있어야 일정이 갑자기 안 달라진다.
     expect(
-      within(panel).getByRole('button', { name: '정확한 날짜' })
+      within(panel).getByRole('radio', { name: '정확한 날짜' })
     ).toBeInTheDocument()
     expect(within(panel).getByLabelText('목표한 날 고르기')).toHaveTextContent(
       '11월 14일'
     )
 
-    await user.click(within(panel).getByRole('button', { name: '여유' }))
+    await user.click(within(panel).getByRole('radio', { name: '여유' }))
     await user.click(within(panel).getByRole('button', { name: '저장' }))
 
     const item = usePlanner.getState().items[0]
