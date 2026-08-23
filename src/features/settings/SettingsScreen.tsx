@@ -4,7 +4,9 @@ import { INTENSITY_RETENTION } from '../../core/policy/constraints'
 import { Chip } from '../../components/Chip'
 import { Expand } from '../../components/Expand'
 import { nowIso, today as clockToday } from '../../lib/clock'
-import { percent } from '../../lib/format'
+import { relativeWindow } from '../../core/horizon/horizon'
+import type { DateOnly } from '../../lib/date'
+import { monthDay, percent } from '../../lib/format'
 import type { ThemePreference } from '../../lib/settings'
 import {
   BackupFormatError,
@@ -18,15 +20,37 @@ import { usePlanner } from '../../store/planner'
 import { INTENSITY_META } from '../../lib/intensity'
 
 const THEMES: { key: ThemePreference; name: string }[] = [
-  { key: 'system', name: '시스템' },
   { key: 'light', name: '밝게' },
   { key: 'dark', name: '어둡게' },
+  { key: 'system', name: '시스템' },
 ]
 
-const NOTIFY_TIMES = ['09:00', '12:00', '18:00', '21:00']
+const NOTIFY_TIMES: { at: string; name: string }[] = [
+  { at: '09:00', name: '오전 9시' },
+  { at: '12:00', name: '낮 12시' },
+  { at: '18:00', name: '저녁 6시' },
+  { at: '21:00', name: '밤 9시' },
+]
+
+const UNCERTAINTY: { value: number; name: string }[] = [
+  { value: 0.15, name: '좁게' },
+  { value: 0.25, name: '보통' },
+  { value: 0.35, name: '넓게' },
+]
+
+/**
+ * 여유 폭이 실제로 며칠이 되는지.
+ *
+ * '앞뒤 25%' 는 무엇을 말하는지 알 수 없다. 두 달쯤을 고르면 어느 날부터
+ * 어느 날까지가 되는지 보여야 고를 수 있다.
+ */
+function sampleWindow(uncertainty: number, today: DateOnly): string {
+  const w = relativeWindow(today, 60, uncertainty)
+  return `${monthDay(w.readyAt)}부터 ${monthDay(w.holdUntil)} 사이`
+}
 
 export function SettingsScreen() {
-  const { settings, goals, items, reviews } = usePlanner()
+  const { settings, goals, items, reviews, today } = usePlanner()
   const saveSetting = usePlanner((s) => s.saveSetting)
   const importAll = usePlanner((s) => s.importAll)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -89,11 +113,13 @@ export function SettingsScreen() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-5 px-6 py-7">
-      <h1 className="text-[22px] font-semibold">설정</h1>
+    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 py-7">
+      <h1 className="text-[24px] font-semibold tracking-[-0.02em]">설정</h1>
 
-      <section className="flex flex-col gap-5 rounded-card border border-line bg-surface px-[16px] py-[15px]">
-        <h2 className="text-[13px] font-semibold">일반</h2>
+      <section className="overflow-hidden rounded-panel border border-line bg-surface">
+        <h2 className="px-[20px] pb-[11px] pt-[14px] text-[13px] font-semibold">
+          일반
+        </h2>
 
         <Row
           label="기본 복습 강도"
@@ -133,11 +159,11 @@ export function SettingsScreen() {
           <div className="flex flex-wrap gap-[6px]">
             {NOTIFY_TIMES.map((time) => (
               <Chip
-                key={time}
-                active={settings.notifyAt === time}
-                onClick={() => void saveSetting('notifyAt', time)}
+                key={time.at}
+                active={settings.notifyAt === time.at}
+                onClick={() => void saveSetting('notifyAt', time.at)}
               >
-                {time}
+                {time.name}
               </Chip>
             ))}
             <Chip
@@ -165,18 +191,19 @@ export function SettingsScreen() {
 
         <Row
           label="대략 목표의 여유 폭"
-          note={`'두 달쯤' 같은 목표를 앞뒤로 얼마나 넓게 볼지 정해요. 지금은 앞뒤 ${Math.round(
-            settings.uncertainty * 100
-          )}%예요.`}
+          note={`고른 날짜 앞뒤로 적당히 여유를 둡니다. 2개월쯤을 고르면 ${sampleWindow(
+            settings.uncertainty,
+            today
+          )}가 돼요.`}
         >
           <div className="flex flex-wrap gap-[6px]">
-            {[0.15, 0.25, 0.35].map((u) => (
+            {UNCERTAINTY.map((u) => (
               <Chip
-                key={u}
-                active={Math.abs(settings.uncertainty - u) < 1e-9}
-                onClick={() => void saveSetting('uncertainty', u)}
+                key={u.value}
+                active={Math.abs(settings.uncertainty - u.value) < 1e-9}
+                onClick={() => void saveSetting('uncertainty', u.value)}
               >
-                {`앞뒤 ${Math.round(u * 100)}%`}
+                {u.name}
               </Chip>
             ))}
           </div>
@@ -184,7 +211,7 @@ export function SettingsScreen() {
 
         <Row
           label="데이터"
-          note="항목, 목표, 평가 이력을 파일 하나로 옮길 수 있어요."
+          note="항목, 목표, 평가 이력을 파일 하나로 옮길 수 있어요. 가져오면 지금 있는 내용을 덮어씁니다. 먼저 내보내 두세요."
         >
           <div className="flex flex-wrap items-center gap-[6px]">
             <Chip onClick={exportJson}>내보내기</Chip>
@@ -204,21 +231,20 @@ export function SettingsScreen() {
             />
           </div>
           {message ? (
-            <p className="pt-2 text-[12px] text-accent">{message}</p>
+            <p className="text-right text-[12px] text-accent">{message}</p>
           ) : null}
-          <p className="pt-1 text-[11.5px] text-text-3">
-            가져오면 지금 있는 내용을 덮어씁니다. 먼저 내보내 두세요.
-          </p>
         </Row>
       </section>
 
+      <section className="overflow-hidden rounded-panel border border-line bg-surface px-[20px] py-[13px]">
       <Expand
+        plain
         open={advancedOpen}
         onToggle={() => setAdvancedOpen((o) => !o)}
         label="고급"
         hint="대부분 그대로 두시면 돼요."
       >
-        <div className="flex flex-col gap-5">
+        <div className="-mx-[20px] flex flex-col pt-[10px]">
           <Row
             label="목표 기억률 기본값"
             note="목표한 날 지켜야 할 기준이에요. 높이면 더 자주 보게 되고, 낮추면 덜 봅니다. 너무 높이면 날짜를 옮길 여지가 줄어요."
@@ -279,7 +305,9 @@ export function SettingsScreen() {
             </div>
           </Row>
 
+          <div className="border-t border-line px-[20px] py-[13px]">
           <Expand
+            plain
             open={paramsOpen}
             onToggle={() => setParamsOpen((o) => !o)}
             label="알고리즘 파라미터"
@@ -298,10 +326,12 @@ export function SettingsScreen() {
               다시 맞추는 기능을 넣을 예정입니다.
             </p>
           </Expand>
+          </div>
         </div>
       </Expand>
+      </section>
 
-      <section className="flex flex-col gap-3 rounded-card border border-line bg-surface px-[16px] py-[15px]">
+      <section className="flex flex-col gap-3 rounded-panel border border-line bg-surface px-[20px] py-[15px]">
         <h2 className="text-[13px] font-semibold">이 앱이 쓰는 방식</h2>
         <p className="text-[13px] leading-relaxed text-text-2">
           다시 볼 날은 <strong className="font-semibold">FSRS</strong> 라는
@@ -334,6 +364,12 @@ export function SettingsScreen() {
   )
 }
 
+/**
+ * 설정 한 줄.
+ *
+ * 이름과 설명을 왼쪽에, 고르는 칸을 오른쪽에 놓는다. 세로로 쌓으면 줄마다
+ * 세 겹이 되어 한 화면에 안 들어온다. 가로로 놓으면 눈이 이름만 훑고 내려간다.
+ */
 function Row({
   label,
   note,
@@ -344,12 +380,18 @@ function Row({
   children: React.ReactNode
 }) {
   return (
-    <div role="group" aria-label={label} className="flex flex-col gap-[6px]">
-      <span className="text-[13px] font-medium">{label}</span>
-      {note ? (
-        <span className="text-[12px] leading-relaxed text-text-3">{note}</span>
-      ) : null}
-      <div className="pt-[2px]">{children}</div>
+    <div
+      role="group"
+      aria-label={label}
+      className="grid grid-cols-[1fr_auto] items-start gap-4 border-t border-line px-[20px] py-[13px] first:border-t-0"
+    >
+      <div className="flex min-w-0 flex-col gap-[3px]">
+        <span className="text-[13px] font-medium">{label}</span>
+        {note ? (
+          <span className="text-[12px] leading-relaxed text-text-3">{note}</span>
+        ) : null}
+      </div>
+      <div className="flex min-w-0 flex-col items-end gap-[4px]">{children}</div>
     </div>
   )
 }

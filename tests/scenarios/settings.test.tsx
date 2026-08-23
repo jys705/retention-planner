@@ -49,9 +49,15 @@ describe('설정', () => {
     await setupApp(TODAY)
     const { user } = render(<SettingsScreen />)
     const panel = panelOf('알림 시각')
-    for (const time of ['09:00', '12:00', '18:00', '21:00']) {
-      await user.click(within(panel).getByRole('button', { name: time }))
-      expect(usePlanner.getState().settings.notifyAt).toBe(time)
+    // 숫자만 적으면 아침인지 저녁인지 한 번 더 생각해야 한다. 우리말로 적는다.
+    for (const [name, at] of [
+      ['오전 9시', '09:00'],
+      ['낮 12시', '12:00'],
+      ['저녁 6시', '18:00'],
+      ['밤 9시', '21:00'],
+    ] as const) {
+      await user.click(within(panel).getByRole('button', { name }))
+      expect(usePlanner.getState().settings.notifyAt).toBe(at)
     }
     await user.click(within(panel).getByRole('button', { name: '끄기' }))
     expect(usePlanner.getState().settings.notifyAt).toBeNull()
@@ -72,10 +78,11 @@ describe('설정', () => {
   })
 
   it('S-085 대략 목표의 여유 폭 3가지', async () => {
+    // 퍼센트가 무엇을 말하는지 알 수 없다. 넓이 이름으로 고르고 실제 날짜로 확인한다.
     for (const [label, value] of [
-      ['앞뒤 15%', 0.15],
-      ['앞뒤 25%', 0.25],
-      ['앞뒤 35%', 0.35],
+      ['좁게', 0.15],
+      ['보통', 0.25],
+      ['넓게', 0.35],
     ] as const) {
       cleanup()
       await setupApp(TODAY)
