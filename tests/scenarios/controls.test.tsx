@@ -7,6 +7,7 @@ import { GoalListScreen } from '../../src/features/goal/GoalListScreen'
 import { ItemDetailScreen } from '../../src/features/item/ItemDetailScreen'
 import { LibraryScreen } from '../../src/features/library/LibraryScreen'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
+import { addDays } from '../../src/lib/date'
 import { usePlanner } from '../../src/store/planner'
 import {
   aGoal,
@@ -218,7 +219,7 @@ describe('나머지 조작 요소', () => {
         screen="today"
         onNavigate={(k) => picked.push(k)}
         onOpenGoal={noop}
-        onOpenLoose={noop}
+        onOpenItem={noop}
       >
         <p>본문</p>
       </AppShell>
@@ -248,7 +249,7 @@ describe('나머지 조작 요소', () => {
         screen="today"
         onNavigate={noop}
         onOpenGoal={(id) => (opened = id)}
-        onOpenLoose={noop}
+        onOpenItem={noop}
       >
         <p>본문</p>
       </AppShell>
@@ -257,28 +258,41 @@ describe('나머지 조작 요소', () => {
     expect(opened).toBe('g1')
   })
 
-  it('S-117c 목표에 안 넣은 항목은 개수 한 줄로만 선다', async () => {
-    // 스무 개가 되든 옆줄은 한 줄이다. 늘어놓으면 옆줄이 그것만으로 채워진다.
+  it('S-117c 목표에 안 넣은 항목은 곧 볼 것만 몇 개 선다', async () => {
+    // 스무 개가 되든 옆줄은 몇 줄이다. 다 늘어놓으면 옆줄이 그것만으로 채워진다.
     await setupApp(TODAY, {
       items: Array.from({ length: 20 }, (_, i) =>
-        anItem({ id: `n${i}`, title: `낱개 ${i}`, goal_id: null })
+        anItem({
+          id: `n${i}`,
+          title: `낱개 ${i}`,
+          goal_id: null,
+          due: addDays(TODAY, i),
+        })
       ),
     })
-    let opened = false
+    let opened: string | null = null
     const { user } = render(
       <AppShell
         screen="today"
         onNavigate={noop}
         onOpenGoal={noop}
-        onOpenLoose={() => (opened = true)}
+        onOpenItem={(id) => (opened = id)}
       >
         <p>본문</p>
       </AppShell>
     )
-    const row = screen.getByRole('button', { name: /목표에 안 넣은 것/ })
-    expect(within(row).getByText('20')).toBeInTheDocument()
-    await user.click(row)
-    expect(opened).toBe(true)
+    // 가까운 것부터 여섯 개까지만 선다.
+    const shown = screen
+      .getAllByRole('button')
+      .filter((b) => /^낱개 \d+/.test(b.textContent ?? ''))
+    expect(shown).toHaveLength(6)
+    // 나머지는 개수로만 알리고 서재로 보낸다.
+    expect(
+      screen.getByRole('button', { name: /항목 \d+개 더/ })
+    ).toBeInTheDocument()
+
+    await user.click(shown[0])
+    expect(opened).toMatch(/^n\d+$/)
   })
 
   it('S-118 오늘 볼 개수가 왼쪽에 뜬다', async () => {
@@ -293,7 +307,7 @@ describe('나머지 조작 요소', () => {
         screen="today"
         onNavigate={noop}
         onOpenGoal={noop}
-        onOpenLoose={noop}
+        onOpenItem={noop}
       >
         <p>본문</p>
       </AppShell>
@@ -319,7 +333,7 @@ describe('나머지 조작 요소', () => {
         screen="today"
         onNavigate={noop}
         onOpenGoal={noop}
-        onOpenLoose={noop}
+        onOpenItem={noop}
       >
         <p>본문</p>
       </AppShell>

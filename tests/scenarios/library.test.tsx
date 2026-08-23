@@ -54,17 +54,13 @@ describe('서재', () => {
     ).toBeInTheDocument()
   })
 
-  it('S-071 목표 묶음을 풀어 한 줄로 본다', async () => {
+  it('S-071 묶음 안에서는 목표 이름을 되풀이하지 않는다', async () => {
     await setupApp(TODAY, mixed())
-    const { user } = render(
-      <LibraryScreen onOpenItem={noop} onOpenGoal={noop} />
-    )
-    await user.click(screen.getByRole('button', { name: '목표별로 묶기' }))
-    // 묶음 머리글이 사라지고 항목이 한 줄씩 늘어선다.
-    expect(screen.queryByRole('button', { name: 'AWS SCS-C03 접기' })).toBeNull()
-    expect(
-      screen.getByRole('button', { name: '가나다 문제' })
-    ).toBeInTheDocument()
+    render(<LibraryScreen onOpenItem={noop} onOpenGoal={noop} />)
+    // 이미 그 목표 안이라 줄마다 또 적을 이유가 없다.
+    const row = await screen.findByRole('button', { name: '가나다 문제' })
+    expect(within(row).queryByText('AWS SCS-C03')).toBeNull()
+    expect(row.textContent).toMatch(/%/)
   })
 
   it('S-073 정렬: 기억률 낮은순', async () => {
@@ -72,10 +68,14 @@ describe('서재', () => {
     const { user } = render(
       <LibraryScreen onOpenItem={noop} onOpenGoal={noop} />
     )
-    await user.click(screen.getByRole('button', { name: '목표별로 묶기' }))
     await user.click(screen.getByRole('button', { name: '기억률 낮은순' }))
-    // 기억 지속력이 가장 짧은 것이 가장 낮은 기억률이다.
-    expect(visibleTitles()[0]).toContain('정보보안 개념 1~3')
+    // 목표로 묶여 있으니 차례는 묶음 안에서 매겨진다.
+    // 기억 지속력이 짧은 것이 낮은 기억률이다.
+    expect(visibleTitles()).toEqual([
+      '가나다 문제',
+      '정보보안 개념 1~3',
+      '정보보안 개념 4~6',
+    ])
   })
 
   it('S-074 정렬: 이름순', async () => {
@@ -83,9 +83,12 @@ describe('서재', () => {
     const { user } = render(
       <LibraryScreen onOpenItem={noop} onOpenGoal={noop} />
     )
-    await user.click(screen.getByRole('button', { name: '목표별로 묶기' }))
     await user.click(screen.getByRole('button', { name: '이름순' }))
-    expect(visibleTitles()[0]).toContain('가나다 문제')
+    expect(visibleTitles()).toEqual([
+      '가나다 문제',
+      '정보보안 개념 1~3',
+      '정보보안 개념 4~6',
+    ])
   })
 
   it('S-075 검색으로 걸러낸다', async () => {
@@ -142,31 +145,14 @@ describe('서재', () => {
     ).toBeInTheDocument()
   })
 
-  it('S-079 목표 없는 항목은 소속 칸에 목표 없음이라고 적힌다', async () => {
+  it('S-079 목표 없는 항목은 목표 없음 묶음에 모인다', async () => {
     await setupApp(TODAY, mixed())
-    const { user } = render(
-      <LibraryScreen onOpenItem={noop} onOpenGoal={noop} />
-    )
-    await user.click(screen.getByRole('button', { name: '목표별로 묶기' }))
-    const row = screen.getByRole('button', { name: '정보보안 개념 1~3' })
-    expect(within(row).getByText('목표 없음')).toBeInTheDocument()
-  })
-
-  it('S-079b 목표 없는 것만 걸러 본다', async () => {
-    await setupApp(TODAY, mixed())
-    const { user } = render(
-      <LibraryScreen onOpenItem={noop} onOpenGoal={noop} initialLooseOnly />
-    )
-    // 옆줄에서 눌러 들어오면 걸러진 채로 열린다.
+    render(<LibraryScreen onOpenItem={noop} onOpenGoal={noop} />)
     expect(
-      await screen.findByRole('button', { name: '정보보안 개념 1~3' })
+      await screen.findByRole('button', { name: '목표 없음 접기' })
     ).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '가나다 문제' })).toBeNull()
-
-    // 걸개를 다시 눌러 풀 수 있다.
-    await user.click(screen.getByRole('button', { name: '목표 없는 것만' }))
     expect(
-      screen.getByRole('button', { name: '가나다 문제' })
+      screen.getByRole('button', { name: '정보보안 개념 1~3' })
     ).toBeInTheDocument()
   })
 
@@ -197,5 +183,7 @@ describe('서재', () => {
 function visibleTitles(): string[] {
   return [...document.querySelectorAll('button[aria-label]')]
     .filter((b) => /%/.test(b.textContent ?? ''))
+    // 묶음 머리글도 평균 기억률을 달고 있다. 항목 줄만 센다.
+    .filter((b) => !/(접기|펼치기)$/.test(b.getAttribute('aria-label') ?? ''))
     .map((b) => b.getAttribute('aria-label') ?? '')
 }

@@ -25,23 +25,17 @@ const SORTS: { key: SortKey; name: string }[] = [
 export function LibraryScreen({
   onOpenItem,
   onOpenGoal,
-  initialLooseOnly = false,
 }: {
   onOpenItem: (id: string) => void
   onOpenGoal: (id: string) => void
-  /** 옆줄에서 '목표에 안 넣은 것' 을 눌러 들어왔을 때. */
-  initialLooseOnly?: boolean
 }) {
   const { items, goals, today } = usePlanner()
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortKey>('title')
-  const [grouped, setGrouped] = useState(true)
-  const [looseOnly, setLooseOnly] = useState(initialLooseOnly)
+
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
-  const active = items
-    .filter(isActive)
-    .filter((i) => (looseOnly ? i.goal_id === null : true))
+  const active = items.filter(isActive)
   const matched = query.trim()
     ? active.filter((i) =>
         i.title.toLowerCase().includes(query.trim().toLowerCase())
@@ -69,56 +63,43 @@ export function LibraryScreen({
 
   return (
     <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 py-7">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-1 flex-col gap-[10px]">
-          <div className="flex items-baseline gap-3">
-            <h1 className="text-[22px] font-semibold">서재</h1>
-            <span className="text-[13px] text-text-3">
-              항목 <span className="num">{whole.length}</span>개, 목표{' '}
-              <span className="num">{goalCount}</span>개와 낱개{' '}
-              <span className="num">{looseCount}</span>개
-              {narrowed ? (
-                <span className="text-accent">
-                  {' '}
-                  (지금 <span className="num">{matched.length}</span>개 보는 중)
-                </span>
-              ) : null}
-            </span>
-          </div>
+      <header className="flex flex-col gap-[10px]">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-[22px] font-semibold">서재</h1>
+          <span className="text-[13px] text-text-3">
+            항목 <span className="num">{whole.length}</span>개, 목표{' '}
+            <span className="num">{goalCount}</span>개와 낱개{' '}
+            <span className="num">{looseCount}</span>개
+            {narrowed ? (
+              <span className="text-accent">
+                {' '}
+                (지금 <span className="num">{matched.length}</span>개 보는 중)
+              </span>
+            ) : null}
+          </span>
+        </div>
+
+        {/* 찾기 칸과 정렬 칩이 한 줄에서 같은 높이로 선다. */}
+        <div className="flex flex-wrap items-center gap-3">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="제목으로 찾기"
             aria-label="항목 찾기"
-            className="h-[36px] w-full max-w-[420px] rounded-ctl border border-line-2 bg-surface px-[12px] text-[13px] outline-none focus:border-accent"
+            className="h-[36px] min-w-[220px] flex-1 rounded-ctl border border-line-2 bg-surface px-[12px] text-[13px] outline-none focus:border-accent"
           />
-        </div>
-
-        <div className="flex flex-none items-end gap-[14px]">
-          <div className="flex flex-col items-end gap-[7px]">
-            <span className="text-[11.5px] text-text-3">정렬</span>
-            <div className="flex flex-wrap justify-end gap-[6px]">
-              {SORTS.map((s) => (
-                <Chip
-                  key={s.key}
-                  active={sort === s.key}
-                  onClick={() => setSort(s.key)}
-                >
-                  {s.name}
-                </Chip>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-[7px]">
-            <span className="text-[11.5px] text-text-3">보기</span>
-            <div className="flex gap-[6px]">
-              <Chip active={grouped} onClick={() => setGrouped((g) => !g)}>
-                목표별로 묶기
+          <span className="flex-none text-[11.5px] text-text-3">정렬</span>
+          <div className="flex flex-none gap-[6px]">
+            {SORTS.map((s) => (
+              <Chip
+                key={s.key}
+                tall
+                active={sort === s.key}
+                onClick={() => setSort(s.key)}
+              >
+                {s.name}
               </Chip>
-              <Chip active={looseOnly} onClick={() => setLooseOnly((v) => !v)}>
-                목표 없는 것만
-              </Chip>
-            </div>
+            ))}
           </div>
         </div>
       </header>
@@ -132,40 +113,16 @@ export function LibraryScreen({
               : '오늘 화면에서 한 줄 적으면 여기에 쌓입니다.'}
           </p>
         </div>
-      ) : grouped ? (
+      ) : (
         <GroupedList
           rows={sorted}
           goals={goals}
           collapsed={collapsed}
-          onToggle={(key) =>
-            setCollapsed((c) => ({ ...c, [key]: !c[key] }))
-          }
+          onToggle={(key) => setCollapsed((c) => ({ ...c, [key]: !c[key] }))}
           onOpenItem={onOpenItem}
           onOpenGoal={onOpenGoal}
         />
-      ) : (
-        <div className="relative overflow-hidden rounded-panel border border-line bg-surface">
-          <div
-            aria-hidden
-            className="absolute bottom-0 right-0 top-0 w-[120px] bg-rail"
-          />
-          <div className="relative">
-            {sorted.map(({ item, goal, retention }) => (
-              <Row
-                key={item.id}
-                item={item}
-                goal={goal}
-                goalDot={
-                  goal ? goalColor(goal, goals.indexOf(goal)) : undefined
-                }
-                retention={retention}
-                onClick={() => onOpenItem(item.id)}
-              />
-            ))}
-          </div>
-        </div>
       )}
-
     </div>
   )
 }

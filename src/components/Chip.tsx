@@ -7,6 +7,7 @@ export function Chip({
   children,
   title,
   compact = false,
+  tall = false,
 }: {
   active?: boolean
   onClick?: () => void
@@ -14,6 +15,8 @@ export function Chip({
   title?: string
   /** 여럿이 한 줄에 서야 할 때. 좌우를 좁힌다. */
   compact?: boolean
+  /** 입력칸과 같은 줄에 설 때. 높이를 맞춘다. */
+  tall?: boolean
 }) {
   return (
     <button
@@ -21,7 +24,8 @@ export function Chip({
       onClick={onClick}
       title={title}
       className={cn(
-        'rounded-ctl border py-[6px] text-[13px] transition-colors',
+        'rounded-ctl border text-[13px] transition-colors',
+        tall ? 'h-[36px]' : 'py-[6px]',
         compact ? 'px-[8px]' : 'px-[11px]',
         active
           ? 'border-accent bg-accent-soft font-semibold text-accent'

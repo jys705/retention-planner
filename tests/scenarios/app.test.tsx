@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { App } from '../../src/App'
 import { usePlanner } from '../../src/store/planner'
@@ -26,7 +26,10 @@ describe('앱 전체', () => {
     })
     render(<App />)
     expect(await screen.findByText('오늘 볼 항목')).toBeInTheDocument()
-    expect(screen.getByText('오늘 것')).toBeInTheDocument()
+    // 옆줄의 '다가오는 항목' 에도 같은 제목이 선다. 본문 쪽을 본다.
+    expect(
+      within(screen.getByRole('main')).getByText('오늘 것')
+    ).toBeInTheDocument()
   })
 
   it('S-137 왼쪽으로 다섯 화면을 오간다', async () => {
