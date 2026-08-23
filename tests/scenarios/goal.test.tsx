@@ -186,9 +186,9 @@ describe('목표 상세', () => {
     expect(
       screen.getByText(/목표한 날까지 \d+번 볼 수 있게 잡아뒀어요/)
     ).toBeInTheDocument()
-    expect(
-      screen.getByText(/가장 몰리는 날은 .*\d+개입니다/)
-    ).toBeInTheDocument()
+    // 가장 몰리는 날은 옆의 '하루 분량' 이 맡는다. 문장으로 또 적지 않는다.
+    expect(screen.queryByText(/가장 몰리는 날은/)).toBeNull()
+    expect(screen.getByText('가장 많은 날')).toBeInTheDocument()
   })
 
   it('S-054 강도 4단계를 일괄 수정한다', async () => {

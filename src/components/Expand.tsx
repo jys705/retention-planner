@@ -32,7 +32,13 @@ export function Expand({
             : 'flex w-full items-center gap-2 px-[13px] py-[10px] text-left'
         }
       >
-        <span className="flex h-[20px] w-[20px] flex-none items-center justify-center rounded-ctl border border-line-2 bg-surface text-[11px] text-text-2">
+        <span
+          className={
+            plain
+              ? 'flex h-[16px] w-[16px] flex-none items-center justify-center text-[10px] text-text-3'
+              : 'flex h-[20px] w-[20px] flex-none items-center justify-center rounded-ctl border border-line-2 bg-surface text-[11px] text-text-2'
+          }
+        >
           {open ? '▾' : '▸'}
         </span>
         <span className="text-[13px] font-medium text-text">{label}</span>

@@ -9,6 +9,7 @@ import { OptionCards } from '../../components/OptionCards'
 import { Expand } from '../../components/Expand'
 import type { GoalRow } from '../../db/types'
 import { statusBadgeOf } from '../../lib/badge'
+import { cn } from '../../lib/cn'
 import { diffDays } from '../../lib/date'
 import { effectiveConfig, isActive, memoryStateOf } from '../../lib/domain'
 import { daysLeftLabel, dueLabel, monthDay, percent } from '../../lib/format'
@@ -168,28 +169,26 @@ export function GoalDetailScreen({
       ) : null}
 
       <p className="text-[16px] font-medium leading-relaxed">
-        {didSentence(
-          rows.length,
-          totalReviews,
-          atRisk,
-          overdue,
-          busiest,
-          settings.dailyCap,
-          goal
-        )}
+        {didSentence(rows.length, totalReviews, atRisk, overdue, goal)}
       </p>
 
       <section
         aria-label="목표 설정"
-        className="relative overflow-hidden rounded-panel border border-line bg-surface"
+        className="rounded-panel border border-line bg-surface px-[20px] py-[16px]"
       >
-        <div
-          aria-hidden
-          className="absolute bottom-0 right-0 top-0 w-[268px] bg-rail"
-        />
-        <div className="relative grid grid-cols-[1fr_268px]">
-          <div className="flex min-w-0 flex-col gap-4 px-[20px] py-[16px]">
+        <div className="flex min-w-0 flex-col gap-4">
+          {/*
+            안내문을 오른쪽 레일에 두었더니 왼쪽이 끝난 뒤로 레일만 길게 남았다.
+            제목 옆 한 줄이면 충분하다.
+          */}
+          <div className="flex flex-wrap items-baseline gap-[9px]">
             <h2 className="text-[13px] font-semibold">목표 설정</h2>
+            <span className="text-[12px] text-text-3">
+              {rows.length === 0
+                ? '여기서 정한 값은 앞으로 이 목표에 넣는 항목에 그대로 적용돼요.'
+                : `여기서 바꾸면 이 목표에 묶인 항목 ${rows.length}개 전부에 함께 적용돼요.`}
+            </span>
+          </div>
 
             <Field label="목표 시점">
               <HorizonPicker
@@ -263,29 +262,6 @@ export function GoalDetailScreen({
                 </div>
               </Expand>
             </div>
-          </div>
-
-          <div className="rail-panel flex flex-col gap-[10px] px-[18px] py-[16px]">
-            <span className="text-[11.5px] text-text-3">지금 상태</span>
-            {rows.length === 0 ? (
-              <p className="text-[12.5px] leading-relaxed text-text-2">
-                아직 묶인 항목이 없어요. 여기서 정한 값은 앞으로 이 목표에 넣는
-                항목에 그대로 적용됩니다.
-              </p>
-            ) : (
-              <>
-                <p className="text-[12.5px] leading-relaxed text-text-2">
-                  여기서 바꾸면 이 목표에 묶인{' '}
-                  <span className="num">{rows.length}</span>개 전부에 함께
-                  적용됩니다.
-                </p>
-                <p className="text-[12px] leading-relaxed text-text-3">
-                  목표한 날이 미뤄지면 여기서 날짜만 바꾸면 됩니다. 항목을 하나씩
-                  고칠 필요가 없어요.
-                </p>
-              </>
-            )}
-          </div>
         </div>
       </section>
 
@@ -313,7 +289,15 @@ export function GoalDetailScreen({
               <span className="text-[11.5px] text-text-3">하루 분량</span>
               <div className="flex items-baseline justify-between">
                 <span className="text-[12px] text-text-3">가장 많은 날</span>
-                <span className="num text-[13px]">
+                <span
+                  className={cn(
+                    'num text-[13px]',
+                    // 상한을 넘는 날은 여기서만 표시한다. 문장으로 또 적으면 겹친다.
+                    settings.dailyCap !== null && peak > settings.dailyCap
+                      ? 'text-imp-fg'
+                      : ''
+                  )}
+                >
                   {busiest ? `${monthDay(busiest.date)} ` : ''}
                   {peak}개
                 </span>
@@ -448,8 +432,6 @@ function didSentence(
   totalReviews: number,
   atRisk: number,
   overdue: number,
-  busiest: LoadBar | null,
-  dailyCap: number | null,
   goal: GoalRow
 ): string {
   if (count === 0) {
@@ -459,22 +441,14 @@ function didSentence(
     return `${count}개를 마감 없이 계속 볼 수 있게 잡아뒀어요. 잊을 만할 때마다 올라옵니다.`
   }
 
+  // 가장 몰리는 날과 하루 상한은 바로 옆 '하루 분량' 과 그림이 이미 말한다.
+  // 여기서 또 적으면 같은 말을 두 번 읽게 된다.
   const parts = [`목표한 날까지 ${totalReviews}번 볼 수 있게 잡아뒀어요.`]
   if (atRisk > 0) {
     parts.push(`한 번으로 모자란 ${atRisk}개는 두 번씩 잡았습니다.`)
   }
   if (overdue > 0) {
     parts.push(`밀린 ${overdue}개는 다시 계산해서 앞으로 당겼어요.`)
-  }
-  if (busiest && busiest.count > 0) {
-    parts.push(
-      `가장 몰리는 날은 ${monthDay(busiest.date)} ${busiest.count}개입니다.`
-    )
-    if (dailyCap !== null && busiest.count > dailyCap) {
-      parts.push(
-        `하루 상한 ${dailyCap}개를 넘지만, 목표한 날 전에 다 보려면 이만큼은 잡아야 해요.`
-      )
-    }
   }
   return parts.join(' ')
 }
