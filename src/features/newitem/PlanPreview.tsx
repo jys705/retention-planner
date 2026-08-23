@@ -5,7 +5,7 @@ import { projectItem } from '../../core/simulate/project'
 import type { GoalRow, ItemRow } from '../../db/types'
 import { diffDays, type DateOnly } from '../../lib/date'
 import { effectiveConfig, horizonFields } from '../../lib/domain'
-import { monthDay } from '../../lib/format'
+import { monthDay, weekday } from '../../lib/format'
 import type { Settings } from '../../lib/settings'
 
 export interface PlanPreviewProps {
@@ -137,6 +137,14 @@ export function PlanPreview({
                 />
                 <span className="num relative text-[11.5px] text-text-2">
                   {monthDay(step.date)}
+                  {/*
+                    무슨 요일인지 알아야 그날 볼 수 있을지 가늠이 된다.
+                    괄호까지 고정폭으로 찍으면 사이가 벌어져 보여서 본문 서체로 둔다.
+                  */}
+                  <span className="font-sans text-[11px] text-text-3">
+                    {' '}
+                    ({weekday(step.date)})
+                  </span>
                 </span>
                 <span className="num relative text-[11px] text-text-3">
                   {step.gap}일 뒤
