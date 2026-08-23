@@ -11,8 +11,15 @@ import type { GoalRow } from '../../db/types'
 import { statusBadgeOf } from '../../lib/badge'
 import { cn } from '../../lib/cn'
 import { diffDays } from '../../lib/date'
-import { effectiveConfig, isActive, memoryStateOf } from '../../lib/domain'
-import { daysLeftLabel, dueLabel, monthDay, percent } from '../../lib/format'
+import { effectiveConfig, goalColor, isActive, memoryStateOf } from '../../lib/domain'
+import {
+  daysLeftLabel,
+  dueLabel,
+  horizonLabel,
+  monthDay,
+  percent,
+  weekday,
+} from '../../lib/format'
 import { INTENSITY_META } from '../../lib/intensity'
 import { usePlanner } from '../../store/planner'
 import { LoadBars, type LoadBar } from '../charts/LoadBars'
@@ -76,6 +83,12 @@ export function GoalDetailScreen({
     markGoal: day.date === goal.ready_at,
   }))
   const totalReviews = bars.reduce((sum, b) => sum + b.count, 0)
+  const target = goal.target_retention ?? settings.targetRetention
+  // 지금 이 목표가 어디까지 와 있는지. 화면이 크게 말할 값은 이것 하나다.
+  const avgNow =
+    rows.length === 0
+      ? 0
+      : rows.reduce((sum, r) => sum + r.retention, 0) / rows.length
   // 마감이 가까워지면 마지막 점검이 한 날에 모인다. 그 봉우리를 평소 분량인 척
   // 말하면 "하루에 많아야 24개" 같은 거짓말이 되므로, 어느 날인지 같이 밝힌다.
   const busiest = bars.reduce<LoadBar | null>(
@@ -92,39 +105,46 @@ export function GoalDetailScreen({
   ).length
 
   return (
-    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-5 px-6 py-7">
-      <header className="grid grid-cols-[1fr_268px] items-start gap-4">
-        <div className="min-w-0">
-          <div className="flex items-baseline gap-3">
+    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 py-7">
+      <header className="grid grid-cols-[1fr_268px] items-start gap-6">
+        <div className="flex min-w-0 flex-col gap-[7px]">
+          <div className="flex items-center gap-[9px]">
+            <span
+              aria-hidden
+              className="h-[7px] w-[7px] flex-none rounded-full"
+              style={{ background: goalColor(goal, goals.indexOf(goal)) }}
+            />
             <InlineText
               value={goal.name}
               label="목표 이름"
               placeholder="이름 없음"
-              className="-ml-[6px] text-[22px] font-semibold tracking-[-0.02em]"
+              className="-ml-[6px] text-[24px] font-semibold tracking-[-0.02em]"
               onSave={(next) => void updateGoal(goal.id, { name: next })}
             />
             {goal.ready_at ? (
-              <span className="num flex-none text-[13px] text-text-2">
+              <span className="flex-none rounded-[5px] bg-adj-bg px-[9px] py-[3px] text-[11.5px] font-medium text-adj-fg">
                 {daysLeftLabel(today, goal.ready_at)}
               </span>
             ) : null}
           </div>
+          <p className="text-[13px] text-text-2">
+            목표 시점:{' '}
+            <span className="num text-[12.5px] text-text">
+              {horizonLabel(goal.horizon_kind, goal.ready_at, goal.hold_until)}
+              {goal.horizon_kind === 'date' && goal.ready_at ? (
+                <span className="font-sans"> ({weekday(goal.ready_at)})</span>
+              ) : null}
+            </span>
+          </p>
         </div>
 
         {/*
-          이 화면이 답해야 할 것은 '몇 개가 부족한가' 가 아니라
-          '목표를 지키려고 앱이 무엇을 해뒀는가' 다.
+          몇 번 잡아뒀는지는 숫자만 크고 막막하다. 지금 어디까지 왔고 어디로 가는
+          중인지가 이 화면이 답할 것이다.
         */}
-        <div className="rail-panel flex flex-col items-end gap-[8px] pr-[18px]">
-          <div className="flex w-full items-start justify-between">
-            <div className="flex flex-col gap-[1px]">
-              <span className="text-[11.5px] text-text-3">
-                {goal.ready_at ? '목표한 날까지 잡아둔 복습' : '앞으로 잡아둔 복습'}
-              </span>
-              <span className="font-display num text-[30px] font-semibold leading-none tracking-[-0.02em]">
-                {totalReviews}번
-              </span>
-            </div>
+        <div className="rail-panel flex flex-col gap-[6px] pr-[18px]">
+          <div className="flex items-start justify-between">
+            <span className="text-[11.5px] text-text-3">지금 평균 기억률</span>
             <MoreMenu
               label="이 목표 더보기"
               items={[
@@ -136,6 +156,15 @@ export function GoalDetailScreen({
               ]}
             />
           </div>
+          <span className="font-display num text-[34px] font-semibold leading-none tracking-[-0.02em]">
+            {percent(avgNow)}
+          </span>
+          <RetentionBar now={avgNow} target={target} />
+          <span className="text-[11.5px] leading-relaxed text-text-3">
+            {avgNow >= target
+              ? `목표 ${percent(target)}를 지키는 중이에요.`
+              : `목표 ${percent(target)}까지 끌어올리는 중이에요.`}
+          </span>
         </div>
       </header>
 
@@ -268,31 +297,16 @@ export function GoalDetailScreen({
       {rows.length > 0 ? (
         <section
           aria-label="복습 분포"
-          className="relative overflow-hidden rounded-panel border border-line bg-surface"
+          className="rounded-panel border border-line bg-surface px-[20px] py-[16px]"
         >
-          <div
-            aria-hidden
-            className="absolute bottom-0 right-0 top-0 w-[268px] bg-rail"
-          />
-          <div className="relative grid grid-cols-[1fr_268px]">
-            <div className="min-w-0 px-[20px] py-[16px]">
-              <h2 className="pb-3 text-[13px] font-semibold">복습 분포</h2>
-              <LoadBars bars={bars} cap={settings.dailyCap} />
-              <p className="pt-3 text-[12px] leading-relaxed text-text-2">
-                복습 항목을 목표 시점 범위 안에서만 조정해요. 목표 기억률인{' '}
-                <span className="num">{percent(settings.targetRetention)}</span>는
-                그대로 유지됩니다.
-              </p>
-            </div>
-
-            <div className="rail-panel flex flex-col gap-[12px] px-[18px] py-[16px]">
-              <span className="text-[11.5px] text-text-3">하루 분량</span>
-              <div className="flex items-baseline justify-between">
-                <span className="text-[12px] text-text-3">가장 많은 날</span>
+          <div className="flex flex-wrap items-baseline justify-between gap-3 pb-3">
+            <h2 className="text-[13px] font-semibold">복습 분포</h2>
+            <div className="num flex items-baseline gap-4 text-[12px] text-text-3">
+              <span>
+                가장 많은 날{' '}
                 <span
                   className={cn(
-                    'num text-[13px]',
-                    // 상한을 넘는 날은 여기서만 표시한다. 문장으로 또 적으면 겹친다.
+                    'text-text-2',
                     settings.dailyCap !== null && peak > settings.dailyCap
                       ? 'text-imp-fg'
                       : ''
@@ -301,14 +315,17 @@ export function GoalDetailScreen({
                   {busiest ? `${monthDay(busiest.date)} ` : ''}
                   {peak}개
                 </span>
-              </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-[12px] text-text-3">하루 평균</span>
-                <span className="num text-[13px]">{perDayAvg}개</span>
-              </div>
-
+              </span>
+              <span>
+                하루 평균 <span className="text-text-2">{perDayAvg}개</span>
+              </span>
             </div>
           </div>
+          <LoadBars bars={bars} cap={settings.dailyCap} />
+          <p className="pt-3 text-[12px] leading-relaxed text-text-2">
+            복습 항목을 목표 시점 범위 안에서만 조정해요. 목표 기억률인{' '}
+            <span className="num">{percent(target)}</span>는 그대로 유지됩니다.
+          </p>
         </section>
       ) : null}
 
@@ -451,4 +468,34 @@ function didSentence(
     parts.push(`밀린 ${overdue}개는 다시 계산해서 앞으로 당겼어요.`)
   }
   return parts.join(' ')
+}
+
+/**
+ * 지금 기억률이 목표까지 얼마나 왔는지.
+ *
+ * 0부터 100까지 그리면 83% 와 90% 가 붙어 보여서 나아가는 느낌이 안 난다.
+ * 기억률은 실제로 50 아래로 잘 안 내려가므로 50 부터 그린다.
+ */
+function RetentionBar({ now, target }: { now: number; target: number }) {
+  const FLOOR = 0.5
+  const at = (v: number) =>
+    Math.min(100, Math.max(0, ((v - FLOOR) / (1 - FLOOR)) * 100))
+  return (
+    <div
+      className="relative h-[6px] w-full overflow-hidden rounded-full bg-line-2"
+      role="img"
+      aria-label={`목표 ${percent(target)} 가운데 지금 ${percent(now)}`}
+    >
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 rounded-full bg-accent"
+        style={{ width: `${at(now)}%` }}
+      />
+      <span
+        aria-hidden
+        className="absolute inset-y-0 w-[2px] bg-text-3"
+        style={{ left: `${at(target)}%` }}
+      />
+    </div>
+  )
 }

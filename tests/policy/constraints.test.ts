@@ -271,18 +271,29 @@ describe('어느 제약이 걸렸는지 알려준다', () => {
     expect(result.dueKind).toBe('deadline_pull')
   })
 
-  it('이미 충분히 기억하고 있으면 여유로 표시된다', () => {
+  it('이미 충분히 기억하고 있으면 마감선이 당기지 않는다', () => {
     // 오래 잘 외운 항목을 목표 며칠 앞에 두면 건너뛰어도 목표한 날 기억률을 지킨다.
+    // 그런 항목까지 목표 직전으로 당기면, 안 봐도 되는 복습이 마감선 하루에 쌓인다.
     const state = stateAfter([4, 4, 4, 4, 4, 4], 120)
+    const daysToGoal = 5
     const result = schedule({
       from: TODAY,
       state,
-      horizon: { kind: 'date', at: addDays(TODAY, 5) },
+      horizon: { kind: 'date', at: addDays(TODAY, daysToGoal) },
       intensity: 'max',
       minReviews: 1,
       repsSinceGoal: 5,
     })
-    expect(result.dueKind).toBe('final_check')
+
+    // 안 봐도 목표한 날 목표 기억률을 지킨다는 것이 전제다.
+    expect(
+      defaultFsrs.retrievability(daysToGoal, state.stability)
+    ).toBeGreaterThanOrEqual(0.9)
+    // 그래서 마감선 제약이 아예 서지 않고, 날짜는 FSRS 가 정한 대로 간다.
+    expect(Number.isFinite(result.constraints.ready)).toBe(false)
+    expect(toEpochDay(result.due)).toBeGreaterThan(
+      toEpochDay(addDays(TODAY, daysToGoal))
+    )
   })
 })
 

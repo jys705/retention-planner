@@ -23,10 +23,12 @@ async function seed(count: number): Promise<string> {
   await usePlanner.getState().load()
   usePlanner.getState().setToday(TODAY)
 
+  // 여유 강도는 FSRS 간격을 길게 잡아서 마감선 제약이 이기는 상태를 만든다.
+  // 표준으로 두면 항목이 안 봐도 목표 기억률을 지켜서 마감선이 아예 안 당긴다.
   const goal = await usePlanner.getState().createGoal({
     name: 'AWS SCS-C03',
     horizon: { kind: 'date', at: EXAM },
-    intensity: 'standard',
+    intensity: 'easy',
   })
 
   for (let i = 0; i < count; i += 1) {
@@ -39,7 +41,12 @@ async function seed(count: number): Promise<string> {
   return goal.id
 }
 
-/** 항목들을 여러 번 평가해서 마감선이 끌어당기는 상태까지 밀어 올린다. */
+/**
+ * 항목들을 여러 번 평가해서 마감선이 끌어당기는 상태까지 밀어 올린다.
+ *
+ * '어려움' 으로 눌러 둔다. 잘 외운 항목은 안 봐도 목표한 날 목표 기억률을 지켜서
+ * 마감선이 아예 안 당긴다. 그런 항목으로는 몰림 자체가 안 생긴다.
+ */
 async function reviewUntilPulled(rounds: number): Promise<void> {
   let cursor = TODAY
   for (let r = 0; r < rounds; r += 1) {
@@ -58,7 +65,7 @@ async function reviewUntilPulled(rounds: number): Promise<void> {
       continue
     }
     for (const item of due) {
-      await usePlanner.getState().rateItem(item.id, 4, { reviewedAt: cursor })
+      await usePlanner.getState().rateItem(item.id, 3, { reviewedAt: cursor })
     }
   }
 }
@@ -71,7 +78,7 @@ describe('앱 안에서의 날짜 조정', () => {
 
   it('마감선이 끌어당긴 항목들의 몰림을 실제로 덜어낸다', async () => {
     const goalId = await seed(22)
-    await reviewUntilPulled(40)
+    await reviewUntilPulled(4)
     usePlanner.getState().setToday(TODAY)
     await usePlanner.getState().recomputeAll()
 
@@ -99,7 +106,7 @@ describe('앱 안에서의 날짜 조정', () => {
 
   it('다시 계산해도 일정이 흔들리지 않는다', async () => {
     await seed(16)
-    await reviewUntilPulled(30)
+    await reviewUntilPulled(4)
     usePlanner.getState().setToday(TODAY)
     await usePlanner.getState().recomputeAll()
     const first = usePlanner.getState().items.map((i) => i.due)
@@ -111,7 +118,7 @@ describe('앱 안에서의 날짜 조정', () => {
 
   it('조정된 항목에는 조정됨 표시가 붙는다', async () => {
     await seed(22)
-    await reviewUntilPulled(40)
+    await reviewUntilPulled(4)
     usePlanner.getState().setToday(TODAY)
     await usePlanner.getState().recomputeAll()
     const moved = usePlanner

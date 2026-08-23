@@ -90,12 +90,19 @@ export interface ScheduleResult {
  * 마감선 전이면 그 날짜에서 버퍼를 뺀 날을 넘지 않게 하고,
  * 두 마감선 사이에 있으면 유지 마감선을 기준으로 같은 일을 한다.
  * 무기한이면 두 값이 무한이라 제약이 저절로 사라진다.
+ *
+ * 안 봐도 목표한 날 목표 기억률을 지키는 항목에는 이 제약이 살 게 없다.
+ * 그때도 값을 돌려주면 `readyAt - buffer - fromDay` 라서 fromDay 가 상쇄되고,
+ * 마지막으로 본 날이 언제든 stability 가 얼마든 모두 같은 하루로 빨려든다.
+ * 목표는 기억률을 '넘기는' 것이지 그날 기억률을 '가장 높이는' 것이 아니다.
  */
 function readyConstraint(
   horizon: ResolvedHorizon,
   fromDay: number,
-  bufferDays: number
+  bufferDays: number,
+  skipSafe: boolean
 ): number {
+  if (skipSafe) return NEVER
   const beforeReady = horizon.readyAt - bufferDays - fromDay
   if (beforeReady >= 1) return beforeReady
   // 준비 마감선까지 남은 날이 없으면 유지 마감선을 기준으로 다시 본다.
@@ -114,12 +121,15 @@ function sessionsConstraint(
   horizon: ResolvedHorizon,
   fromDay: number,
   minReviews: number,
-  repsSinceGoal: number
+  repsSinceGoal: number,
+  bufferDays: number
 ): number {
   const remaining = Math.max(0, minReviews - repsSinceGoal)
   if (remaining === 0 || !Number.isFinite(horizon.readyAt)) return NEVER
-  if (fromDay >= horizon.readyAt) return NEVER
-  return Math.floor((horizon.readyAt - fromDay) / remaining)
+  // 목표한 날 당일에 잡으면 그날은 이미 준비돼 있어야 하는 날인데 늦는다.
+  const last = horizon.readyAt - bufferDays
+  if (fromDay >= last) return NEVER
+  return Math.floor((last - fromDay) / remaining)
 }
 
 /**
@@ -147,14 +157,23 @@ export function schedule(input: ScheduleInput): ScheduleResult {
     ? Math.max(resolveIntensity(input.intensity), targetRetention)
     : resolveIntensity(input.intensity)
 
+  // 이번 복습을 건너뛰어도 목표한 날 목표 기억률을 지키는가.
+  // classify 가 final_check 를 가르는 바로 그 셈이다.
+  const skipSafe =
+    Number.isFinite(horizon.readyAt) &&
+    horizon.readyAt > fromDay &&
+    engine.retrievability(horizon.readyAt - fromDay, input.state.stability) >=
+      targetRetention
+
   const constraints: ConstraintSet = {
     base: engine.nextInterval(desiredRetention, input.state.stability),
-    ready: readyConstraint(horizon, fromDay, buffer),
+    ready: readyConstraint(horizon, fromDay, buffer, skipSafe),
     sessions: sessionsConstraint(
       horizon,
       fromDay,
       minReviews,
-      repsSinceGoal
+      repsSinceGoal,
+      buffer
     ),
     maxcap: input.maxIntervalDays ?? NEVER,
   }

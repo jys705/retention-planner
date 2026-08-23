@@ -518,7 +518,13 @@ function nextOpenDay(item: ItemRow, today: DateOnly): DateOnly {
  * 이것들만 편다. 아직 평소 간격으로 도는 항목은 그대로 둔다.
  */
 function isPulledByDeadline(dueKind: DueKind): boolean {
-  return dueKind === 'deadline_pull' || dueKind === 'final_check'
+  // session_fill 도 목표 때문에 생긴 날짜다. 같은 날에서 출발한 항목들이
+  // 같은 몫으로 나뉘면 그것도 한 날에 쌓인다. 펼 후보에서 뺄 이유가 없다.
+  return (
+    dueKind === 'deadline_pull' ||
+    dueKind === 'final_check' ||
+    dueKind === 'session_fill'
+  )
 }
 
 /**
