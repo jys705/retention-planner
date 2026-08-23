@@ -202,3 +202,19 @@ export async function setDateInput(
 function monthIndex(date: string): number {
   return Number(date.slice(0, 4)) * 12 + Number(date.slice(5, 7)) - 1
 }
+
+/**
+ * 점 세 개 메뉴를 열고 그 안의 항목을 누른다.
+ *
+ * 편집과 삭제는 이제 화면에 늘어놓지 않고 이 메뉴 안에 접혀 있다.
+ */
+export async function pickFromMenu(
+  user: ReturnType<typeof render>['user'],
+  menuLabel: string,
+  itemLabel: string
+): Promise<void> {
+  await user.click(await screen.findByRole('button', { name: menuLabel }))
+  await user.click(
+    within(screen.getByRole('menu')).getByRole('menuitem', { name: itemLabel })
+  )
+}

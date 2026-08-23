@@ -3,7 +3,7 @@ import { screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { App } from '../../src/App'
 import { usePlanner } from '../../src/store/planner'
-import { aGoal, anItem, render, setupApp, teardownApp } from './harness'
+import { aGoal, anItem, render, setupApp, teardownApp, pickFromMenu } from './harness'
 
 const TODAY = '2026-10-01'
 
@@ -99,7 +99,7 @@ describe('앱 전체', () => {
     await user.click(screen.getByRole('button', { name: '서재' }))
     await user.click(await screen.findByRole('button', { name: '지울 것' }))
 
-    await user.click(await screen.findByRole('button', { name: '삭제' }))
+    await pickFromMenu(user, '이 항목 더보기', '삭제')
     await user.click(screen.getByRole('button', { name: '지우기' }))
 
     expect(await screen.findByLabelText('항목 찾기')).toBeInTheDocument()

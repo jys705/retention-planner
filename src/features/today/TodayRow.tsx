@@ -25,7 +25,6 @@ export interface TodayRowProps {
   settings: Settings
   today: DateOnly
   expanded: boolean
-  focused: boolean
   showFullGradeHelp: boolean
   onToggle: () => void
   onRate: (grade: Grade) => void
@@ -39,7 +38,6 @@ export function TodayRow({
   settings,
   today,
   expanded,
-  focused,
   showFullGradeHelp,
   onToggle,
   onRate,
@@ -74,10 +72,10 @@ export function TodayRow({
     <div
       role="listitem"
       className={cn(
-        // 카드 안에 놓이므로 평소에는 바탕이 없다. 마우스를 올린 줄과 키보드로 고른
-        // 줄이 같은 모양으로 도드라진다. 테는 안쪽으로 넣어 줄 높이가 안 흔들린다.
+        // 카드 안에 놓이므로 평소에는 바탕이 없다. 테를 안쪽으로 넣어야 마우스를
+        // 올렸을 때 줄 높이가 안 흔들린다.
         'rounded-[9px] transition-colors',
-        focused
+        expanded
           ? 'bg-raise shadow-[inset_0_0_0_1.5px_var(--accent)]'
           : 'hover:bg-raise hover:shadow-[inset_0_0_0_1.5px_var(--accent)]'
       )}
@@ -123,9 +121,6 @@ export function TodayRow({
         <div className="px-[18px] pb-4 pl-[40px] pt-[2px]">
           <div className="flex items-baseline gap-[10px] pb-[9px]">
             <span className="text-[13px] text-text-2">얼마나 기억났나요?</span>
-            <span className="num text-[11px] text-text-3">
-              1~4 키로 바로 평가
-            </span>
           </div>
 
           <div className="grid grid-cols-[repeat(4,minmax(0,168px))] gap-2">

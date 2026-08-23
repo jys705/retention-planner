@@ -3,19 +3,22 @@ import type { Horizon } from '../../core/horizon/horizon'
 import { INTENSITY_RETENTION } from '../../core/policy/constraints'
 import { AdjustedBadge, Badge } from '../../components/Badge'
 import { Chip } from '../../components/Chip'
+import { InlineText } from '../../components/InlineText'
+import { MoreMenu } from '../../components/MoreMenu'
 import type { GoalRow, Intensity, ItemRow } from '../../db/types'
 import { dueReason, statusBadgeOf } from '../../lib/badge'
-import { fromEpochDay, type DateOnly } from '../../lib/date'
+import { diffDays, type DateOnly } from '../../lib/date'
 import {
   difficultyLabel,
   horizonLabel,
   dueLabel,
+  josa,
   monthDay,
   percent,
   stabilityLabel,
 } from '../../lib/format'
-import { effectiveConfig, horizonFields } from '../../lib/domain'
-import { gradeName } from '../../lib/grade'
+import { effectiveConfig, goalColor, horizonFields } from '../../lib/domain'
+import { gradeColor, gradeName } from '../../lib/grade'
 import { INTENSITY_META, intensityName } from '../../lib/intensity'
 import type { Settings } from '../../lib/settings'
 import { usePlanner } from '../../store/planner'
@@ -37,8 +40,6 @@ export function ItemDetailScreen({
 
   const [editing, setEditing] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const [draftTitle, setDraftTitle] = useState('')
-  const [draftMemo, setDraftMemo] = useState('')
   const [draftGoalId, setDraftGoalId] = useState<string | null>(null)
   const [draftHorizon, setDraftHorizon] = useState<Horizon>({ kind: 'open' })
   const [draftIntensity, setDraftIntensity] = useState<Intensity>('standard')
@@ -53,8 +54,6 @@ export function ItemDetailScreen({
    */
   function seed(target: ItemRow) {
     const config = seedConfig(target, goals, settings)
-    setDraftTitle(target.title)
-    setDraftMemo(target.memo)
     setDraftGoalId(target.goal_id)
     setDraftHorizon(config.horizon)
     setDraftIntensity(config.intensity)
@@ -116,13 +115,9 @@ export function ItemDetailScreen({
   }
 
   async function saveEdit() {
-    const title = draftTitle.trim()
-    if (title === '') return
     // 목표에 속하면 시점과 강도는 목표 것이다. 항목 쪽 칸을 비워야 목표를 고쳤을 때 따라온다.
     const own = draftGoalId === null
     await updateItem(found.id, {
-      title,
-      memo: draftMemo.trim(),
       goal_id: draftGoalId,
       horizon_kind: own ? horizonFields(draftHorizon).horizon_kind : null,
       ready_at: own ? horizonFields(draftHorizon).ready_at : null,
@@ -140,89 +135,116 @@ export function ItemDetailScreen({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-5 px-6 py-7">
+    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-[14px] px-6 py-7">
       <div>
-        <button
-          type="button"
-          onClick={onBack}
-          className="text-[12px] text-text-3 hover:text-text-2"
-        >
-          ← 서재
-        </button>
-        <div className="flex flex-wrap items-center gap-2 pt-2">
-          <h1 className="text-[19px] font-semibold">{item.title}</h1>
-          {badge ? <Badge kind={badge} /> : null}
-          {item.due_source === 'spread' ? <AdjustedBadge /> : null}
-          <div className="flex-1" />
+        <div className="flex items-center justify-between pr-[18px]">
           <button
             type="button"
-            onClick={startEditing}
-            className="rounded-ctl border border-line-2 px-[10px] py-[5px] text-[12px] text-text-2 hover:bg-hover"
+            onClick={onBack}
+            className="text-[12px] text-text-3 hover:text-text-2"
           >
-            편집
+            ← 서재
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEditing(false)
-              setConfirmingDelete(true)
-            }}
-            className="rounded-ctl border border-line-2 px-[10px] py-[5px] text-[12px] text-text-2 hover:bg-hover"
-          >
-            삭제
-          </button>
+          <MoreMenu
+            label="이 항목 더보기"
+            items={[
+              { label: '설정 편집', onSelect: startEditing },
+              {
+                label: '삭제',
+                danger: true,
+                onSelect: () => {
+                  setEditing(false)
+                  setConfirmingDelete(true)
+                },
+              },
+            ]}
+          />
         </div>
-        <div className="num flex flex-wrap gap-4 pt-1 text-[12px] text-text-3">
-          {goal ? <span>{goal.name}</span> : null}
-          <span>
-            목표 시점{' '}
-            {horizonLabel(
-              view.config.horizon.kind,
-              view.readyAt,
-              view.holdUntil
-            )}
-          </span>
-          <span>복습 강도 {intensityName(view.config.intensity)}</span>
-          {goal ? (
-            view.config.overridden ? (
-              <span className="text-imp-fg">목표와 다른 설정을 쓰는 중</span>
-            ) : (
-              <span>목표 설정을 따르는 중</span>
-            )
-          ) : null}
+        <div className="grid grid-cols-[1fr_268px] items-start gap-4 pt-2">
+          <div className="min-w-0">
+            <InlineText
+              value={item.title}
+              label="제목"
+              placeholder="제목 없음"
+              allowEmpty={false}
+              className="-ml-[6px] text-[23px] font-semibold tracking-[-0.02em]"
+              onSave={(next) => void updateItem(found.id, { title: next })}
+            />
+
+            <div className="flex flex-wrap items-center gap-[10px] pt-[7px]">
+              {badge ? <Badge kind={badge} /> : null}
+              {item.due_source === 'spread' ? <AdjustedBadge /> : null}
+              {goal ? (
+                <span className="flex items-center gap-[6px] rounded-full border border-line bg-surface px-[10px] py-[3px] text-[12px] text-text-2">
+                  <span
+                    aria-hidden
+                    className="h-[5px] w-[5px] rounded-full"
+                    style={{ background: goalColor(goal, goals.indexOf(goal)) }}
+                  />
+                  {goal.name}
+                </span>
+              ) : null}
+              <span className="text-[12px] text-text-3">
+                목표 시점{' '}
+                {horizonLabel(
+                  view.config.horizon.kind,
+                  view.readyAt,
+                  view.holdUntil
+                )}
+              </span>
+              <span className="text-[12px] text-text-3">
+                복습 강도 {intensityName(view.config.intensity)}
+              </span>
+              {goal && view.config.overridden ? (
+                <span className="text-[12px] text-imp-fg">
+                  목표와 다른 설정을 쓰는 중
+                </span>
+              ) : null}
+            </div>
+
+            <div className="pt-[8px]">
+              <InlineText
+                value={item.memo}
+                label="메모"
+                placeholder="메모 없음. 눌러서 적을 수 있어요."
+                allowEmpty
+                className="-ml-[6px] w-full text-[13px] text-text-2"
+                onSave={(next) => void updateItem(found.id, { memo: next })}
+              />
+            </div>
+          </div>
+
+          {/* 오른쪽 268px 은 앱이 계산한 숫자 자리다. 한 값만 크게 세운다. */}
+          <div className="rail-panel flex flex-col items-end gap-[8px] pr-[18px]">
+            <div className="flex flex-col items-end gap-[1px]">
+              <span className="text-[11.5px] text-text-3">지금 기억률</span>
+              <span className="font-display num text-[38px] font-semibold leading-none tracking-[-0.02em]">
+                {percent(view.retention)}
+              </span>
+            </div>
+            <div className="num flex gap-4 text-[12.5px]">
+              <span className="flex flex-col items-end gap-[2px]">
+                <span className="font-sans text-[11px] text-text-3">
+                  다음에 볼 날
+                </span>
+                <span className="text-accent">
+                  {item.due ? dueLabel(today, item.due) : '없음'}
+                </span>
+              </span>
+              <span className="flex flex-col items-end gap-[2px]">
+                <span className="font-sans text-[11px] text-text-3">지금까지</span>
+                <span title={`지금까지 ${item.reps}번 봤어요`}>
+                  {item.reps}번
+                </span>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
       {editing ? (
-        <section className="flex flex-col gap-4 rounded-card border border-accent bg-surface px-[16px] py-[14px]">
-          <h2 className="text-[13px] font-semibold">항목 고치기</h2>
-
-          <label className="flex flex-col gap-[6px]">
-            <span className="text-[12px] font-medium text-text-2">제목</span>
-            <input
-              value={draftTitle}
-              onChange={(event) => setDraftTitle(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void saveEdit()
-                }
-              }}
-              aria-label="제목 고치기"
-              className="rounded-ctl border border-line-2 bg-surface px-[10px] py-[7px] text-[14px] outline-none"
-            />
-          </label>
-
-          <label className="flex flex-col gap-[6px]">
-            <span className="text-[12px] font-medium text-text-2">메모</span>
-            <input
-              value={draftMemo}
-              onChange={(event) => setDraftMemo(event.target.value)}
-              aria-label="메모 고치기"
-              placeholder="3, 7번 틀림"
-              className="rounded-ctl border border-line-2 bg-surface px-[10px] py-[7px] text-[13px] outline-none"
-            />
-          </label>
+        <section className="flex flex-col gap-4 rounded-panel border border-accent bg-surface px-[16px] py-[14px]">
+          <h2 className="text-[13px] font-semibold">설정 고치기</h2>
 
           <div className="flex flex-col gap-[6px]">
             <span className="text-[12px] font-medium text-text-2">소속 목표</span>
@@ -300,7 +322,6 @@ export function ItemDetailScreen({
             <button
               type="button"
               onClick={() => void saveEdit()}
-              disabled={draftTitle.trim() === ''}
               className="rounded-ctl bg-accent px-[14px] py-[7px] text-[13px] font-semibold text-white disabled:opacity-35"
             >
               저장
@@ -317,10 +338,14 @@ export function ItemDetailScreen({
       ) : null}
 
       {confirmingDelete ? (
-        <section className="flex flex-col gap-3 rounded-card border border-imp-fg bg-surface px-[16px] py-[14px]">
+        <section className="flex flex-col gap-3 rounded-panel border border-imp-fg bg-surface px-[16px] py-[14px]">
           <h2 className="text-[13px] font-semibold">이 항목을 지울까요?</h2>
           <p className="text-[12.5px] leading-relaxed text-text-2">
-            {`"${item.title}"과 지금까지의 평가 ${view.reviews.length}건이 함께 사라집니다. 되돌릴 수 없어요.`}
+            {`"${item.title}"${josa(
+              item.title,
+              '과',
+              '와'
+            )} 지금까지의 평가 ${view.reviews.length}건이 함께 사라집니다. 되돌릴 수 없어요.`}
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -341,188 +366,263 @@ export function ItemDetailScreen({
         </section>
       ) : null}
 
-      <Summary item={item} today={today} retention={view.retention} />
-
-      <Section title="기억 곡선">
-        <MemoryCurveChart
-          curve={view.curve}
-          today={today}
-          targetRetention={view.config.targetRetention}
-          readyAt={view.readyAt}
-          holdUntil={view.holdUntil}
+      {/*
+        시안에는 '기억 곡선' 이라는 머리글이 없다. 결론 문장이 그 자리를 대신한다.
+        그래도 이 구역에 이름은 있어야 하므로 aria-label 로 붙인다.
+      */}
+      <section
+        aria-label="기억 곡선"
+        className="relative overflow-hidden rounded-panel border border-line bg-surface"
+      >
+        <div
+          aria-hidden
+          className="absolute bottom-0 right-0 top-0 w-[268px] bg-rail"
         />
-        <Caption>{curveSentence(view.retention, item.due, today)}</Caption>
-      </Section>
-
-      {view.feasible ? (
-        <Section title="옮길 수 있는 날짜 범위">
-          <p className="pb-3 text-[12.5px] text-text-2">
-            다음에 볼 날을 이 사이로 옮겨도 계획이 틀어지지 않아요.
-          </p>
-          <div className="rounded-card bg-rail px-[14px] py-[12px]">
-            <div className="num flex items-center justify-between text-[13px]">
-              <span>{monthDay(fromEpochDay(view.feasible.earliest))}</span>
-              <span className="text-accent">
-                고른 날: {item.due ? monthDay(item.due) : '없음'}
+        <div className="relative grid grid-cols-[1fr_268px]">
+          <div className="min-w-0 px-[20px] py-[16px]">
+            {/* 한 줄만 읽는다면 이 줄이다. 그림보다 먼저 나와야 한다. */}
+            <p className="pb-3 text-[15px] font-medium leading-relaxed">
+              {curveSentence(
+                item,
+                view.retention,
+                view.config.targetRetention,
+                today
+              )}
+            </p>
+            <MemoryCurveChart
+              curve={view.curve}
+              today={today}
+              targetRetention={view.config.targetRetention}
+              readyAt={view.readyAt}
+              holdUntil={view.holdUntil}
+            />
+          </div>
+          <div className="rail-panel flex flex-col gap-[14px] px-[18px] py-[16px]">
+            <Summary item={item} />
+            <div className="h-px bg-line" />
+            <div className="flex flex-col gap-[6px]">
+              <span className="text-[11.5px] text-text-3">
+                {item.due && item.due <= today
+                  ? '이 항목이 오늘 올라온 이유'
+                  : '다음 날짜를 이렇게 잡은 이유'}
               </span>
-              <span>{monthDay(fromEpochDay(view.feasible.latest))}</span>
-            </div>
-            <div className="flex justify-between pt-2 text-[11px] text-text-3">
-              <span>이보다 이르면 목표한 날에 기억이 부족해요.</span>
-              <span>이보다 늦으면 목표한 날을 넘어요.</span>
+              <p className="text-[12.5px] leading-relaxed text-text-2">
+                {whyToday(item, view.retention, view.config.targetRetention, today)}
+              </p>
+              {view.feasible?.atRisk ? (
+                <p className="text-[12.5px] leading-relaxed text-text-2">
+                  {plannedDates.length >= 2
+                    ? `한 번 봐서는 목표한 날 기억이 모자라요. 그래서 ${plannedDates
+                        .map(monthDay)
+                        .join(', ')} 두 번 잡아두었어요.`
+                    : '한 번 봐서는 목표한 날 기억이 모자라요. 목표한 날 전에 한 번 더 잡아둡니다.'}
+                </p>
+              ) : null}
             </div>
           </div>
-          <Caption>
-            {view.feasible.atRisk
-              ? plannedDates.length >= 2
-                ? `한 번 봐서는 목표한 날 기억이 모자라요. 그래서 ${plannedDates
-                    .map(monthDay)
-                    .join(', ')} 두 번 잡아두었어요.`
-                : '한 번 봐서는 목표한 날 기억이 모자라요. 목표한 날 전에 한 번 더 잡아둡니다.'
-              : `이 범위 안에서 보면 목표한 날 기억률이 ${percent(
-                  view.config.targetRetention
-                )} 아래로 안 떨어져요.`}
-          </Caption>
-        </Section>
-      ) : null}
+        </div>
+      </section>
 
-      <Section title="이 항목이 오늘 올라온 이유">
-        <p className="text-[13px] text-text-2">{dueReason(item.due_kind)}</p>
-      </Section>
-
-      <Section title="평가 이력">
-        {view.reviews.length === 0 ? (
-          <p className="text-[13px] text-text-3">
-            아직 평가한 적이 없어요. 처음 공부한 날만 기록돼 있습니다.
-          </p>
-        ) : (
-          <table className="w-full text-left text-[12.5px]">
-            <thead className="text-[11.5px] text-text-3">
-              <tr className="border-b border-line">
-                <th className="py-2 font-normal">날짜</th>
-                <th className="py-2 font-normal">등급</th>
-                <th className="py-2 font-normal">메모</th>
-                <th className="py-2 text-right font-normal">그때의 기억률</th>
-                <th className="py-2 text-right font-normal">다음에 본 날</th>
-              </tr>
-            </thead>
-            <tbody>
+      <section className="relative overflow-hidden rounded-panel border border-line bg-surface">
+        <div
+          aria-hidden
+          className="absolute bottom-0 right-0 top-0 w-[268px] bg-rail"
+        />
+        <div className="relative py-[16px]">
+          <h2 className="px-[20px] pb-3 text-[14px] font-semibold tracking-[-0.01em]">
+            평가 이력
+          </h2>
+          {view.reviews.length === 0 ? (
+            <p className="px-[20px] text-[13px] text-text-3">
+              아직 평가한 적이 없어요. 처음 공부한 날만 기록돼 있습니다.
+            </p>
+          ) : (
+            <div role="table" aria-label="평가 이력">
+              <div
+                role="row"
+                className="grid grid-cols-[1fr_268px] pb-2 text-[11px] text-text-3"
+              >
+                <div className="grid grid-cols-[96px_90px_1fr] gap-3 px-[20px]">
+                  <span role="columnheader">날짜</span>
+                  <span role="columnheader">등급</span>
+                  <span role="columnheader">메모</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 pr-[18px] text-right">
+                  <span role="columnheader">그때의 기억률</span>
+                  <span role="columnheader">다음에 본 날</span>
+                </div>
+              </div>
               {[...view.reviews].reverse().map((review, index, list) => {
                 const next = list[index - 1]
                 return (
-                  <tr key={review.id} className="border-b border-line">
-                    <td className="num py-2">{monthDay(review.reviewed_at)}</td>
-                    <td className="py-2">{gradeName(review.rating)}</td>
-                    <td className="py-2 text-text-3">
-                      {review.memo_snapshot ?? ''}
-                    </td>
-                    <td className="num py-2 text-right">
-                      {percent(review.r_at_review)}
-                    </td>
-                    <td className="num py-2 text-right text-text-3">
-                      {next ? monthDay(next.reviewed_at) : '아직'}
-                    </td>
-                  </tr>
+                  <div
+                    key={review.id}
+                    role="row"
+                    className="grid h-[44px] grid-cols-[1fr_268px] items-center hover:bg-raise"
+                  >
+                    <div className="grid min-w-0 grid-cols-[96px_90px_1fr] items-center gap-3 px-[20px]">
+                      <span role="cell" className="num text-[12.5px] text-text-2">
+                        {monthDay(review.reviewed_at)}
+                      </span>
+                      <span
+                        role="cell"
+                        className="flex items-center gap-[7px] text-[13px]"
+                      >
+                        <span
+                          aria-hidden
+                          className="h-2 w-2 flex-none rounded-full"
+                          style={{ background: gradeColor(review.rating) }}
+                        />
+                        {gradeName(review.rating)}
+                      </span>
+                      <span
+                        role="cell"
+                        className="truncate text-[12.5px] text-text-3"
+                      >
+                        {review.memo_snapshot ?? ''}
+                      </span>
+                    </div>
+                    <div className="num grid grid-cols-2 items-center gap-3 pr-[18px] text-right text-[12.5px]">
+                      <span role="cell">{percent(review.r_at_review)}</span>
+                      <span role="cell" className="text-text-2">
+                        {next ? monthDay(next.reviewed_at) : '아직'}
+                      </span>
+                    </div>
+                  </div>
                 )
               })}
-            </tbody>
-          </table>
-        )}
-      </Section>
+            </div>
+          )}
+        </div>
+      </section>
 
-      <footer className="num flex flex-wrap gap-4 text-[11px] text-text-3">
-        <span>E 편집</span>
-        <span>⌫ 삭제</span>
-        <span>Esc 취소</span>
-      </footer>
     </div>
   )
 }
 
-function Summary({
-  item,
-  today,
-  retention,
-}: {
-  item: ItemRow
-  today: DateOnly
-  retention: number
-}) {
+function Summary({ item }: { item: ItemRow }) {
   return (
-    <div className="rail-panel grid grid-cols-4 gap-3 rounded-card bg-rail px-[16px] py-[13px]">
-      <Stat label="지금 기억률" value={percent(retention)} />
-      <Stat
-        label="다음에 볼 날"
-        value={item.due ? dueLabel(today, item.due) : '없음'}
-      />
-      <Stat
-        label="기억 지속력"
-        value={item.stability !== null ? stabilityLabel(item.stability) : '아직'}
-        note="90%까지 유지되는 기간"
-      />
-      <Stat
-        label="체감 난이도"
-        value={
-          item.difficulty !== null ? difficultyLabel(item.difficulty) : '아직'
-        }
-        note={`지금까지 ${item.reps}번 봤어요`}
-      />
+    <>
+      <div className="flex flex-col gap-[3px]">
+        <span className="text-[11.5px] text-text-3">기억 지속력</span>
+        <span className="num text-[19px]">
+          {item.stability !== null ? stabilityLabel(item.stability) : '아직'}
+        </span>
+        <span className="text-[11.5px] text-text-3">90%까지 유지되는 기간</span>
+      </div>
+
+      <div className="h-px bg-line" />
+
+      <div className="flex flex-col gap-[6px]">
+        <span className="text-[11.5px] text-text-3">체감 난이도</span>
+        <div className="flex items-center gap-[9px]">
+          {item.difficulty !== null ? (
+            <DifficultyMeter difficulty={item.difficulty} />
+          ) : null}
+          <span className="text-[13px] font-medium">
+            {item.difficulty !== null
+              ? difficultyLabel(item.difficulty)
+              : '아직'}
+          </span>
+        </div>
+        <span className="text-[11.5px] leading-relaxed text-text-3">
+          어렵게 느낀 항목일수록 사이를 좁게 잡아요.
+        </span>
+      </div>
+    </>
+  )
+}
+
+/**
+ * 체감 난이도 눈금.
+ *
+ * 숫자를 그대로 적으면 1부터 10까지 중 어디쯤인지 읽는 데 시간이 걸린다.
+ * 칸 다섯 개로 나누면 눈으로 한 번에 들어온다.
+ */
+function DifficultyMeter({ difficulty }: { difficulty: number }) {
+  // difficultyLabel 이 쓰는 경계와 같아야 이름과 칸수가 서로 안 어긋난다.
+  const filled =
+    difficulty < 3 ? 1 : difficulty < 5 ? 2 : difficulty < 7 ? 3 : difficulty < 8.5 ? 4 : 5
+  return (
+    <div
+      className="flex flex-none gap-[3px]"
+      role="img"
+      aria-label={`다섯 칸 중 ${filled}칸`}
+    >
+      {[0, 1, 2, 3, 4].map((slot) => (
+        <span
+          key={slot}
+          className="h-[6px] w-[16px] rounded-[2px]"
+          style={{
+            background: slot < filled ? 'var(--accent)' : 'var(--line-2)',
+          }}
+        />
+      ))}
     </div>
   )
-}
-
-function Stat({
-  label,
-  value,
-  note,
-}: {
-  label: string
-  value: string
-  note?: string
-}) {
-  return (
-    <div className="flex flex-col gap-[2px]">
-      <span className="text-[11px] text-text-3">{label}</span>
-      <span className="num text-[16px] font-semibold">{value}</span>
-      {note ? <span className="text-[10.5px] text-text-3">{note}</span> : null}
-    </div>
-  )
-}
-
-function Section({
-  title,
-  children,
-}: {
-  title: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="rounded-card border border-line bg-surface px-[16px] py-[14px]">
-      <h2 className="pb-3 text-[13px] font-semibold">{title}</h2>
-      {children}
-    </section>
-  )
-}
-
-/** 그래프를 못 읽어도 결론은 알 수 있게 한 문장을 붙인다. */
-function Caption({ children }: { children: React.ReactNode }) {
-  return <p className="pt-3 text-[12px] text-text-2">{children}</p>
 }
 
 function curveSentence(
+  item: ItemRow,
   retention: number,
-  due: DateOnly | null,
+  target: number,
   today: DateOnly
 ): string {
-  const now = percent(retention)
-  if (!due) return `지금 이 항목을 떠올릴 확률은 ${now}쯤이에요.`
-  if (due <= today) {
-    return `지금 떠올릴 확률은 ${now}쯤이에요. 오늘 다시 보면 곡선이 100%로 올라갑니다.`
+  const now = `지금 기억률은 ${percent(retention)}예요.`
+  const due = item.due
+  if (!due) return now
+  if (due > today) {
+    return `${now} 목표 기억률 ${percent(
+      target
+    )} 아래로 떨어지기 전인 ${dueLabel(today, due)} 보라고 잡아두었어요.`
   }
-  return `지금 떠올릴 확률은 ${now}쯤이에요. ${dueLabel(
-    today,
-    due
-  )} 다시 보면 곡선이 100%로 올라갑니다.`
+  // 오늘 올라온 까닭은 규칙마다 다르다. 오른쪽 이유와 어긋나면 안 된다.
+  switch (item.due_kind) {
+    case 'deadline_pull':
+      return `${now} 목표한 날에 기억을 지키려고 오늘로 당겨 잡았어요.`
+    case 'session_fill':
+      return `${now} 목표한 날 전에 정해둔 횟수를 채우려고 오늘 잡았어요.`
+    case 'final_check':
+      return `${now} 이미 충분히 기억하고 있어서 마지막으로 한 번 훑는 자리예요.`
+    case 'hold':
+      return `${now} 목표한 기간 동안 기억을 붙잡아 두려고 오늘 잡았어요.`
+    default:
+      return `${now} 목표 기억률 ${percent(
+        target
+      )}보다 낮아서 오늘 보라고 잡았어요.`
+  }
+}
+
+/**
+ * 이 항목이 오늘 올라온 이유.
+ *
+ * 규칙 이름만 적으면 왜 하필 오늘인지가 안 보인다. 마지막으로 본 날과 그 뒤로 지난 날수,
+ * 지금 내려온 기억률까지 같이 적어야 사용자가 스스로 납득한다.
+ */
+function whyToday(
+  item: ItemRow,
+  retention: number,
+  target: number,
+  today: DateOnly
+): string {
+  if (!item.due || item.due > today) {
+    return `아직 오늘 볼 차례는 아니에요. ${dueLabel(
+      today,
+      item.due ?? today
+    )} 올라옵니다.`
+  }
+
+  const since = item.last_review
+    ? `마지막으로 본 ${monthDay(item.last_review)}부터 ${diffDays(
+        item.last_review,
+        today
+      )}일이 지나서 기억률이 ${percent(retention)}까지 내려왔어요. `
+    : ''
+
+  if (item.due_kind === 'normal' || item.due_kind === null) {
+    return `${since}목표 기억률 ${percent(target)}를 밑돌아서 오늘로 잡았습니다.`
+  }
+  return `${since}${dueReason(item.due_kind)}`
 }
 
 /**

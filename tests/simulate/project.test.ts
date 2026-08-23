@@ -193,6 +193,35 @@ describe('기억 곡선', () => {
     expect(curve.find((p) => p.date === addDays(TODAY, 10))?.reviewed).toBe(true)
   })
 
+  it('S-063 예정일이 오늘이어도 아직 안 본 것이라 곡선이 안 올라간다', () => {
+    // 예정일이 오늘이거나 지났다고 곡선을 100%로 올려 버리면, 화면이 크게 적어 둔
+    // '지금 기억률'과 그림이 서로 다른 말을 하게 된다.
+    const state = defaultFsrs.nextState(null, 0, 3)
+    const studied = addDays(TODAY, -30)
+    const curve = memoryCurve({
+      history: [{ date: studied, state }],
+      future: [
+        { date: addDays(TODAY, -2), state },
+        { date: TODAY, state },
+        { date: addDays(TODAY, 9), state },
+      ],
+      from: studied,
+      to: addDays(TODAY, 20),
+      today: TODAY,
+    })
+
+    const atToday = curve.find((p) => p.date === TODAY)
+    expect(atToday?.retention).toBeCloseTo(
+      defaultFsrs.retrievability(30, state.stability),
+      8
+    )
+    expect(atToday?.reviewed).toBe(false)
+    // 밀린 예정일도 마찬가지다. 그날 봤다고 치면 안 된다.
+    expect(curve.find((p) => p.date === addDays(TODAY, -2))?.reviewed).toBe(false)
+    // 내일 뒤로 잡힌 것은 그대로 예상에 남는다.
+    expect(curve.find((p) => p.date === addDays(TODAY, 9))?.reviewed).toBe(true)
+  })
+
   it('대략 목표에서는 두 마감선 사이가 평평하게 유지된다', () => {
     const readyAt = addDays(TODAY, 40)
     const holdUntil = addDays(TODAY, 70)

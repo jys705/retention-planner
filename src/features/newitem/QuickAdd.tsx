@@ -22,7 +22,6 @@ export interface QuickAddProps {
   today: DateOnly
   goals: GoalRow[]
   settings: Settings
-  lastTitle: string | null
   /** 상세 설정이 펼쳐졌는지. 카드 밖 안내문이 이 값을 같이 본다. */
   detailOpen: boolean
   onDetailOpenChange: (open: boolean) => void
@@ -32,14 +31,12 @@ export interface QuickAddProps {
 /**
  * 한 줄 적기.
  *
- * 매일 하는 행동이라 마찰이 0에 가까워야 한다. 제목만 치고 Enter 를 누르면 끝나고,
- * 나머지는 마지막에 쓴 설정을 그대로 물려받는다.
+ * 매일 하는 행동이라 마찰이 0에 가까워야 한다. 제목만 치고 Enter 를 누르면 끝난다.
  */
 export function QuickAdd({
   today,
   goals,
   settings,
-  lastTitle,
   detailOpen,
   onDetailOpenChange: setDetailOpen,
   onAdd,
@@ -102,29 +99,10 @@ export function QuickAdd({
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && event.altKey) {
-              event.preventDefault()
-              setDetailOpen(!detailOpen)
-              return
-            }
             if (event.key === 'Enter') {
               event.preventDefault()
               submit()
               return
-            }
-            if (event.key === 'Escape') {
-              event.preventDefault()
-              if (detailOpen) setDetailOpen(false)
-              else reset()
-              return
-            }
-            if (
-              event.key === 'ArrowUp' &&
-              title === '' &&
-              lastTitle !== null
-            ) {
-              event.preventDefault()
-              setTitle(lastTitle)
             }
           }}
           placeholder="예: 4장 연습문제 1번에서 10번"
@@ -136,7 +114,7 @@ export function QuickAdd({
           onClick={() => setDetailOpen(!detailOpen)}
           className="flex-none rounded-ctl px-[9px] py-[5px] text-[12px] text-text-3 hover:bg-hover"
         >
-          상세 설정 <span className="num">⌥⏎</span>
+          상세 설정
         </button>
         <button
           type="button"
@@ -144,7 +122,7 @@ export function QuickAdd({
           disabled={title.trim() === ''}
           className="flex-none rounded-ctl bg-accent px-[12px] py-[6px] text-[12.5px] font-semibold text-white disabled:opacity-35"
         >
-          적어두기 <span className="num">⏎</span>
+          적어두기
         </button>
       </div>
 

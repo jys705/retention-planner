@@ -89,7 +89,7 @@ export function MemoryCurveChart({
             strokeDasharray="4 4"
             label={{
               value: `목표 기억률 ${percent(targetRetention)}`,
-              position: 'insideTopRight',
+              position: 'insideTopLeft',
               fill: 'var(--text-3)',
               fontSize: 11,
             }}

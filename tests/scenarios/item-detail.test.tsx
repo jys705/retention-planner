@@ -11,6 +11,7 @@ import {
   setupApp,
   shift,
   teardownApp,
+  pickFromMenu,
 } from './harness'
 
 const TODAY = '2026-10-01'
@@ -24,9 +25,11 @@ describe('항목 상세', () => {
       items: [anItem({ id: 'i1', title: '곡선 항목' })],
     })
     render(<ItemDetailScreen itemId="i1" onBack={noop} />)
-    expect(await screen.findByText('기억 곡선')).toBeInTheDocument()
-    expect(screen.getByText('목표 기억률 90%')).toBeInTheDocument()
-    expect(screen.getByText(/지금 떠올릴 확률은/)).toBeInTheDocument()
+    expect(
+      await screen.findByRole('region', { name: '기억 곡선' })
+    ).toBeInTheDocument()
+    expect(screen.getAllByText('목표 기억률 90%')[0]).toBeInTheDocument()
+    expect(screen.getByText(/지금 기억률은/)).toBeInTheDocument()
   })
 
   it('S-061 기억률이 낮아도 곡선이 안 잘린다', async () => {
@@ -43,7 +46,7 @@ describe('항목 상세', () => {
       ],
     })
     render(<ItemDetailScreen itemId="i1" onBack={noop} />)
-    await screen.findByText('기억 곡선')
+    await screen.findByRole('region', { name: '기억 곡선' })
 
     // y축 눈금이 60% 아래까지 내려와 있어야 한다.
     const ticks = [...document.querySelectorAll('svg text')]
@@ -52,26 +55,6 @@ describe('항목 상세', () => {
       .map((t) => Number(t.replace('%', '')))
     expect(ticks.length).toBeGreaterThan(1)
     expect(Math.min(...ticks)).toBeLessThan(60)
-  })
-
-  it('S-062 옮길 수 있는 날짜 범위가 두 끝을 보여준다', async () => {
-    await setupApp(TODAY, {
-      goals: [
-        aGoal({
-          id: 'g1',
-          horizon_kind: 'date',
-          ready_at: '2026-10-20',
-          hold_until: '2026-10-20',
-        }),
-      ],
-      items: [anItem({ id: 'i1', goal_id: 'g1', title: '목표 있는 항목' })],
-    })
-    render(<ItemDetailScreen itemId="i1" onBack={noop} />)
-    expect(await screen.findByText('옮길 수 있는 날짜 범위')).toBeInTheDocument()
-    expect(
-      screen.getByText('이보다 이르면 목표한 날에 기억이 부족해요.')
-    ).toBeInTheDocument()
-    expect(screen.getByText(/고른 날:/)).toBeInTheDocument()
   })
 
   it('S-063 한 번으로 부족한 항목은 실제 두 날짜를 말한다', async () => {
@@ -215,9 +198,9 @@ describe('항목 상세', () => {
       items: [anItem({ id: 'i1', title: '묶인 항목', goal_id: 'g1' })],
     })
     const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)
-    await user.click(await screen.findByRole('button', { name: '편집' }))
+    await pickFromMenu(user, '이 항목 더보기', '설정 편집')
 
-    const panel = screen.getByText('항목 고치기').closest('section')!
+    const panel = screen.getByText('설정 고치기').closest('section')!
     expect(within(panel).getByText('11월 14일')).toBeInTheDocument()
     expect(within(panel).getByText('집중')).toBeInTheDocument()
     // 목표에 속한 동안에는 고치는 칸이 없다.
@@ -240,9 +223,9 @@ describe('항목 상세', () => {
       items: [anItem({ id: 'i1', title: '떼어낼 항목', goal_id: 'g1' })],
     })
     const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)
-    await user.click(await screen.findByRole('button', { name: '편집' }))
+    await pickFromMenu(user, '이 항목 더보기', '설정 편집')
 
-    const panel = screen.getByText('항목 고치기').closest('section')!
+    const panel = screen.getByText('설정 고치기').closest('section')!
     await user.click(within(panel).getByRole('button', { name: '없음' }))
     // 따르던 목표 값이 그대로 채워져 있어야 일정이 갑자기 안 달라진다.
     expect(
@@ -290,15 +273,16 @@ describe('항목 상세', () => {
       await screen.findByText('목표와 다른 설정을 쓰는 중')
     ).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '편집' }))
-    const panel = screen.getByText('항목 고치기').closest('section')!
+    await pickFromMenu(user, '이 항목 더보기', '설정 편집')
+    const panel = screen.getByText('설정 고치기').closest('section')!
     expect(within(panel).getByText(/저장하면 목표 설정을 따라갑니다/)).toBeInTheDocument()
     await user.click(within(panel).getByRole('button', { name: '저장' }))
 
     const item = usePlanner.getState().items[0]
     expect(item.horizon_kind).toBeNull()
     expect(item.intensity).toBeNull()
-    expect(screen.getByText('목표 설정을 따르는 중')).toBeInTheDocument()
+    // 목표를 따르게 되면 어긋났다는 알림이 사라진다.
+    expect(screen.queryByText('목표와 다른 설정을 쓰는 중')).toBeNull()
   })
 
 
@@ -315,7 +299,7 @@ describe('항목 상세', () => {
     // 한 화면 안에서 본 횟수와 평가 건수가 어긋나면 안 된다.
     const history = screen.getByRole('table')
     expect(within(history).getByText('어려움')).toBeInTheDocument()
-    expect(screen.getByText('지금까지 1번 봤어요')).toBeInTheDocument()
+    expect(screen.getByTitle('지금까지 1번 봤어요')).toHaveTextContent('1번')
     expect(usePlanner.getState().reviews).toHaveLength(1)
   })
 

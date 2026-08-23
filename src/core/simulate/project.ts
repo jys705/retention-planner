@@ -154,11 +154,15 @@ export interface MemoryCurveInput {
  */
 export function memoryCurve(input: MemoryCurveInput): CurvePoint[] {
   const engine = input.engine ?? defaultFsrs
-  const marks = [...input.history, ...input.future].sort((a, b) =>
-    a.date < b.date ? -1 : a.date > b.date ? 1 : 0
-  )
+  const todayMark = toEpochDay(input.today)
+  // 앞으로 잡힌 복습은 아직 안 한 것이다. 예정일이 오늘이거나 지났다고 해서
+  // 곡선을 100% 로 올려 버리면, 화면이 말하는 '지금 기억률' 과 그림이 어긋난다.
+  const marks = [
+    ...input.history,
+    ...input.future.filter((f) => toEpochDay(f.date) > todayMark),
+  ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   const reviewDays = new Set(marks.map((m) => m.date))
-  const todayDay = toEpochDay(input.today)
+  const todayDay = todayMark
 
   const out: CurvePoint[] = []
   const start = toEpochDay(input.from)

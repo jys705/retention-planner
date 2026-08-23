@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Grade } from '../../core/fsrs/types'
 import { Hint } from '../../components/Chip'
 import { RailPanel } from '../../components/Rail'
@@ -26,10 +26,6 @@ export function TodayScreen({
   const addItem = usePlanner((s) => s.addItem)
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [focusIndex, setFocusIndex] = useState(0)
-  // 키보드 단축키는 첫 줄부터 듣지만, 표시는 사람이 실제로 옮겨 다니거나
-  // 줄을 누른 뒤에만 켠다. 켜자마자 첫 줄만 유난히 달라 보이면 안 된다.
-  const [focusShown, setFocusShown] = useState(false)
   // 적어두기 줄은 카드 안에 있고 안내문은 카드 밖에 있다. 둘이 같은 상태를 봐야 한다.
   const [detailOpen, setDetailOpen] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
@@ -39,64 +35,11 @@ export function TodayScreen({
   const upcoming = selectUpcoming(items, today)
   const overall = selectOverallRetention(items, today)
   const showFullGradeHelp = settings.ratingCount < GRADE_HELP_THRESHOLD
-  const lastTitle = items.length > 0 ? items[items.length - 1].title : null
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null
-      const typing =
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement
-      if (typing) return
-
-      if (event.key === 'ArrowDown' || event.key === 'j') {
-        event.preventDefault()
-        setFocusShown(true)
-        setFocusIndex((i) => Math.min(i + 1, Math.max(0, todayItems.length - 1)))
-        return
-      }
-      if (event.key === 'ArrowUp' || event.key === 'k') {
-        event.preventDefault()
-        setFocusShown(true)
-        setFocusIndex((i) => Math.max(0, i - 1))
-        return
-      }
-      if (event.key === 'Enter') {
-        const item = todayItems[focusIndex]
-        if (!item) return
-        event.preventDefault()
-        setFocusShown(true)
-        setExpandedId((current) => (current === item.id ? null : item.id))
-        return
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        setExpandedId(null)
-        return
-      }
-      if (event.key === 'n' || event.key === 'N') {
-        event.preventDefault()
-        listRef.current
-          ?.querySelector<HTMLInputElement>('input[aria-label="새 항목 제목"]')
-          ?.focus()
-        return
-      }
-      if (['1', '2', '3', '4'].includes(event.key)) {
-        const item = todayItems[focusIndex]
-        if (!item || expandedId !== item.id) return
-        event.preventDefault()
-        void handleRate(item.id, Number(event.key) as Grade)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
 
   async function handleRate(itemId: string, grade: Grade) {
     setExpandedId(null)
     // 여기는 '오늘' 화면이다. 오늘 본 것으로만 기록한다.
     await rateItem(itemId, grade, { reviewedAt: today })
-    setFocusIndex((i) => Math.max(0, Math.min(i, todayItems.length - 2)))
   }
 
   return (
@@ -158,7 +101,7 @@ export function TodayScreen({
               aria-label="오늘 볼 항목"
               className="relative flex flex-col p-[8px]"
             >
-              {todayItems.map((item, index) => {
+              {todayItems.map((item) => {
                 const goalIndex = goals.findIndex((g) => g.id === item.goal_id)
                 return (
                   <TodayRow
@@ -169,15 +112,12 @@ export function TodayScreen({
                     settings={settings}
                     today={today}
                     expanded={expandedId === item.id}
-                    focused={focusShown && focusIndex === index}
                     showFullGradeHelp={showFullGradeHelp}
-                    onToggle={() => {
-                      setFocusShown(true)
-                      setFocusIndex(index)
+                    onToggle={() =>
                       setExpandedId((current) =>
                         current === item.id ? null : item.id
                       )
-                    }}
+                    }
                     onRate={(grade) => void handleRate(item.id, grade)}
                     onOpen={() => onOpenItem(item.id)}
                   />
@@ -198,7 +138,6 @@ export function TodayScreen({
               today={today}
               goals={goals}
               settings={settings}
-              lastTitle={lastTitle}
               detailOpen={detailOpen}
               onDetailOpenChange={setDetailOpen}
               onAdd={(draft) => void addItem(draft)}
@@ -216,13 +155,6 @@ export function TodayScreen({
         <QuickAddHint detailOpen={detailOpen} />
       </div>
 
-      <footer className="num flex flex-wrap gap-4 pt-6 text-[11px] text-text-3">
-        <span>↑↓ 이동</span>
-        <span>Enter 펼치기</span>
-        <span>1~4 평가</span>
-        <span>N 새 항목</span>
-        <span>Esc 닫기</span>
-      </footer>
     </div>
   )
 }

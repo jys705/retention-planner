@@ -12,7 +12,7 @@ import { intensityName } from '../../lib/intensity'
 export function GoalSettingsReadout({ goal }: { goal: GoalRow }) {
   return (
     <div className="flex flex-col gap-[7px] rounded-card bg-rail px-[13px] py-[11px]">
-      <Line label="목표" value={goal.name} />
+      <Line label="목표" value={goal.name} plain />
       <Line
         label="목표 시점"
         value={horizonLabel(goal.horizon_kind, goal.ready_at, goal.hold_until)}
@@ -27,11 +27,20 @@ export function GoalSettingsReadout({ goal }: { goal: GoalRow }) {
   )
 }
 
-function Line({ label, value }: { label: string; value: string }) {
+function Line({
+  label,
+  value,
+  plain = false,
+}: {
+  label: string
+  value: string
+  /** 이름처럼 숫자가 아닌 값. 고정폭으로 찍으면 글자 사이가 벌어져 보인다. */
+  plain?: boolean
+}) {
   return (
     <div className="flex items-baseline gap-2 text-[12.5px]">
       <span className="w-[84px] flex-none text-text-3">{label}</span>
-      <span className="num text-text-2">{value}</span>
+      <span className={plain ? 'text-text-2' : 'num text-text-2'}>{value}</span>
     </div>
   )
 }

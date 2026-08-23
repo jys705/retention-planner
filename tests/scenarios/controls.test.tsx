@@ -117,39 +117,6 @@ describe('새 항목: 목표 시점 3모드', () => {
   })
 })
 
-describe('새 항목: 입력창 단축키', () => {
-  it('S-109 Alt+Enter 로 상세 설정을 연다', async () => {
-    await setupApp(TODAY)
-    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
-    const input = screen.getByLabelText('새 항목 제목')
-    await user.click(input)
-    await user.keyboard('{Alt>}{Enter}{/Alt}')
-    expect(screen.getByText('처음 공부한 날')).toBeInTheDocument()
-  })
-
-  it('S-110 Esc 로 상세 설정을 닫는다', async () => {
-    await setupApp(TODAY)
-    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
-    const input = screen.getByLabelText('새 항목 제목')
-    await user.click(input)
-    await user.keyboard('{Alt>}{Enter}{/Alt}')
-    expect(screen.getByText('처음 공부한 날')).toBeInTheDocument()
-    await user.keyboard('{Escape}')
-    expect(screen.queryByText('처음 공부한 날')).toBeNull()
-  })
-
-  it('S-111 위쪽 키로 직전 제목을 채운다', async () => {
-    await setupApp(TODAY, {
-      items: [anItem({ id: 'i1', title: '직전에 적은 것', due: '2026-10-09' })],
-    })
-    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
-    const input = screen.getByLabelText('새 항목 제목')
-    await user.click(input)
-    await user.keyboard('{ArrowUp}')
-    expect((input as HTMLInputElement).value).toBe('직전에 적은 것')
-  })
-})
-
 describe('평가 줄의 날짜 단추', () => {
   it('S-112 어제를 골랐다가 오늘로 되돌린다', async () => {
     await setupApp(TODAY, {

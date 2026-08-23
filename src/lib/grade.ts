@@ -45,3 +45,8 @@ export const GRADE_HINT_SHORT =
 export function gradeName(grade: number): string {
   return GRADE_META.find((m) => m.grade === grade)?.name ?? ''
 }
+
+/** 등급마다 정해진 색. 표와 그림이 같은 색을 써야 눈으로 이어진다. */
+export function gradeColor(grade: number): string {
+  return GRADE_META.find((m) => m.grade === grade)?.color ?? 'var(--text-3)'
+}
