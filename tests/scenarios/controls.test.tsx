@@ -181,32 +181,35 @@ describe('나머지 조작 요소', () => {
     expect(within(card).getByText('예보 항목')).toBeInTheDocument()
   })
 
-  it('S-116 서재에서 제목 묶음을 접고 편다', async () => {
+  it('S-116 서재에서 목표 묶음을 접고 편다', async () => {
     await setupApp(TODAY, {
+      goals: [aGoal({ id: 'g1', name: '정보보안 개념 정리' })],
       items: [
-        anItem({ id: 'a', title: '정보보안 개념 1~3', due: '2026-10-05' }),
-        anItem({ id: 'b', title: '정보보안 개념 4~6', due: '2026-10-06' }),
+        anItem({ id: 'a', title: '정보보안 개념 1~3', goal_id: 'g1' }),
+        anItem({ id: 'b', title: '정보보안 개념 4~6', goal_id: 'g1' }),
       ],
     })
     const { user } = render(
       <LibraryScreen onOpenItem={noop} onOpenGoal={noop} />
     )
     const header = await screen.findByRole('button', {
-      name: '제목 묶음 정보보안 개념',
+      name: '정보보안 개념 정리 접기',
     })
     expect(
       screen.getByRole('button', { name: '정보보안 개념 1~3' })
     ).toBeInTheDocument()
+
     await user.click(header)
     expect(screen.queryByRole('button', { name: '정보보안 개념 1~3' })).toBeNull()
-    await user.click(header)
+
+    await user.click(
+      screen.getByRole('button', { name: '정보보안 개념 정리 펼치기' })
+    )
     expect(
       screen.getByRole('button', { name: '정보보안 개념 1~3' })
     ).toBeInTheDocument()
   })
-})
 
-describe('앱 껍데기', () => {
   it('S-117 왼쪽에서 화면을 옮겨 다닌다', async () => {
     await setupApp(TODAY, { items: [anItem({ id: 'i1', due: TODAY })] })
     const picked: string[] = []

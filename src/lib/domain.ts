@@ -114,65 +114,6 @@ export function isActive(item: ItemRow): boolean {
   return item.archived_at === null && item.state !== 'archived'
 }
 
-/**
- * 제목을 공백으로 자른 토큰들.
- */
-export function titleTokens(title: string): string[] {
-  return title.split(/\s+/).filter((t) => t.length > 0)
-}
-
-/**
- * 제목 여러 개가 앞에서부터 공유하는 부분.
- *
- * 한 제목만 보고 짐작하지 않고 실제로 여러 제목을 견줘서 찾는다.
- * 그래야 "모의고사 1회 오답" 처럼 미리 정해두지 않은 번호 표기가 나와도
- * 공통 부분을 놓치지 않는다.
- *
- * 뒤쪽 공통 부분은 접두사가 아니다. "1~10번 문제 풀이" 와 "11~20번 문제 풀이" 는
- * "문제 풀이" 를 공유하지만 그건 이름의 앞이 아니라 꼬리다.
- */
-export function commonTitlePrefix(titles: readonly string[]): string {
-  if (titles.length === 0) return ''
-  const tokenized = titles.map(titleTokens)
-  const shortest = Math.min(...tokenized.map((t) => t.length))
-
-  const shared: string[] = []
-  for (let i = 0; i < shortest; i += 1) {
-    const token = tokenized[0][i]
-    if (tokenized.every((t) => t[i] === token)) shared.push(token)
-    else break
-  }
-
-  const prefix = shared.join(' ')
-  // 비었거나 한 글자면 묶을 근거가 못 된다.
-  return prefix.length <= 1 ? '' : prefix
-}
-
-/**
- * 제목들을 앞부분이 같은 것끼리 모은다.
- *
- * 첫 토큰이 같은 것을 한 통에 넣고, 그 통 안에서 실제 공통 앞부분을 구한다.
- */
-export function groupByCommonPrefix<T>(
-  entries: readonly T[],
-  titleOf: (entry: T) => string
-): Map<string, T[]> {
-  const byFirstToken = new Map<string, T[]>()
-  for (const entry of entries) {
-    const first = titleTokens(titleOf(entry))[0]
-    if (first === undefined) continue
-    byFirstToken.set(first, [...(byFirstToken.get(first) ?? []), entry])
-  }
-
-  const out = new Map<string, T[]>()
-  for (const bucket of byFirstToken.values()) {
-    const prefix = commonTitlePrefix(bucket.map(titleOf))
-    if (prefix === '') continue
-    out.set(prefix, bucket)
-  }
-  return out
-}
-
 const NUMBER_TOKEN =
   /\d+\s*[~\-\u2013]\s*\d+\s*(번|쪽|페이지|문제)?|\d+\s*(번|회차|회|장|절|단원|챕터|쪽|페이지|일차|주차)/
 

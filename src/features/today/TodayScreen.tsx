@@ -13,7 +13,6 @@ import {
   usePlanner,
 } from '../../store/planner'
 import { QuickAdd, QuickAddHint } from '../newitem/QuickAdd'
-import { GroupSuggestionRow } from './GroupSuggestionRow'
 import { TodayRow } from './TodayRow'
 
 export function TodayScreen({
@@ -151,7 +150,6 @@ export function TodayScreen({
 
         {items.length === 0 ? <EmptyLibrary /> : null}
 
-        <GroupSuggestionRow />
         <QuickAddHint detailOpen={detailOpen} />
       </div>
 

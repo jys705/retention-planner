@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { defaultFsrs } from '../../core/fsrs/fsrs6'
 import { Badge } from '../../components/Badge'
+import { Chip } from '../../components/Chip'
 import type { GoalRow, ItemRow } from '../../db/types'
 import { statusBadgeOf } from '../../lib/badge'
 import { cn } from '../../lib/cn'
@@ -10,24 +11,15 @@ import {
   isActive,
   memoryStateOf,
   splitTitle,
-  groupByCommonPrefix,
 } from '../../lib/domain'
-import { dueLabel, horizonLabel, percent } from '../../lib/format'
+import { percent } from '../../lib/format'
 import { usePlanner } from '../../store/planner'
 
-/**
- * 찾기 칸, 정렬 칸, 묶기 단추가 나란히 선다.
- * 셋의 높이가 다르면 줄이 어긋나 보이므로 한 곳에서 정해 준다.
- */
-const CONTROL =
-  'h-[32px] rounded-ctl border border-line-2 bg-surface px-[10px] text-[12.5px]'
-
-type SortKey = 'due' | 'retention' | 'title'
+type SortKey = 'title' | 'retention'
 
 const SORTS: { key: SortKey; name: string }[] = [
-  { key: 'due', name: '다음에 볼 날' },
-  { key: 'retention', name: '기억률 낮은순' },
   { key: 'title', name: '이름순' },
+  { key: 'retention', name: '기억률 낮은순' },
 ]
 
 export function LibraryScreen({
@@ -39,7 +31,7 @@ export function LibraryScreen({
 }) {
   const { items, goals, today } = usePlanner()
   const [query, setQuery] = useState('')
-  const [sort, setSort] = useState<SortKey>('due')
+  const [sort, setSort] = useState<SortKey>('title')
   const [grouped, setGrouped] = useState(true)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
@@ -56,46 +48,56 @@ export function LibraryScreen({
 
   const sorted = [...rows].sort((a, b) => {
     if (sort === 'retention') return a.retention - b.retention
-    if (sort === 'title') return a.item.title < b.item.title ? -1 : 1
-    return (a.item.due ?? '9999') < (b.item.due ?? '9999') ? -1 : 1
+    return a.item.title < b.item.title ? -1 : 1
   })
+
+  const goalCount = new Set(
+    matched.map((i) => i.goal_id).filter((id): id is string => id !== null)
+  ).size
+  const looseCount = matched.filter((i) => i.goal_id === null).length
 
   return (
     <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 py-7">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-[22px] font-semibold">서재</h1>
-          <span className="num text-[13px] text-text-3">
-            {matched.length}개
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-[10px]">
+          <div className="flex items-baseline gap-3">
+            <h1 className="text-[22px] font-semibold">서재</h1>
+            <span className="text-[13px] text-text-3">
+              항목 <span className="num">{matched.length}</span>개, 목표{' '}
+              <span className="num">{goalCount}</span>개와 낱개{' '}
+              <span className="num">{looseCount}</span>개
+            </span>
+          </div>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="찾기"
+            placeholder="제목으로 찾기"
             aria-label="항목 찾기"
-            className={cn(CONTROL, 'w-[180px] outline-none')}
+            className="h-[36px] w-full max-w-[420px] rounded-ctl border border-line-2 bg-surface px-[12px] text-[13px] outline-none focus:border-accent"
           />
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            aria-label="정렬"
-            className={cn(CONTROL, 'pr-[6px]')}
-          >
-            {SORTS.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => setGrouped((g) => !g)}
-            className={cn(CONTROL, 'text-text-2 hover:bg-hover')}
-          >
-            {grouped ? '목표 묶음 풀기' : '목표별로 묶기'}
-          </button>
+        </div>
+
+        <div className="flex flex-none items-end gap-[14px]">
+          <div className="flex flex-col items-end gap-[7px]">
+            <span className="text-[11.5px] text-text-3">정렬</span>
+            <div className="flex flex-wrap justify-end gap-[6px]">
+              {SORTS.map((s) => (
+                <Chip
+                  key={s.key}
+                  active={sort === s.key}
+                  onClick={() => setSort(s.key)}
+                >
+                  {s.name}
+                </Chip>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-[7px]">
+            <span className="text-[11.5px] text-text-3">보기</span>
+            <Chip active={grouped} onClick={() => setGrouped((g) => !g)}>
+              목표별로 묶기
+            </Chip>
+          </div>
         </div>
       </header>
 
@@ -112,7 +114,6 @@ export function LibraryScreen({
         <GroupedList
           rows={sorted}
           goals={goals}
-          today={today}
           collapsed={collapsed}
           onToggle={(key) =>
             setCollapsed((c) => ({ ...c, [key]: !c[key] }))
@@ -121,24 +122,28 @@ export function LibraryScreen({
           onOpenGoal={onOpenGoal}
         />
       ) : (
-        <div className="rounded-card border border-line bg-surface">
-          {sorted.map(({ item, goal, retention }) => (
-            <Row
-              key={item.id}
-              item={item}
-              goal={goal}
-              retention={retention}
-              today={today}
-              onClick={() => onOpenItem(item.id)}
-            />
-          ))}
+        <div className="relative overflow-hidden rounded-panel border border-line bg-surface">
+          <div
+            aria-hidden
+            className="absolute bottom-0 right-0 top-0 w-[120px] bg-rail"
+          />
+          <div className="relative">
+            {sorted.map(({ item, goal, retention }) => (
+              <Row
+                key={item.id}
+                item={item}
+                goal={goal}
+                goalDot={
+                  goal ? goalColor(goal, goals.indexOf(goal)) : undefined
+                }
+                retention={retention}
+                onClick={() => onOpenItem(item.id)}
+              />
+            ))}
+          </div>
         </div>
       )}
 
-      <p className="text-[11px] text-text-3">
-        바깥 묶음은 소속 목표이고, 안쪽 `제목` 묶음은 제목이 비슷해서 보기 좋게 접어둔
-        것이에요. 제목이 비슷하다고 같은 목표에 든 것은 아닙니다.
-      </p>
     </div>
   )
 }
@@ -149,11 +154,15 @@ interface RowData {
   retention: number
 }
 
-/** 목표로 한 번, 제목의 공통 부분으로 한 번. 두 단으로 접힌다. */
+/**
+ * 목표로 한 번만 접힌다.
+ *
+ * 제목이 비슷하다고 한 번 더 묶던 것이 있었는데, 묶는 단위는 사용자가 스스로 만든
+ * 목표 하나면 된다. 앱이 제목을 보고 지어낸 묶음은 목표와 헷갈리기만 했다.
+ */
 function GroupedList({
   rows,
   goals,
-  today,
   collapsed,
   onToggle,
   onOpenItem,
@@ -161,7 +170,6 @@ function GroupedList({
 }: {
   rows: RowData[]
   goals: GoalRow[]
-  today: DateOnly
   collapsed: Record<string, boolean>
   onToggle: (key: string) => void
   onOpenItem: (id: string) => void
@@ -173,62 +181,58 @@ function GroupedList({
     byGoal.set(key, [...(byGoal.get(key) ?? []), row])
   }
 
+  // 어디에도 안 넣은 것은 늘 맨 아래다. 제목 차례에 밀려 목표들 사이에 끼면
+  // 그것도 목표 하나인 줄 알게 된다.
+  const order = [...byGoal.entries()].sort(([a], [b]) => {
+    if (a === '__none__') return 1
+    if (b === '__none__') return -1
+    return goals.findIndex((g) => g.id === a) - goals.findIndex((g) => g.id === b)
+  })
+
   return (
     <div className="flex flex-col gap-3">
-      {[...byGoal.entries()].map(([goalKey, goalRows]) => {
+      {order.map(([goalKey, goalRows]) => {
         const goal = goals.find((g) => g.id === goalKey) ?? null
         const goalCollapsed = collapsed[goalKey] ?? false
         const avg =
           goalRows.reduce((s, r) => s + r.retention, 0) / goalRows.length
 
-        // 제목 앞부분이 같은 것끼리 한 번 더 접는다. 이건 보기 편하라고 하는 묶음이고
-        // 목표 소속과는 다른 것이다. 머리글에서 그 차이가 드러나야 한다.
-        const byStem = groupByCommonPrefix(goalRows, (r) => r.item.title)
-        const groupedIds = new Set(
-          [...byStem.values()].flatMap((rows) =>
-            rows.length > 1 ? rows.map((r) => r.item.id) : []
-          )
-        )
-        for (const row of goalRows) {
-          if (groupedIds.has(row.item.id)) continue
-          byStem.set(row.item.title, [row])
-        }
-
         return (
-          <div
+          <section
             key={goalKey}
-            className="overflow-hidden rounded-card border border-line bg-surface"
+            className="relative overflow-hidden rounded-panel border border-line bg-surface"
           >
-            <div className="flex items-center gap-2 border-b border-line px-[14px] py-[10px]">
-              <button
-                type="button"
-                onClick={() => onToggle(goalKey)}
-                className="flex h-[20px] w-[20px] flex-none items-center justify-center rounded-ctl border border-line-2 bg-surface text-[11px] text-text-2 transition-colors hover:bg-hover"
-                aria-label={`${goal?.name ?? '목표 없음'} ${
-                  goalCollapsed ? '펼치기' : '접기'
-                }`}
-              >
-                {goalCollapsed ? '▸' : '▾'}
-              </button>
+            <div
+              aria-hidden
+              className="absolute bottom-0 right-0 top-0 w-[120px] bg-rail"
+            />
+
+            {/*
+              머리글 전체가 접고 펴는 단추다. 점 옆에 네모난 단추를 따로 두면
+              색점과 겹쳐 보이고, 테두리를 없애면 눌리는 자리인지 안 보였다.
+              줄 전체가 반응하고 오른쪽 끝의 꺾쇠가 돌아가는 쪽이 분명하다.
+            */}
+            <button
+              type="button"
+              onClick={() => onToggle(goalKey)}
+              aria-expanded={!goalCollapsed}
+              aria-label={`${goal?.name ?? '목표 없음'} ${
+                goalCollapsed ? '펼치기' : '접기'
+              }`}
+              className="group relative flex w-full items-center gap-2 border-b border-line px-[14px] py-[11px] text-left transition-colors hover:bg-hover"
+            >
               <span
                 aria-hidden
-                className="h-[6px] w-[6px] rounded-full"
+                className="h-[7px] w-[7px] flex-none rounded-full"
                 style={{
                   background: goal
                     ? goalColor(goal, goals.indexOf(goal))
                     : 'var(--dot)',
                 }}
               />
-              <button
-                type="button"
-                onClick={() => (goal ? onOpenGoal(goal.id) : undefined)}
-                className={cn(
-                  'text-[13.5px] font-medium',
-                  goal && 'hover:text-accent'
-                )}
-              >
+              <span className="text-[13.5px] font-medium">
                 {goal?.name ?? '목표 없음'}
-              </button>
+              </span>
               <span className="num text-[12px] text-text-3">
                 {goalRows.length}개
               </span>
@@ -238,71 +242,45 @@ function GroupedList({
                 </span>
               )}
               <div className="flex-1" />
-              {goal ? (
-                <span className="num text-[11.5px] text-text-3">
-                  {horizonLabel(goal.horizon_kind, goal.ready_at, goal.hold_until)}
-                </span>
-              ) : null}
-              <span className="num text-[12px] text-text-2">
-                {percent(avg)}
+              {/* 글자 길이와 상관없이 늘 같은 자리에 서야 눈이 찾아간다. */}
+              <span
+                aria-hidden
+                className={cn(
+                  'flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full text-[11px] text-text-3 transition-all group-hover:bg-line group-hover:text-text',
+                  goalCollapsed ? '-rotate-90' : ''
+                )}
+              >
+                ▾
               </span>
-            </div>
+              <span className="num w-[120px] flex-none pr-[4px] text-right text-[12px] text-text-2">
+                평균 {percent(avg)}
+              </span>
+            </button>
 
-            {!goalCollapsed
-              ? [...byStem.entries()].map(([stem, stemRows]) => {
-                  const stemKey = `${goalKey}::${stem}`
-                  const stemCollapsed = collapsed[stemKey] ?? false
-                  if (stemRows.length === 1) {
-                    const row = stemRows[0]
-                    return (
-                      <Row
-                        key={row.item.id}
-                        item={row.item}
-                        goal={row.goal}
-                        retention={row.retention}
-                        today={today}
-                        onClick={() => onOpenItem(row.item.id)}
-                      />
-                    )
-                  }
-                  return (
-                    <div key={stemKey}>
-                      <button
-                        type="button"
-                        onClick={() => onToggle(stemKey)}
-                        aria-label={`제목 묶음 ${stem}`}
-                        title="제목이 비슷해서 보기 좋게 접어둔 것이에요. 목표 소속과는 다릅니다."
-                        className="flex w-full items-center gap-2 bg-rail px-[14px] py-[7px] pl-[26px] text-left transition-colors hover:bg-hover"
-                      >
-                        <span className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-ctl border border-line-2 bg-surface text-[10px] text-text-2">
-                          {stemCollapsed ? '▸' : '▾'}
-                        </span>
-                        <span className="rounded-[4px] border border-line-2 px-[5px] py-[1px] text-[10px] text-text-3">
-                          제목
-                        </span>
-                        <span className="text-[12.5px] text-text-2">{stem}</span>
-                        <span className="num text-[11.5px] text-text-3">
-                          {stemRows.length}개
-                        </span>
-                      </button>
-                      {!stemCollapsed
-                        ? stemRows.map((row) => (
-                            <Row
-                              key={row.item.id}
-                              item={row.item}
-                              goal={row.goal}
-                              retention={row.retention}
-                              today={today}
-                              indent
-                              onClick={() => onOpenItem(row.item.id)}
-                            />
-                          ))
-                        : null}
-                    </div>
-                  )
-                })
-              : null}
-          </div>
+            {!goalCollapsed ? (
+              <div className="relative">
+                {goalRows.map((row) => (
+                  <Row
+                    key={row.item.id}
+                    item={row.item}
+                    retention={row.retention}
+                    onClick={() => onOpenItem(row.item.id)}
+                  />
+                ))}
+              </div>
+            ) : null}
+
+            {goal ? (
+              <button
+                type="button"
+                onClick={() => onOpenGoal(goal.id)}
+                className="relative flex w-full items-center gap-1 border-t border-line px-[14px] py-[7px] text-left text-[11.5px] text-text-3 transition-colors hover:bg-hover hover:text-text-2"
+              >
+                이 목표 자세히 보기
+                <span aria-hidden>›</span>
+              </button>
+            ) : null}
+          </section>
         )
       })}
     </div>
@@ -311,17 +289,16 @@ function GroupedList({
 
 function Row({
   item,
-  goal,
   retention,
-  today,
-  indent,
+  goal,
+  goalDot,
   onClick,
 }: {
   item: ItemRow
-  goal: GoalRow | null
   retention: number
-  today: DateOnly
-  indent?: boolean
+  /** 묶음을 풀었을 때만 준다. 목표 안에서는 어느 목표인지 이미 안다. */
+  goal?: GoalRow | null
+  goalDot?: string | undefined
   onClick: () => void
 }) {
   const badge = statusBadgeOf(item.due_kind, item.goal_risk)
@@ -332,25 +309,29 @@ function Row({
       onClick={onClick}
       // 제목이 등폭 숫자 때문에 여러 조각으로 나뉘어 있어서 이름을 따로 붙인다.
       aria-label={item.title}
-      className={cn(
-        'flex w-full items-center gap-3 border-b border-line px-[14px] py-[9px] text-left last:border-b-0 hover:bg-hover',
-        indent && 'pl-[32px]'
-      )}
+      className="flex w-full items-center gap-3 border-b border-line px-[14px] py-[9px] text-left last:border-b-0 hover:bg-hover"
     >
       <span className="min-w-0 flex-1 truncate text-[13.5px]">
         <span className="text-text-2">{parts.pre}</span>
         <span className="num text-[13px]">{parts.num}</span>
         <span className="text-text-2">{parts.post}</span>
       </span>
-      {badge ? <Badge kind={badge} /> : null}
-      <span className="rail-panel num grid w-[220px] flex-none grid-cols-[52px_84px_1fr] items-center gap-[12px] pr-[4px]">
-        <span className="text-right text-[12.5px]">{percent(retention)}</span>
-        <span className="text-right text-[12px] text-text-2">
-          {item.due ? dueLabel(today, item.due) : '없음'}
+      {goal !== undefined ? (
+        // 칸 너비를 고정한다. 이름 길이에 따라 뒤의 배지 자리가 들쭉날쭉하면 안 된다.
+        <span className="flex w-[150px] flex-none items-center justify-end gap-[5px] text-[11.5px] text-text-3">
+          <span
+            aria-hidden
+            className="h-[5px] w-[5px] flex-none rounded-full"
+            style={{ background: goalDot ?? 'var(--dot)' }}
+          />
+          <span className="truncate">{goal?.name ?? '목표 없음'}</span>
         </span>
-        <span className="truncate font-sans text-[11.5px] text-text-3">
-          {goal?.name ?? '목표 없음'}
-        </span>
+      ) : null}
+      <span className="flex w-[42px] flex-none justify-end">
+        {badge ? <Badge kind={badge} /> : null}
+      </span>
+      <span className="rail-panel num w-[120px] flex-none pr-[4px] text-right text-[12.5px]">
+        {percent(retention)}
       </span>
     </button>
   )
