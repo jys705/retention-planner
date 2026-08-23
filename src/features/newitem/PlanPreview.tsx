@@ -105,18 +105,15 @@ export function PlanPreview({
       aria-label="앞으로 보게 될 횟수"
       className="rail-panel flex flex-col gap-[12px] px-[18px] py-[14px]"
     >
-      <div className="flex flex-col gap-[1px]">
-        <span className="text-[11.5px] text-text-3">
-          {until ? '목표한 날까지 보게 될 횟수' : '앞으로 넉 달 동안 볼 횟수'}
+      {/*
+        큰 숫자 하나만 위에 얹으면 아래로 남는 빈 칸이 넓어서 붕 뜬다.
+        왼쪽 칸이 '이름 + 고르는 것' 으로 흐르니 여기도 '이름 + 목록' 으로 맞춘다.
+      */}
+      <div className="flex flex-col gap-[5px]">
+        <span className="text-[12px] font-medium text-text-2">
+          {until ? '목표한 날까지' : '앞으로 넉 달 동안'}{' '}
+          <span className="num">{dates.length}번</span> 보게 돼요
         </span>
-        <span className="font-display num text-[30px] font-semibold leading-none tracking-[-0.02em]">
-          {dates.length}번
-        </span>
-      </div>
-
-      {shown.length > 0 ? (
-        <>
-          <div className="h-px bg-line" />
 
           {/*
             날짜를 시간 축 위에 점으로 찍으면 초반 이삼일 간격이 왼쪽 끝에 뭉친다.
@@ -157,8 +154,7 @@ export function PlanPreview({
               </span>
             ) : null}
           </div>
-        </>
-      ) : null}
+      </div>
     </aside>
   )
 }
