@@ -18,10 +18,12 @@ export interface PlanPreviewProps {
   initialGrade: Grade
 }
 
-/** 내다볼 날수. 이보다 멀면 사람이 계획으로 안 읽는다. */
-const LOOKAHEAD = 120
-/** 날짜를 몇 개까지 늘어놓을지. 넘치면 뒤는 접는다. */
-const SHOWN = 6
+/** 마감이 없을 때 내다볼 날수. 이보다 멀면 사람이 계획으로 안 읽는다. */
+const OPEN_LOOKAHEAD = 120
+/** 목표가 아무리 멀어도 여기까지만 센다. */
+const MAX_LOOKAHEAD = 730
+/** 줄을 몇 개까지 늘어놓을지. 넘치면 뒤는 한 줄로 접는다. */
+const SHOWN = 7
 
 /**
  * 적기 전에 보여주는 미리보기.
@@ -63,13 +65,21 @@ export function PlanPreview({
     bufferDays: settings.bufferDays,
   })
 
+  // 목표가 있으면 그날까지 몇 번인지가 답이다. 120일에서 끊으면 먼 목표일수록
+  // 실제보다 적게 세어 놓고 '앞으로 N번' 이라고 말하게 된다.
+  const fieldsOf = horizonFields(config.horizon)
+  const until = fieldsOf.hold_until ?? fieldsOf.ready_at
+  const lookahead = until
+    ? Math.min(MAX_LOOKAHEAD, Math.max(1, diffDays(today, until)))
+    : OPEN_LOOKAHEAD
+
   const future = projectItem({
     itemId: 'preview',
     state: initial.state,
     anchor: firstStudiedAt,
     due: initial.due,
     from: today,
-    days: LOOKAHEAD,
+    days: lookahead,
     horizon: config.horizon,
     intensity: config.intensity,
     targetRetention: config.targetRetention,
@@ -80,65 +90,64 @@ export function PlanPreview({
   })
 
   const dates = future.map((f) => f.date)
-  const shown = dates.slice(0, SHOWN)
-  const rest = dates.length - shown.length
-  // 마지막 날까지의 길이. 점을 이 위에 비율로 찍는다.
-  const span = dates.length > 0 ? Math.max(1, diffDays(today, dates[dates.length - 1])) : 1
+  // 각 복습이 그 앞의 복습에서 며칠 뒤인지. 첫 줄만 오늘을 기준으로 센다.
+  const steps = dates.map((date, index) => ({
+    date,
+    gap: diffDays(index === 0 ? today : dates[index - 1], date),
+  }))
+  const shown = steps.slice(0, SHOWN)
+  const rest = steps.length - shown.length
+  // 막대는 가장 긴 간격을 꽉 찬 것으로 놓고 나머지를 그에 견준다.
+  const longest = Math.max(1, ...steps.map((s) => s.gap))
 
   return (
     <aside
-      aria-label="이렇게 잡힐 거예요"
-      className="rail-panel flex flex-col gap-[14px] px-[18px] py-[14px]"
+      aria-label="앞으로 보게 될 횟수"
+      className="rail-panel flex flex-col gap-[12px] px-[18px] py-[14px]"
     >
-      <span className="text-[11.5px] text-text-3">이렇게 잡힐 거예요</span>
-
       <div className="flex flex-col gap-[1px]">
-        <span className="text-[11.5px] text-text-3">앞으로 보게 될 횟수</span>
-        <span className="font-display num text-[34px] font-semibold leading-none tracking-[-0.02em]">
+        <span className="text-[11.5px] text-text-3">
+          {until ? '목표한 날까지 보게 될 횟수' : '앞으로 넉 달 동안 볼 횟수'}
+        </span>
+        <span className="font-display num text-[30px] font-semibold leading-none tracking-[-0.02em]">
           {dates.length}번
         </span>
       </div>
 
-      {dates.length > 0 ? (
+      {shown.length > 0 ? (
         <>
           <div className="h-px bg-line" />
 
-          <div className="flex flex-col gap-[9px]">
-            <span className="num flex flex-wrap gap-x-[6px] gap-y-[2px] text-[12px] leading-relaxed text-text-2">
-              {shown.map((date, index) => (
-                <span key={date} className="whitespace-nowrap">
-                  {monthDay(date)}
-                  {index < shown.length - 1 ? ',' : ''}
-                </span>
-              ))}
-              {rest > 0 ? (
-                <span className="whitespace-nowrap">외 {rest}번</span>
-              ) : null}
-            </span>
-
-            {/*
-              날짜만 늘어놓으면 간격이 어떻게 벌어지는지가 안 읽힌다.
-              처음엔 촘촘하다가 뒤로 갈수록 뜸해지는 게 이 앱이 하는 일이다.
-            */}
-            <div className="relative h-[13px]" aria-hidden>
-              <div className="absolute inset-x-0 top-[6px] h-px bg-line-2" />
-              <span className="absolute left-0 top-[3px] h-[7px] w-[2px] rounded-full bg-text-3" />
-              {dates.map((date) => (
+          {/*
+            날짜를 시간 축 위에 점으로 찍으면 초반 이삼일 간격이 왼쪽 끝에 뭉친다.
+            한 줄에 하나씩 놓고 막대 길이로 간격을 보이면 몇 번이 되든 안 겹친다.
+          */}
+          <div className="flex flex-col gap-[1px]">
+            {shown.map((step) => (
+              <div
+                key={step.date}
+                className="relative flex h-[21px] items-center justify-between overflow-hidden rounded-[3px] px-[5px]"
+              >
                 <span
-                  key={date}
-                  className="absolute top-[3px] h-[7px] w-[7px] -translate-x-1/2 rounded-full border-2 border-rail bg-accent"
+                  aria-hidden
+                  className="absolute inset-y-0 left-0 rounded-[3px] bg-accent-soft"
                   style={{
-                    left: `calc(${(diffDays(today, date) / span) * 100}% + ${
-                      (0.5 - diffDays(today, date) / span) * 7
-                    }px)`,
+                    width: `${Math.max(11, (step.gap / longest) * 100)}%`,
                   }}
                 />
-              ))}
-            </div>
-            <div className="flex justify-between text-[10.5px] text-text-3">
-              <span>오늘</span>
-              <span className="num">{monthDay(dates[dates.length - 1])}</span>
-            </div>
+                <span className="num relative text-[11.5px] text-text-2">
+                  {monthDay(step.date)}
+                </span>
+                <span className="num relative text-[11px] text-text-3">
+                  {step.gap}일 뒤
+                </span>
+              </div>
+            ))}
+            {rest > 0 ? (
+              <span className="px-[5px] pt-[3px] text-[11px] text-text-3">
+                외 {rest}번 더
+              </span>
+            ) : null}
           </div>
         </>
       ) : null}
