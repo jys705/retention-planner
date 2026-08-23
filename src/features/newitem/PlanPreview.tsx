@@ -3,9 +3,9 @@ import type { Horizon } from '../../core/horizon/horizon'
 import { initialSchedule, type Intensity } from '../../core/policy/constraints'
 import { projectItem } from '../../core/simulate/project'
 import type { GoalRow, ItemRow } from '../../db/types'
-import type { DateOnly } from '../../lib/date'
+import { diffDays, type DateOnly } from '../../lib/date'
 import { effectiveConfig, horizonFields } from '../../lib/domain'
-import { monthDay, percent } from '../../lib/format'
+import { monthDay } from '../../lib/format'
 import type { Settings } from '../../lib/settings'
 
 export interface PlanPreviewProps {
@@ -82,11 +82,8 @@ export function PlanPreview({
   const dates = future.map((f) => f.date)
   const shown = dates.slice(0, SHOWN)
   const rest = dates.length - shown.length
-
-  const resolved = config.horizon
-  const readyAt = resolved.kind === 'open' ? null : horizonFields(resolved).ready_at
-  const holdUntil =
-    resolved.kind === 'open' ? null : horizonFields(resolved).hold_until
+  // 마지막 날까지의 길이. 점을 이 위에 비율로 찍는다.
+  const span = dates.length > 0 ? Math.max(1, diffDays(today, dates[dates.length - 1])) : 1
 
   return (
     <aside
@@ -95,59 +92,56 @@ export function PlanPreview({
     >
       <span className="text-[11.5px] text-text-3">이렇게 잡힐 거예요</span>
 
-      <div className="flex flex-col gap-[2px]">
-        {readyAt ? (
-          <>
-            <span className="num text-[15px] font-semibold">
-              {monthDay(readyAt)}까지 준비
+      <div className="flex flex-col gap-[1px]">
+        <span className="text-[11.5px] text-text-3">앞으로 보게 될 횟수</span>
+        <span className="font-display num text-[34px] font-semibold leading-none tracking-[-0.02em]">
+          {dates.length}번
+        </span>
+      </div>
+
+      {dates.length > 0 ? (
+        <>
+          <div className="h-px bg-line" />
+
+          <div className="flex flex-col gap-[9px]">
+            <span className="num flex flex-wrap gap-x-[6px] gap-y-[2px] text-[12px] leading-relaxed text-text-2">
+              {shown.map((date, index) => (
+                <span key={date} className="whitespace-nowrap">
+                  {monthDay(date)}
+                  {index < shown.length - 1 ? ',' : ''}
+                </span>
+              ))}
+              {rest > 0 ? (
+                <span className="whitespace-nowrap">외 {rest}번</span>
+              ) : null}
             </span>
-            {holdUntil && holdUntil !== readyAt ? (
-              <span className="num text-[12.5px] text-text-2">
-                {monthDay(holdUntil)}까지 유지
-              </span>
-            ) : null}
-          </>
-        ) : (
-          <span className="text-[15px] font-semibold">마감 없이 계속</span>
-        )}
-      </div>
 
-      <div className="h-px bg-line" />
-
-      <div className="flex flex-col gap-[5px]">
-        <span className="text-[12.5px] font-medium">
-          {dates.length === 0
-            ? '앞으로 볼 날이 없어요'
-            : `앞으로 ${dates.length}번 보게 돼요`}
-        </span>
-        {shown.length > 0 ? (
-          <span className="num flex flex-wrap gap-x-[6px] gap-y-[2px] text-[12px] leading-relaxed text-text-2">
-            {shown.map((date, index) => (
-              <span key={date} className="whitespace-nowrap">
-                {monthDay(date)}
-                {index < shown.length - 1 ? ',' : ''}
-              </span>
-            ))}
-            {rest > 0 ? (
-              <span className="whitespace-nowrap">외 {rest}번</span>
-            ) : null}
-          </span>
-        ) : null}
-        <span className="text-[11px] leading-relaxed text-text-3">
-          다른 항목과 같은 날에 몰리면 하루씩 옮겨 잡을 수 있어요.
-        </span>
-      </div>
-
-      <div className="h-px bg-line" />
-
-      <div className="flex flex-col gap-[2px]">
-        <span className="text-[11.5px] text-text-3">
-          {readyAt ? '목표한 날 기억률' : '유지할 기억률'}
-        </span>
-        <span className="font-display num text-[28px] font-semibold leading-none tracking-[-0.02em]">
-          {percent(config.targetRetention)}
-        </span>
-      </div>
+            {/*
+              날짜만 늘어놓으면 간격이 어떻게 벌어지는지가 안 읽힌다.
+              처음엔 촘촘하다가 뒤로 갈수록 뜸해지는 게 이 앱이 하는 일이다.
+            */}
+            <div className="relative h-[13px]" aria-hidden>
+              <div className="absolute inset-x-0 top-[6px] h-px bg-line-2" />
+              <span className="absolute left-0 top-[3px] h-[7px] w-[2px] rounded-full bg-text-3" />
+              {dates.map((date) => (
+                <span
+                  key={date}
+                  className="absolute top-[3px] h-[7px] w-[7px] -translate-x-1/2 rounded-full border-2 border-rail bg-accent"
+                  style={{
+                    left: `calc(${(diffDays(today, date) / span) * 100}% + ${
+                      (0.5 - diffDays(today, date) / span) * 7
+                    }px)`,
+                  }}
+                />
+              ))}
+            </div>
+            <div className="flex justify-between text-[10.5px] text-text-3">
+              <span>오늘</span>
+              <span className="num">{monthDay(dates[dates.length - 1])}</span>
+            </div>
+          </div>
+        </>
+      ) : null}
     </aside>
   )
 }
