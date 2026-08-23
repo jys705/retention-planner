@@ -1,14 +1,19 @@
 import { useState } from 'react'
-import { addDays, type DateOnly } from '../../lib/date'
-import { dueReason } from '../../lib/badge'
-import { fullDate, monthDay, percent, shortDate } from '../../lib/format'
+import { addDays, maxDate, minDate, type DateOnly } from '../../lib/date'
+import { dueReason, statusBadgeOf } from '../../lib/badge'
+import { fullDate, monthDay, percent } from '../../lib/format'
+import { cn } from '../../lib/cn'
+import { goalColor } from '../../lib/domain'
 import { usePlanner } from '../../store/planner'
 import { CalendarHeatmap } from '../charts/CalendarHeatmap'
 import { monthKey, monthLabel } from '../charts/calendar'
 import { LoadBars, type LoadBar } from '../charts/LoadBars'
+import { LOAD_SERIES } from '../charts/loadSeries'
 import { dailyCountOf, rollout, type PlannedItem } from './rollout'
 
 const HORIZON_DAYS = 60
+/** 머리 문장이 보는 기간. 예보의 물음은 '곧 얼마나 바쁜가' 다. */
+const SOON_DAYS = 14
 
 export function ForecastScreen() {
   const { items, goals, settings, today } = usePlanner()
@@ -31,130 +36,246 @@ export function ForecastScreen() {
   // 막대는 그 자리에 뜨는 상자로 말하므로 이 카드를 건드리지 않는다.
   const shown = hovered ?? selected
 
-  const bars: LoadBar[] = plan.map((day) => ({
-    date: day.date,
-    count: day.items.length,
-  }))
+  // 배지별로 나눠 쌓는다. 봉우리가 무엇 때문인지 색으로 읽힌다.
+  const bars: LoadBar[] = plan.map((day) => {
+    const badges = day.items.map((i) => statusBadgeOf(i.kind, null))
+    return {
+      date: day.date,
+      count: day.items.length,
+      imp: badges.filter((b) => b === 'important').length,
+      easy: badges.filter((b) => b === 'easy').length,
+      plain: badges.filter((b) => b !== 'important' && b !== 'easy').length,
+    }
+  })
 
   const total = plan.reduce((sum, day) => sum + day.items.length, 0)
-  const average = Math.round((total / (HORIZON_DAYS + 1)) * 10) / 10
-  const busiest = bars.reduce(
+  // 예보를 보는 까닭은 '곧 얼마나 바쁜가' 다. 예순 날로 나누면 먼 빈 날까지 섞여
+  // 실제로 앞이 빽빽한데도 하루 한 개꼴로 보인다. 앞 두 주만 센다.
+  const soon = bars.slice(0, SOON_DAYS)
+  const soonTotal = soon.reduce((sum, b) => sum + b.count, 0)
+  const average = Math.round((soonTotal / SOON_DAYS) * 10) / 10
+  const busiest = soon.reduce(
     (best, bar) => (bar.count > best.count ? bar : best),
-    bars[0] ?? { date: today, count: 0 }
+    soon[0] ?? { date: today, count: 0 }
   )
   const overCap = bars.filter((b) => b.count > settings.dailyCap)
 
   const months = [monthKey(today), monthKey(addDays(today, 32))]
+  const monthCounts = months.map((m) => ({
+    month: m,
+    count: countInMonth(dailyCount, m),
+  }))
+  const peak = bars.reduce(
+    (best, bar) => (bar.count > best.count ? bar : best),
+    bars[0] ?? { date: today, count: 0 }
+  )
+
+  const horizonEnd = addDays(today, HORIZON_DAYS)
+  const live = goals.filter((g) => g.archived_at === null)
+  const marks = live
+    .filter((g) => g.ready_at !== null && g.ready_at >= today && g.ready_at <= horizonEnd)
+    .map((g, i) => ({
+      date: g.ready_at as DateOnly,
+      label: g.name,
+      color: goalColor(g, goals.indexOf(g) < 0 ? i : goals.indexOf(g)),
+    }))
+  const bands = live
+    .filter(
+      (g) =>
+        g.horizon_kind === 'window' &&
+        g.ready_at !== null &&
+        g.hold_until !== null &&
+        g.hold_until >= today &&
+        g.ready_at <= horizonEnd
+    )
+    .map((g) => ({
+      from: maxDate(g.ready_at as DateOnly, today),
+      to: minDate(g.hold_until as DateOnly, horizonEnd),
+      color: goalColor(g, goals.indexOf(g)),
+    }))
 
   return (
-    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-5 px-6 py-7">
-      <header>
-        <h1 className="text-[22px] font-semibold">예보</h1>
-        <p className="pt-1 text-[13px] text-text-2">
-          {total === 0
-            ? '앞으로 잡힌 복습이 없어요. 오늘 화면에서 한 줄 적어보세요.'
-            : `앞으로 ${HORIZON_DAYS}일 동안 ${total}번 보게 돼요. 하루 평균 ${average}개이고, ${monthDay(
-                busiest.date
-              )}이 ${busiest.count}개로 가장 많아요.`}
-        </p>
-        {overCap.length > 0 ? (
-          <p className="pt-1 text-[13px] text-imp-fg">
-            {`${monthDay(overCap[0].date)}${
-              overCap.length > 1 ? ` 외 ${overCap.length - 1}일` : ''
-            }은 하루 상한 ${settings.dailyCap}개를 넘어요. 그때가 되면 앞쪽으로 펴서 잡아드릴게요.`}
+    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 py-7">
+      <header className="grid grid-cols-[1fr_268px] items-start gap-6">
+        <div className="min-w-0">
+          <h1 className="text-[24px] font-semibold tracking-[-0.02em]">예보</h1>
+          <p className="pt-[6px] text-[15px] font-medium leading-relaxed">
+            {total === 0
+              ? '앞으로 잡힌 복습이 없어요. 오늘 화면에서 한 줄 적어보세요.'
+              : `다음 ${SOON_DAYS}일 동안 하루 평균 ${average}개예요. ${monthDay(
+                  busiest.date
+                )}이 ${busiest.count}개로 가장 많아요.`}
           </p>
-        ) : null}
+          {overCap.length > 0 ? (
+            <p className="pt-[6px] text-[13px] text-imp-fg">
+              {`${monthDay(overCap[0].date)}${
+                overCap.length > 1 ? ` 외 ${overCap.length - 1}일` : ''
+              }은 하루 상한 ${settings.dailyCap}개를 넘어요. 그때가 되면 앞쪽으로 펴서 잡아드릴게요.`}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="rail-panel num flex flex-col gap-[6px] pr-[18px] text-[12.5px]">
+          <RailRow label={`앞으로 ${HORIZON_DAYS}일`} value={`${total}개`} />
+          <RailRow label={`다음 ${SOON_DAYS}일 하루 평균`} value={`${average}개`} />
+          <RailRow
+            label="하루 상한"
+            value={`${settings.dailyCap}개`}
+            muted
+          />
+        </div>
       </header>
 
-      <div className="rail-panel grid grid-cols-3 gap-3 rounded-card bg-rail px-[16px] py-[13px]">
-        <Stat label={`앞으로 ${HORIZON_DAYS}일`} value={`${total}개`} />
-        <Stat label="하루 평균" value={`${average}개`} />
-        <Stat label="하루 상한" value={`${settings.dailyCap}개`} />
-      </div>
-
-      <section className="rounded-card border border-line bg-surface px-[16px] py-[14px]">
-        <h2 className="pb-3 text-[13px] font-semibold">앞으로 60일</h2>
-        <LoadBars
-          bars={bars}
-          cap={settings.dailyCap}
-          onSelect={(date) => setSelected(date === selected ? null : date)}
-          renderTooltip={(date) => (
-            <DayCard date={date} items={byDate.get(date) ?? []} floating />
-          )}
-          selected={selected}
+      <section
+        aria-label={`앞으로 ${HORIZON_DAYS}일`}
+        className="relative overflow-hidden rounded-panel border border-line bg-surface"
+      >
+        <div
+          aria-hidden
+          className="absolute bottom-0 right-0 top-0 w-[268px] bg-rail"
         />
-        <p className="pt-3 text-[12px] text-text-2">
-          막대에 마우스를 올리면 그날 무엇을 보는지 그 자리에 뜹니다.
-        </p>
-      </section>
-
-      <section className="rounded-card border border-line bg-surface px-[16px] py-[14px]">
-        <h2 className="pb-3 text-[13px] font-semibold">달력으로 보기</h2>
-        <div className="grid grid-cols-2 gap-6">
-          {months.map((month) => (
-            <div key={month} className="flex flex-col gap-2">
-              <div className="flex items-baseline gap-2">
-                <span className="text-[12.5px] font-medium">
-                  {monthLabel(month)}
-                </span>
-                <span className="num text-[11.5px] text-text-3">
-                  {countInMonth(dailyCount, month)}개
-                </span>
+        <div className="relative grid grid-cols-[1fr_268px]">
+          <div className="min-w-0 px-[20px] py-[16px]">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
+              <h2 className="text-[13px] font-semibold">
+                앞으로 {HORIZON_DAYS}일
+              </h2>
+              <div className="flex flex-wrap items-center gap-[12px] text-[11px] text-text-3">
+                {[...LOAD_SERIES].reverse().map((series) => (
+                  <span key={series.key} className="flex items-center gap-[5px]">
+                    <span
+                      aria-hidden
+                      className="h-[8px] w-[8px] rounded-[2px]"
+                      style={{ background: series.color }}
+                    />
+                    {series.name}
+                  </span>
+                ))}
               </div>
-              <CalendarHeatmap
-                month={month}
-                counts={dailyCount}
-                cap={settings.dailyCap}
-                selected={selected}
-                onSelect={(date) =>
-                  setSelected(date === selected ? null : date)
-                }
-                onHover={setHovered}
-              />
             </div>
-          ))}
-        </div>
-        {/*
-          높이를 고정한다. 최소 높이만 두면 담긴 항목 수에 따라 상자가 늘었다 줄고,
-          그때마다 문서 전체 높이가 바뀐다. 아래쪽까지 굴려 놓고 보는 중이면
-          브라우저가 스크롤을 되당겨서 커서 밑 칸이 달아나고, 그러면 상자가 다시
-          줄어들기를 되풀이한다. 넘치는 것은 상자 안에서 굴린다.
-        */}
-        <div className="mt-3 h-[168px] overflow-y-auto rounded-card bg-rail px-[14px] py-[11px]">
-          {shown ? (
-            <section aria-label="그날 무엇을 보나">
-              <div className="flex items-start justify-between gap-3 pb-1">
-                <h2 className="text-[12px] font-medium text-text-3">
-                  그날 무엇을 보나
-                </h2>
-                {selected ? (
-                  <button
-                    type="button"
-                    onClick={() => setSelected(null)}
-                    className="text-[12px] text-text-3 hover:text-text-2"
-                  >
-                    고정 해제
-                  </button>
-                ) : null}
-              </div>
-              <DayCard date={shown} items={byDate.get(shown) ?? []} />
-            </section>
-          ) : (
-            <p className="text-[12px] leading-relaxed text-text-2">
-              {monthSentence(dailyCount, settings.dailyCap)}
-              <br />
-              칸에 마우스를 올리면 그날 무엇을 보는지 여기 나옵니다. 누르면
-              고정돼요.
+            <LoadBars
+              bars={bars}
+              cap={settings.dailyCap}
+              stacked
+              marks={marks}
+              bands={bands}
+              onSelect={(date) => setSelected(date === selected ? null : date)}
+              renderTooltip={(date) => (
+                <DayCard date={date} items={byDate.get(date) ?? []} floating />
+              )}
+              selected={selected}
+            />
+            <p className="pt-3 text-[12px] text-text-2">
+              막대에 마우스를 올리면 그날 무엇을 보는지 그 자리에 뜹니다.
             </p>
-          )}
+          </div>
+
+          <div className="rail-panel flex flex-col gap-[8px] px-[18px] py-[16px]">
+            <span className="text-[11.5px] text-text-3">이번 달과 다음 달</span>
+            {monthCounts.map((m) => (
+              <RailRow
+                key={m.month}
+                label={monthLabel(m.month)}
+                value={`${m.count}개`}
+              />
+            ))}
+            <div className="h-px bg-line" />
+            <RailRow
+              label="가장 많은 날"
+              value={peak.count > 0 ? `${monthDay(peak.date)} ${peak.count}개` : '없음'}
+              warn={peak.count > settings.dailyCap}
+            />
+            {marks.length > 0 ? (
+              <p className="pt-[4px] text-[11.5px] leading-relaxed text-text-3">
+                세로선은 목표한 날이에요. 옅은 띠는 대략 목표의 구간입니다.
+              </p>
+            ) : null}
+          </div>
         </div>
       </section>
 
-      {bars.some((b) => b.count > 0) ? (
-        <p className="num text-[11.5px] text-text-3">
-          가장 붐비는 날 세 개: {topDays(bars).map(shortDate).join(', ')}
-        </p>
-      ) : null}
+      <section
+        aria-label="달력으로 보기"
+        className="relative overflow-hidden rounded-panel border border-line bg-surface"
+      >
+        <div
+          aria-hidden
+          className="absolute bottom-0 right-0 top-0 w-[268px] bg-rail"
+        />
+        <div className="relative grid grid-cols-[1fr_268px]">
+          <div className="min-w-0 px-[20px] py-[16px]">
+            <h2 className="pb-3 text-[13px] font-semibold">달력으로 보기</h2>
+            <div className="grid grid-cols-2 gap-5">
+              {months.map((month) => (
+                <div key={month} className="flex flex-col gap-2">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[12.5px] font-medium">
+                      {monthLabel(month)}
+                    </span>
+                    <span className="num text-[11.5px] text-text-3">
+                      {countInMonth(dailyCount, month)}개
+                    </span>
+                  </div>
+                  <CalendarHeatmap
+                    month={month}
+                    counts={dailyCount}
+                    cap={settings.dailyCap}
+                    selected={selected}
+                    onSelect={(date) =>
+                      setSelected(date === selected ? null : date)
+                    }
+                    onHover={setHovered}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/*
+            고른 날의 내용을 레일에 담는다. 예전에는 달력 밑 상자였는데, 담긴 수에
+            따라 상자가 늘었다 줄면서 문서 높이가 바뀌고 커서 밑 칸이 달아났다.
+            레일은 카드 높이를 따라가므로 그 일이 안 생긴다.
+          */}
+          <div className="rail-panel flex min-h-0 flex-col gap-[8px] overflow-y-auto px-[18px] py-[16px]">
+            {shown ? (
+              <section
+                aria-label="그날 무엇을 보나"
+                className="flex flex-col gap-[8px]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-[11.5px] text-text-3">
+                    그날 무엇을 보나
+                  </span>
+                  {selected ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelected(null)}
+                      className="flex-none text-[11.5px] text-text-3 hover:text-text-2"
+                    >
+                      고정 해제
+                    </button>
+                  ) : null}
+                </div>
+                <DayCard date={shown} items={byDate.get(shown) ?? []} />
+              </section>
+            ) : (
+              <>
+                <span className="text-[11.5px] text-text-3">
+                  한 달 단위로 보면
+                </span>
+                <p className="text-[12.5px] leading-relaxed text-text-2">
+                  {monthSentence(dailyCount, settings.dailyCap)}
+                </p>
+                <p className="text-[11.5px] leading-relaxed text-text-3">
+                  칸에 마우스를 올리면 그날 무엇을 보는지 여기 나옵니다. 누르면
+                  고정돼요.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+
     </div>
   )
 }
@@ -180,19 +301,29 @@ function monthSentence(
   return `색이 진한 칸이 그날 볼 게 많은 날이에요. 상한을 넘는 ${over.length}일은 앞으로 펴서 잡습니다.`
 }
 
-function topDays(bars: LoadBar[]): DateOnly[] {
-  return [...bars]
-    .filter((b) => b.count > 0)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 3)
-    .map((b) => b.date)
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
+/** 레일에 한 줄로 서는 이름과 값. */
+function RailRow({
+  label,
+  value,
+  muted,
+  warn,
+}: {
+  label: string
+  value: string
+  muted?: boolean
+  warn?: boolean
+}) {
   return (
-    <div className="flex flex-col gap-[2px]">
-      <span className="text-[11px] text-text-3">{label}</span>
-      <span className="num text-[16px] font-semibold">{value}</span>
+    <div className="flex items-baseline justify-between gap-2">
+      <span className="font-sans text-[12px] text-text-3">{label}</span>
+      <span
+        className={cn(
+          'num flex-none',
+          warn ? 'text-imp-fg' : muted ? 'text-text-3' : 'text-text'
+        )}
+      >
+        {value}
+      </span>
     </div>
   )
 }

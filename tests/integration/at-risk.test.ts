@@ -1,14 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { defaultFsrs } from '../../src/core/fsrs/fsrs6'
 import { projectItem } from '../../src/core/simulate/project'
 import { feasibleInterval } from '../../src/core/spread/feasible'
 import { resetRepositoryForTest } from '../../src/db'
 import type { GoalRow, ItemRow } from '../../src/db/types'
+import { freezeToday, unfreezeToday } from '../../src/lib/clock'
 import { addDays, toEpochDay } from '../../src/lib/date'
 import { resetPlannerForTest, usePlanner } from '../../src/store/planner'
 
 const TODAY = '2026-08-22'
 const EXAM = addDays(TODAY, 5)
+
+// load() 는 시계를 읽어 오늘을 다시 잡고 그 자리에서 일정을 다시 계산한다.
+// 시계를 안 묶어 두면 이 시험은 실제 날짜가 TODAY 에서 멀어질수록 어긋난다.
+beforeAll(() => freezeToday(TODAY))
+afterAll(() => unfreezeToday())
 
 /** 막 '다시' 를 누른 항목. 기억 지속력이 0.212일뿐이라 한 번으로는 목표한 날을 못 맞춘다. */
 const WEAK = defaultFsrs.nextState(null, 0, 1)

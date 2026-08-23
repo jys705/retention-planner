@@ -25,10 +25,13 @@ describe('예보', () => {
     await setupApp(TODAY, { items: many(4, '2026-10-05') })
     render(<ForecastScreen />)
     expect((await screen.findAllByText('앞으로 60일')).length).toBeGreaterThan(0)
+    // 머리 문장은 '곧 얼마나 바쁜가' 를 말한다. 예순 날 평균은 빈 날에 눌려
+    // 실제보다 한가해 보이므로 앞 두 주로 센다.
     expect(
-      screen.getByText(/앞으로 60일 동안 .*번 보게 돼요/)
+      screen.getByText(/다음 14일 동안 하루 평균 .*개예요/)
     ).toBeInTheDocument()
-    expect(screen.getByText('하루 평균')).toBeInTheDocument()
+    // 예순 날 총계와 상한은 레일이 맡는다.
+    expect(screen.getByText('다음 14일 하루 평균')).toBeInTheDocument()
     expect(screen.getByText('하루 상한')).toBeInTheDocument()
     // 막대가 실제로 그려졌는지 본다.
     expect(document.querySelectorAll('svg').length).toBeGreaterThan(0)
@@ -51,8 +54,8 @@ describe('예보', () => {
     await setupApp(TODAY, { items: many(3, '2026-10-05') })
     render(<ForecastScreen />)
     expect(await screen.findByText('달력으로 보기')).toBeInTheDocument()
-    expect(screen.getByText('10월')).toBeInTheDocument()
-    expect(screen.getByText('11월')).toBeInTheDocument()
+    expect(screen.getAllByText('10월').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('11월').length).toBeGreaterThan(0)
     expect(screen.getAllByText('일').length).toBeGreaterThan(0)
   })
 
