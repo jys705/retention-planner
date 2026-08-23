@@ -1,24 +1,21 @@
 import { useState } from 'react'
 import { defaultFsrs } from '../../core/fsrs/fsrs6'
 import type { Horizon } from '../../core/horizon/horizon'
-import { INTENSITY_RETENTION } from '../../core/policy/constraints'
 import { Badge } from '../../components/Badge'
-import { Chip, Hint } from '../../components/Chip'
+import { Hint } from '../../components/Chip'
+import { InlineText } from '../../components/InlineText'
+import { MoreMenu } from '../../components/MoreMenu'
+import { OptionCards } from '../../components/OptionCards'
 import { Expand } from '../../components/Expand'
 import type { GoalRow } from '../../db/types'
 import { statusBadgeOf } from '../../lib/badge'
-import { addDays, diffDays, maxDate, toEpochDay, type DateOnly } from '../../lib/date'
+import { diffDays } from '../../lib/date'
 import { effectiveConfig, isActive, memoryStateOf } from '../../lib/domain'
-import {
-  daysLeftLabel,
-  dueLabel,
-  horizonLabel,
-  percent,
-} from '../../lib/format'
+import { daysLeftLabel, dueLabel, monthDay, percent } from '../../lib/format'
 import { INTENSITY_META } from '../../lib/intensity'
-import { spreadPreview, usePlanner } from '../../store/planner'
-import type { SpreadResult } from '../../core/spread/assign'
+import { usePlanner } from '../../store/planner'
 import { LoadBars, type LoadBar } from '../charts/LoadBars'
+import { rollout } from '../forecast/rollout'
 import { HorizonPicker } from '../newitem/HorizonPicker'
 
 export function GoalDetailScreen({
@@ -30,14 +27,11 @@ export function GoalDetailScreen({
   onOpenItem: (itemId: string) => void
   onDeleted: () => void
 }) {
-  const { items, goals, settings, today, planned } = usePlanner()
+  const { items, goals, settings, today } = usePlanner()
   const updateGoal = usePlanner((s) => s.updateGoal)
   const deleteGoal = usePlanner((s) => s.deleteGoal)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const [showBefore, setShowBefore] = useState(false)
-  const [editOpen, setEditOpen] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
-  const [draftName, setDraftName] = useState<string | null>(null)
 
   const goal = goals.find((g) => g.id === goalId)
   if (!goal) {
@@ -69,54 +63,78 @@ export function GoalDetailScreen({
     return { item, config, retention, retentionAtGoal }
   })
 
-  const avgAtGoal =
-    rows.length === 0
-      ? 0
-      : rows.reduce((sum, r) => sum + r.retentionAtGoal, 0) / rows.length
   const atRisk = rows.filter((r) => r.item.goal_risk === 'at_risk').length
-  // 화면이 "두 번 잡아두었다" 고 말하려면 실제로 두 날짜가 있어야 한다.
-  const doubleBooked = rows.filter(
-    (r) => planned.filter((p) => p.item_id === r.item.id).length >= 2
-  ).length
 
-  const preview = goal.ready_at
-    ? spreadPreview(items, goals, settings, today, goal.ready_at)
-    : null
-  const mineIds = new Set(mine.map((i) => i.id))
-  const plannedDates = planned
-    .filter((p) => mineIds.has(p.item_id))
-    .map((p) => p.date)
-  const bars = buildBars(plannedDates, preview, today, goal.ready_at)
-  const peakAfter = Math.max(0, ...bars.map((b) => b.count))
-  const peakBefore = preview?.peakBefore ?? peakAfter
-  const scheduled = bars.reduce((sum, b) => sum + b.count, 0)
+  // 이미 잡혀 있는 다음 한 번만 그리면 목표한 날까지의 절반 넘게가 빈칸이 된다.
+  // 예보와 같은 방식으로 하루씩 굴려서 목표한 날까지의 계획을 통째로 얻는다.
+  const runway = goal.ready_at ? Math.max(1, diffDays(today, goal.ready_at)) : 60
+  const plan = rollout({ items, goals, settings, from: today, days: runway })
+  const bars: LoadBar[] = plan.map((day) => ({
+    date: day.date,
+    count: day.items.filter((p) => p.goalId === goal.id).length,
+    markGoal: day.date === goal.ready_at,
+  }))
+  const totalReviews = bars.reduce((sum, b) => sum + b.count, 0)
+  // 마감이 가까워지면 마지막 점검이 한 날에 모인다. 그 봉우리를 평소 분량인 척
+  // 말하면 "하루에 많아야 24개" 같은 거짓말이 되므로, 어느 날인지 같이 밝힌다.
+  const busiest = bars.reduce<LoadBar | null>(
+    (best, b) => (best === null || b.count > best.count ? b : best),
+    null
+  )
+  const peak = busiest?.count ?? 0
+  // 복습이 없는 날까지 나누면 실제보다 한참 작게 나온다. 있는 날만 센다.
+  const busyDays = bars.filter((b) => b.count > 0).length
   const perDayAvg =
-    bars.length === 0 ? 0 : Math.round((scheduled / bars.length) * 10) / 10
+    busyDays === 0 ? 0 : Math.round((totalReviews / busyDays) * 10) / 10
+  const overdue = rows.filter(
+    (r) => r.item.due !== null && r.item.due < today
+  ).length
 
   return (
     <div className="mx-auto flex w-full max-w-[940px] flex-col gap-5 px-6 py-7">
-      <header>
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-[22px] font-semibold">{goal.name}</h1>
-          {goal.ready_at ? (
-            <span className="num text-[13px] text-text-2">
-              {daysLeftLabel(today, goal.ready_at)}
-            </span>
-          ) : null}
+      <header className="grid grid-cols-[1fr_268px] items-start gap-4">
+        <div className="min-w-0">
+          <div className="flex items-baseline gap-3">
+            <InlineText
+              value={goal.name}
+              label="목표 이름"
+              placeholder="이름 없음"
+              className="-ml-[6px] text-[22px] font-semibold tracking-[-0.02em]"
+              onSave={(next) => void updateGoal(goal.id, { name: next })}
+            />
+            {goal.ready_at ? (
+              <span className="num flex-none text-[13px] text-text-2">
+                {daysLeftLabel(today, goal.ready_at)}
+              </span>
+            ) : null}
+          </div>
         </div>
-        <div className="flex items-center gap-3 pt-1">
-          <p className="num text-[12.5px] text-text-3">
-            목표 시점:{' '}
-            {horizonLabel(goal.horizon_kind, goal.ready_at, goal.hold_until)}
-          </p>
-          <div className="flex-1" />
-          <button
-            type="button"
-            onClick={() => setConfirmingDelete(true)}
-            className="rounded-ctl border border-line-2 px-[10px] py-[5px] text-[12px] text-text-2 hover:bg-hover"
-          >
-            목표 삭제
-          </button>
+
+        {/*
+          이 화면이 답해야 할 것은 '몇 개가 부족한가' 가 아니라
+          '목표를 지키려고 앱이 무엇을 해뒀는가' 다.
+        */}
+        <div className="rail-panel flex flex-col items-end gap-[8px] pr-[18px]">
+          <div className="flex w-full items-start justify-between">
+            <div className="flex flex-col gap-[1px]">
+              <span className="text-[11.5px] text-text-3">
+                {goal.ready_at ? '목표한 날까지 잡아둔 복습' : '앞으로 잡아둔 복습'}
+              </span>
+              <span className="font-display num text-[30px] font-semibold leading-none tracking-[-0.02em]">
+                {totalReviews}번
+              </span>
+            </div>
+            <MoreMenu
+              label="이 목표 더보기"
+              items={[
+                {
+                  label: '목표 삭제',
+                  danger: true,
+                  onSelect: () => setConfirmingDelete(true),
+                },
+              ]}
+            />
+          </div>
         </div>
       </header>
 
@@ -149,144 +167,166 @@ export function GoalDetailScreen({
         </section>
       ) : null}
 
-      <div className="rail-panel grid grid-cols-4 gap-3 rounded-card bg-rail px-[16px] py-[13px]">
-        <Stat label="항목 수" value={`${rows.length}개`} />
-        <Stat label="목표한 날 평균 기억률" value={percent(avgAtGoal)} />
-        <Stat label="한 번으로 부족한 항목" value={`${atRisk}개`} />
-        <Stat
-          label="복습 강도"
-          value={INTENSITY_META.find((m) => m.key === goal.intensity)?.name ?? '표준'}
-        />
-      </div>
-
-      <p className="text-[13px] leading-relaxed text-text-2">
-        {summarySentence(goal, rows.length, avgAtGoal, atRisk, doubleBooked, today)}
+      <p className="text-[16px] font-medium leading-relaxed">
+        {didSentence(
+          rows.length,
+          totalReviews,
+          atRisk,
+          overdue,
+          busiest,
+          settings.dailyCap,
+          goal
+        )}
       </p>
 
-      <Expand
-        open={editOpen}
-        onToggle={() => setEditOpen((o) => !o)}
-        label="목표 편집"
-        hint="이름, 목표 시점, 복습 강도를 여기서 고칩니다. 묶인 항목 전부에 적용돼요."
+      <section
+        aria-label="목표 설정"
+        className="relative overflow-hidden rounded-panel border border-line bg-surface"
       >
-        <div className="flex flex-col gap-4">
-          <Field label="이름">
-            <input
-              value={draftName ?? goal.name}
-              onChange={(event) => setDraftName(event.target.value)}
-              onBlur={() => {
-                const next = (draftName ?? '').trim()
-                setDraftName(null)
-                if (next !== '' && next !== goal.name) {
-                  void updateGoal(goal.id, { name: next })
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') event.currentTarget.blur()
-                if (event.key === 'Escape') setDraftName(null)
-              }}
-              aria-label="목표 이름 고치기"
-              className="w-full rounded-ctl border border-line-2 bg-surface px-[10px] py-[7px] text-[14px] outline-none"
-            />
-          </Field>
+        <div
+          aria-hidden
+          className="absolute bottom-0 right-0 top-0 w-[268px] bg-rail"
+        />
+        <div className="relative grid grid-cols-[1fr_268px]">
+          <div className="flex min-w-0 flex-col gap-4 px-[20px] py-[16px]">
+            <h2 className="text-[13px] font-semibold">목표 설정</h2>
 
-          <Field label="목표 시점">
-            <HorizonPicker
-              today={today}
-              uncertainty={settings.uncertainty}
-              value={goalHorizonOf(goal)}
-              onChange={(horizon: Horizon) => {
-                void updateGoal(goal.id, {
-                  horizon_kind: horizon.kind,
-                  ready_at:
-                    horizon.kind === 'date'
-                      ? horizon.at
-                      : horizon.kind === 'window'
-                        ? horizon.readyAt
-                        : null,
-                  hold_until:
-                    horizon.kind === 'date'
-                      ? horizon.at
-                      : horizon.kind === 'window'
-                        ? horizon.holdUntil
-                        : null,
-                })
-              }}
-            />
-          </Field>
+            <Field label="목표 시점">
+              <HorizonPicker
+                today={today}
+                uncertainty={settings.uncertainty}
+                value={goalHorizonOf(goal)}
+                onChange={(horizon: Horizon) => {
+                  void updateGoal(goal.id, {
+                    horizon_kind: horizon.kind,
+                    ready_at:
+                      horizon.kind === 'date'
+                        ? horizon.at
+                        : horizon.kind === 'window'
+                          ? horizon.readyAt
+                          : null,
+                    hold_until:
+                      horizon.kind === 'date'
+                        ? horizon.at
+                        : horizon.kind === 'window'
+                          ? horizon.holdUntil
+                          : null,
+                  })
+                }}
+              />
+            </Field>
 
-          <Field label="복습 강도">
-            <div className="flex flex-wrap gap-[6px]">
-              {INTENSITY_META.map((meta) => (
-                <Chip
-                  key={meta.key}
-                  active={goal.intensity === meta.key}
-                  title={`${meta.desc} (기억률 ${Math.round(
-                    INTENSITY_RETENTION[meta.key] * 100
-                  )}% 기준)`}
-                  onClick={() => void updateGoal(goal.id, { intensity: meta.key })}
-                >
-                  {meta.name}
-                </Chip>
-              ))}
-            </div>
-          </Field>
+            <Field label="복습 강도">
+              <OptionCards
+                label="복습 강도"
+                value={goal.intensity}
+                options={INTENSITY_META.map((meta) => ({
+                  key: meta.key,
+                  name: meta.name,
+                  desc: meta.desc,
+                }))}
+                onChange={(key) => void updateGoal(goal.id, { intensity: key })}
+              />
+            </Field>
 
-          <Expand
-            open={advancedOpen}
-            onToggle={() => setAdvancedOpen((o) => !o)}
-            label="고급"
-            hint="대부분 그대로 두시면 돼요."
-          >
-            <div className="flex flex-col gap-4">
-              <Field label="최소 복습 횟수">
-                <div className="flex items-center gap-2">
-                  <Stepper
-                    value={goal.min_reviews}
-                    onChange={(next) =>
-                      void updateGoal(goal.id, { min_reviews: next })
-                    }
-                  />
-                  <span className="text-[12px] text-text-3">
-                    목표한 날 전에 최소 이만큼은 보게 잡아요.
-                  </span>
+            <div className="border-t border-line pt-[12px]">
+              <Expand
+                plain
+                open={advancedOpen}
+                onToggle={() => setAdvancedOpen((o) => !o)}
+                label="고급"
+                hint="대부분 그대로 두시면 돼요."
+              >
+                <div className="flex flex-col gap-4 pt-3">
+                  <Field label="최소 복습 횟수">
+                    <div className="flex items-center gap-2">
+                      <Stepper
+                        value={goal.min_reviews}
+                        onChange={(next) =>
+                          void updateGoal(goal.id, { min_reviews: next })
+                        }
+                      />
+                      <span className="text-[12px] text-text-3">
+                        목표한 날 전에 최소 이만큼은 보게 잡아요.
+                      </span>
+                    </div>
+                  </Field>
+                  <Field label="목표 기억률">
+                    <p className="text-[12px] text-text-3">
+                      모든 목표에 같이 적용돼요. 설정에서 바꿉니다. 지금은{' '}
+                      <span className="num">
+                        {percent(settings.targetRetention)}
+                      </span>
+                      예요.
+                    </p>
+                  </Field>
                 </div>
-              </Field>
-              <Field label="목표 기억률">
-                <p className="text-[12px] text-text-3">
-                  모든 목표에 같이 적용돼요. 설정에서 바꿉니다. 지금은{' '}
-                  <span className="num">
-                    {percent(settings.targetRetention)}
-                  </span>
-                  예요.
-                </p>
-              </Field>
+              </Expand>
             </div>
-          </Expand>
-        </div>
-      </Expand>
+          </div>
 
-      <section className="rounded-card border border-line bg-surface px-[16px] py-[14px]">
-        <div className="flex items-center justify-between pb-3">
-          <h2 className="text-[13px] font-semibold">날짜 조정</h2>
-          <label className="flex items-center gap-[6px] text-[12px] text-text-2">
-            <input
-              type="checkbox"
-              checked={showBefore}
-              onChange={(e) => setShowBefore(e.target.checked)}
-            />
-            조정 전과 비교
-          </label>
+          <div className="rail-panel flex flex-col gap-[10px] px-[18px] py-[16px]">
+            <span className="text-[11.5px] text-text-3">지금 상태</span>
+            {rows.length === 0 ? (
+              <p className="text-[12.5px] leading-relaxed text-text-2">
+                아직 묶인 항목이 없어요. 여기서 정한 값은 앞으로 이 목표에 넣는
+                항목에 그대로 적용됩니다.
+              </p>
+            ) : (
+              <>
+                <p className="text-[12.5px] leading-relaxed text-text-2">
+                  여기서 바꾸면 이 목표에 묶인{' '}
+                  <span className="num">{rows.length}</span>개 전부에 함께
+                  적용됩니다.
+                </p>
+                <p className="text-[12px] leading-relaxed text-text-3">
+                  목표한 날이 미뤄지면 여기서 날짜만 바꾸면 됩니다. 항목을 하나씩
+                  고칠 필요가 없어요.
+                </p>
+              </>
+            )}
+          </div>
         </div>
-        <LoadBars bars={bars} cap={settings.dailyCap} showBefore={showBefore} />
-        <p className="pt-3 text-[12px] text-text-2">
-          {rows.length === 0
-            ? '아직 이 목표에 묶인 항목이 없어요.'
-            : peakBefore > peakAfter
-              ? `가장 몰리는 날을 ${peakBefore}개에서 ${peakAfter}개로 줄였어요. 하루 평균 ${perDayAvg}개입니다.`
-              : `가장 많은 날이 ${peakAfter}개, 하루 평균 ${perDayAvg}개예요.`}
-        </p>
       </section>
+
+      {rows.length > 0 ? (
+        <section
+          aria-label="복습 분포"
+          className="relative overflow-hidden rounded-panel border border-line bg-surface"
+        >
+          <div
+            aria-hidden
+            className="absolute bottom-0 right-0 top-0 w-[268px] bg-rail"
+          />
+          <div className="relative grid grid-cols-[1fr_268px]">
+            <div className="min-w-0 px-[20px] py-[16px]">
+              <h2 className="pb-3 text-[13px] font-semibold">복습 분포</h2>
+              <LoadBars bars={bars} cap={settings.dailyCap} />
+              <p className="pt-3 text-[12px] leading-relaxed text-text-2">
+                복습 항목을 목표 시점 범위 안에서만 조정해요. 목표 기억률인{' '}
+                <span className="num">{percent(settings.targetRetention)}</span>는
+                그대로 유지됩니다.
+              </p>
+            </div>
+
+            <div className="rail-panel flex flex-col gap-[12px] px-[18px] py-[16px]">
+              <span className="text-[11.5px] text-text-3">하루 분량</span>
+              <div className="flex items-baseline justify-between">
+                <span className="text-[12px] text-text-3">가장 많은 날</span>
+                <span className="num text-[13px]">
+                  {busiest ? `${monthDay(busiest.date)} ` : ''}
+                  {peak}개
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-[12px] text-text-3">하루 평균</span>
+                <span className="num text-[13px]">{perDayAvg}개</span>
+              </div>
+
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-card border border-line bg-surface px-[16px] py-[14px]">
         <h2 className="pb-3 text-[13px] font-semibold">항목별 상태</h2>
@@ -348,79 +388,6 @@ function goalHorizonOf(goal: GoalRow): Horizon {
   return { kind: 'open' }
 }
 
-function buildBars(
-  plannedDates: readonly DateOnly[],
-  preview: SpreadResult | null,
-  today: DateOnly,
-  readyAt: DateOnly | null
-): LoadBar[] {
-  const after = new Map<DateOnly, number>()
-  for (const planned of plannedDates) {
-    // 연체된 것은 오늘 칸에 얹는다. 지나간 날에 복습이 일어날 수는 없다.
-    const date = planned < today ? today : planned
-    after.set(date, (after.get(date) ?? 0) + 1)
-  }
-
-  const before = new Map<DateOnly, number>()
-  for (const [date, count] of Object.entries(preview?.dailyLoadBefore ?? {})) {
-    const key = date < today ? today : date
-    before.set(key, (before.get(key) ?? 0) + count)
-  }
-
-  // 빈 날도 칸을 만들어야 분포가 제대로 읽힌다.
-  const last = maxDate(
-    readyAt ?? today,
-    [...after.keys(), ...before.keys()].reduce(
-      (a, b) => (toEpochDay(a) >= toEpochDay(b) ? a : b),
-      today
-    )
-  )
-  const span = Math.max(0, toEpochDay(last) - toEpochDay(today))
-
-  const bars: LoadBar[] = []
-  for (let i = 0; i <= span; i += 1) {
-    const date = addDays(today, i)
-    bars.push({
-      date,
-      count: after.get(date) ?? 0,
-      before: before.get(date) ?? 0,
-    })
-  }
-  return bars
-}
-
-function summarySentence(
-  goal: GoalRow,
-  count: number,
-  avgAtGoal: number,
-  atRisk: number,
-  doubleBooked: number,
-  today: DateOnly
-): string {
-  if (count === 0) return '아직 이 목표에 묶인 항목이 없어요.'
-  if (goal.horizon_kind === 'open') {
-    return `항목 ${count}개를 잊을 만할 때마다 올려드리고 있어요. 목표한 날이 없어서 준비 상태나 날짜 조정은 필요하지 않아요.`
-  }
-  const left = goal.ready_at ? daysLeftLabel(today, goal.ready_at) : ''
-  const risk =
-    doubleBooked > 0
-      ? ` 다만 ${doubleBooked}개는 한 번 봐서는 모자라서 두 번 잡아두었어요.`
-      : atRisk > 0
-        ? ` 다만 ${atRisk}개는 한 번 봐서는 모자라요. 목표한 날 전에 한 번 더 잡아둡니다.`
-        : ''
-  return `${left}. 지금 속도면 목표한 날 평균 ${percent(
-    avgAtGoal
-  )}쯤 기억하고 있을 거예요.${risk}`
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-[2px]">
-      <span className="text-[11px] text-text-3">{label}</span>
-      <span className="num text-[16px] font-semibold">{value}</span>
-    </div>
-  )
-}
 
 function Field({
   label,
@@ -468,4 +435,46 @@ function Stepper({
       </button>
     </div>
   )
+}
+
+/**
+ * 이 목표를 위해 앱이 무엇을 해뒀는지 한 줄로.
+ *
+ * "몇 개가 부족해요" 는 알려 봐야 사용자가 할 일이 없다. 이 앱이 하는 일은
+ * 목표 기억률을 지키도록 날짜를 잡고 다시 잡는 것이므로, 그 결과를 말한다.
+ */
+function didSentence(
+  count: number,
+  totalReviews: number,
+  atRisk: number,
+  overdue: number,
+  busiest: LoadBar | null,
+  dailyCap: number | null,
+  goal: GoalRow
+): string {
+  if (count === 0) {
+    return '아직 이 목표에 묶인 항목이 없어요. 오늘 화면에서 적고 이 목표에 넣어보세요.'
+  }
+  if (!goal.ready_at) {
+    return `${count}개를 마감 없이 계속 볼 수 있게 잡아뒀어요. 잊을 만할 때마다 올라옵니다.`
+  }
+
+  const parts = [`목표한 날까지 ${totalReviews}번 볼 수 있게 잡아뒀어요.`]
+  if (atRisk > 0) {
+    parts.push(`한 번으로 모자란 ${atRisk}개는 두 번씩 잡았습니다.`)
+  }
+  if (overdue > 0) {
+    parts.push(`밀린 ${overdue}개는 다시 계산해서 앞으로 당겼어요.`)
+  }
+  if (busiest && busiest.count > 0) {
+    parts.push(
+      `가장 몰리는 날은 ${monthDay(busiest.date)} ${busiest.count}개입니다.`
+    )
+    if (dailyCap !== null && busiest.count > dailyCap) {
+      parts.push(
+        `하루 상한 ${dailyCap}개를 넘지만, 목표한 날 전에 다 보려면 이만큼은 잡아야 해요.`
+      )
+    }
+  }
+  return parts.join(' ')
 }

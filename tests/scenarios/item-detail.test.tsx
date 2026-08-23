@@ -246,7 +246,7 @@ describe('항목 상세', () => {
     expect(item.intensity).toBe('easy')
   })
 
-  it('S-156 목표와 다르게 설정된 항목은 저장하면 목표를 따른다', async () => {
+  it('S-156 목표에 넣으면 옛 값이 남아 있어도 목표를 따른다', async () => {
     await setupApp(TODAY, {
       goals: [
         aGoal({
@@ -268,23 +268,13 @@ describe('항목 상세', () => {
         }),
       ],
     })
-    const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)
-    expect(
-      await screen.findByText('목표와 다른 설정을 쓰는 중')
-    ).toBeInTheDocument()
+    render(<ItemDetailScreen itemId="i1" onBack={noop} />)
 
-    await pickFromMenu(user, '이 항목 더보기', '설정 편집')
-    const panel = screen.getByText('설정 고치기').closest('section')!
-    expect(within(panel).getByText(/저장하면 목표 설정을 따라갑니다/)).toBeInTheDocument()
-    await user.click(within(panel).getByRole('button', { name: '저장' }))
-
-    const item = usePlanner.getState().items[0]
-    expect(item.horizon_kind).toBeNull()
-    expect(item.intensity).toBeNull()
-    // 목표를 따르게 되면 어긋났다는 알림이 사라진다.
+    // 항목에 옛 값이 남아 있어도 목표에 든 이상 목표 것으로 보인다.
+    expect(await screen.findByText(/11월 14일/)).toBeInTheDocument()
+    expect(screen.getByText(/복습 강도 집중/)).toBeInTheDocument()
     expect(screen.queryByText('목표와 다른 설정을 쓰는 중')).toBeNull()
   })
-
 
   it('S-157 적을 때의 첫 평가가 이력에 남는다', async () => {
     await setupApp(TODAY)

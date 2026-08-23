@@ -194,7 +194,7 @@ describe('목표 지우기', () => {
     const { user } = render(
       <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
     )
-    await user.click(await screen.findByRole('button', { name: '목표 삭제' }))
+    await pickFromMenu(user, '이 목표 더보기', '목표 삭제')
     expect(screen.getByText('이 목표를 지울까요?')).toBeInTheDocument()
     expect(screen.getByText(/항목 2개는 지워지지 않고 소속만 풀립니다/)).toBeInTheDocument()
     expect(usePlanner.getState().goals).toHaveLength(1)
@@ -210,7 +210,7 @@ describe('목표 지우기', () => {
         onDeleted={() => (deleted = true)}
       />
     )
-    await user.click(await screen.findByRole('button', { name: '목표 삭제' }))
+    await pickFromMenu(user, '이 목표 더보기', '목표 삭제')
     await user.click(screen.getByRole('button', { name: '지우기' }))
 
     expect(usePlanner.getState().goals).toHaveLength(0)
@@ -226,7 +226,7 @@ describe('목표 지우기', () => {
     const { user } = render(
       <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
     )
-    await user.click(await screen.findByRole('button', { name: '목표 삭제' }))
+    await pickFromMenu(user, '이 목표 더보기', '목표 삭제')
     expect(screen.getByText(/묶인 항목이 없어서 이 목표만 사라집니다/)).toBeInTheDocument()
   })
 
@@ -235,7 +235,7 @@ describe('목표 지우기', () => {
     const { user } = render(
       <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
     )
-    await user.click(await screen.findByRole('button', { name: '목표 삭제' }))
+    await pickFromMenu(user, '이 목표 더보기', '목표 삭제')
     await user.click(screen.getByRole('button', { name: '취소' }))
     expect(usePlanner.getState().goals).toHaveLength(1)
   })

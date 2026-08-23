@@ -19,8 +19,6 @@ export interface EffectiveConfig {
   maxIntervalDays: number | null
   /** 목표 시점을 지난 뒤에 보관할지 계속 볼지. */
   postGoalMode: PostGoalMode
-  /** 항목이 목표와 다른 설정을 쓰고 있는지. 화면에 그렇다고 알려준다. */
-  overridden: boolean
 }
 
 function horizonFrom(
@@ -73,23 +71,23 @@ export function effectiveConfig(
   goal: GoalRow | null,
   settings: Settings
 ): EffectiveConfig {
+  // 목표에 넣었다는 것은 그 목표의 값을 따르겠다는 뜻이다. 항목이 옛 값을 들고
+  // 있어도 목표가 이긴다. 안 그러면 목표에서 날짜를 바꿔도 안 따라오는 항목이 생기고,
+  // 화면은 그걸 '개별 설정을 쓰는 중' 이라고 해명해야 한다.
   const own = horizonFrom(item.horizon_kind, item.ready_at, item.hold_until)
-  const horizon = own ?? (goal ? goalHorizon(goal) : { kind: 'open' as const })
+  const horizon = goal ? goalHorizon(goal) : (own ?? { kind: 'open' as const })
 
   return {
     horizon,
-    intensity: item.intensity ?? goal?.intensity ?? settings.defaultIntensity,
+    intensity: goal?.intensity ?? item.intensity ?? settings.defaultIntensity,
     targetRetention:
-      item.target_retention ?? goal?.target_retention ?? settings.targetRetention,
-    minReviews: item.min_reviews ?? goal?.min_reviews ?? settings.minReviews,
+      goal?.target_retention ??
+      item.target_retention ??
+      settings.targetRetention,
+    minReviews: goal?.min_reviews ?? item.min_reviews ?? settings.minReviews,
     maxIntervalDays: goal?.max_interval_days ?? settings.maxIntervalDays,
     // 목표마다 다르게 정할 수 있다. 목표가 정한 것이 전역 기본값보다 앞선다.
     postGoalMode: goal?.post_goal_mode ?? settings.postGoalMode,
-    overridden:
-      own !== null ||
-      item.intensity !== null ||
-      item.target_retention !== null ||
-      item.min_reviews !== null,
   }
 }
 

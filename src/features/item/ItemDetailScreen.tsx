@@ -195,11 +195,6 @@ export function ItemDetailScreen({
               <span className="text-[12px] text-text-3">
                 복습 강도 {intensityName(view.config.intensity)}
               </span>
-              {goal && view.config.overridden ? (
-                <span className="text-[12px] text-imp-fg">
-                  목표와 다른 설정을 쓰는 중
-                </span>
-              ) : null}
             </div>
 
             <div className="pt-[8px]">
@@ -275,12 +270,6 @@ export function ItemDetailScreen({
                 목표 시점과 복습 강도
               </span>
               <GoalSettingsReadout goal={draftGoal} />
-              {view.config.overridden ? (
-                <p className="text-[11.5px] leading-relaxed text-imp-fg">
-                  지금 이 항목은 목표와 다른 설정을 쓰고 있어요. 저장하면 목표 설정을
-                  따라갑니다.
-                </p>
-              ) : null}
             </div>
           ) : (
             <>

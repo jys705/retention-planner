@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, screen, within } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { GoalDetailScreen } from '../../src/features/goal/GoalDetailScreen'
 import { GoalListScreen } from '../../src/features/goal/GoalListScreen'
@@ -7,6 +7,7 @@ import { usePlanner } from '../../src/store/planner'
 import {
   aGoal,
   anItem,
+  pickCard,
   render,
   setDateInput,
   setupApp,
@@ -177,12 +178,16 @@ describe('목표 상세', () => {
     })
   }
 
-  it('S-053 요약 한 문장이 남은 날과 기억률을 말한다', async () => {
+  it('S-053 요약 한 문장이 앱이 해둔 일을 말한다', async () => {
+    // '몇 개가 부족하다' 가 아니라 목표를 지키려고 무엇을 잡아뒀는지를 말한다.
     await withGoal()
     render(<GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />)
     expect((await screen.findAllByText(/44일 남음/)).length).toBeGreaterThan(0)
     expect(
-      screen.getByText(/지금 속도면 목표한 날 평균 .*쯤 기억하고 있을 거예요/)
+      screen.getByText(/목표한 날까지 \d+번 볼 수 있게 잡아뒀어요/)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/가장 몰리는 날은 .*\d+개입니다/)
     ).toBeInTheDocument()
   })
 
@@ -198,11 +203,8 @@ describe('목표 상세', () => {
       const { user } = render(
         <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
       )
-      await user.click(await screen.findByRole('button', { name: /목표 편집/ }))
-      const panel = screen
-        .getByText('이름, 목표 시점, 복습 강도를 여기서 고칩니다. 묶인 항목 전부에 적용돼요.')
-        .closest('div')!.parentElement!
-      await user.click(within(panel).getByRole('button', { name: label }))
+      // 설정은 늘 펼쳐져 있다. 따로 열 필요가 없다.
+      await pickCard(user, '복습 강도', label)
       expect(usePlanner.getState().goals[0].intensity).toBe(key)
     }
   })
@@ -212,7 +214,6 @@ describe('목표 상세', () => {
     const { user } = render(
       <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
     )
-    await user.click(await screen.findByRole('button', { name: /목표 편집/ }))
     await setDateInput(
       user,
       screen.getByLabelText('목표한 날 고르기'),
@@ -231,8 +232,7 @@ describe('목표 상세', () => {
     const { user } = render(
       <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
     )
-    await user.click(await screen.findByRole('button', { name: /목표 편집/ }))
-    await user.click(screen.getByRole('button', { name: /고급/ }))
+    await user.click(await screen.findByRole('button', { name: /고급/ }))
     const before = usePlanner.getState().goals[0].min_reviews
     await user.click(screen.getByRole('button', { name: '+' }))
     expect(usePlanner.getState().goals[0].min_reviews).toBe(before + 1)
@@ -240,22 +240,11 @@ describe('목표 상세', () => {
     expect(usePlanner.getState().goals[0].min_reviews).toBe(before)
   })
 
-  it('S-057 조정 전과 비교를 켠다', async () => {
-    await withGoal()
-    const { user } = render(
-      <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
-    )
-    const toggle = await screen.findByRole('checkbox', { name: /조정 전과 비교/ })
-    expect(toggle).not.toBeChecked()
-    await user.click(toggle)
-    expect(toggle).toBeChecked()
-  })
-
   it('S-058 목표 시점이 없는 목표는 준비 상태가 필요 없다고 말한다', async () => {
     await withGoal({ horizon_kind: 'open', ready_at: null, hold_until: null })
     render(<GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />)
     expect(
-      await screen.findByText(/목표한 날이 없어서 준비 상태나 날짜 조정은 필요하지 않아요/)
+      await screen.findByText(/마감 없이 계속 볼 수 있게 잡아뒀어요/)
     ).toBeInTheDocument()
   })
 
@@ -289,9 +278,9 @@ describe('목표 상세', () => {
     const { user } = render(
       <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
     )
-    await user.click(await screen.findByRole('button', { name: /목표 편집/ }))
-    const input = screen.getByLabelText('목표 이름 고치기')
-    await user.tripleClick(input)
+    // 이름은 눌러서 그 자리에서 고친다.
+    await user.click(await screen.findByRole('button', { name: '목표 이름' }))
+    await user.tripleClick(screen.getByLabelText('목표 이름'))
     await user.keyboard('새 이름{Enter}')
 
     expect(usePlanner.getState().goals[0].name).toBe('새 이름')

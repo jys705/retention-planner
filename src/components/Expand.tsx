@@ -6,20 +6,31 @@ export function Expand({
   onToggle,
   label,
   hint,
+  plain = false,
   children,
 }: {
   open: boolean
   onToggle: () => void
   label: string
   hint?: string
+  /** 이미 카드 안에 있을 때. 테두리를 빼서 카드 속 카드가 안 되게 한다. */
+  plain?: boolean
   children: ReactNode
 }) {
   return (
-    <div className="rounded-card border border-line bg-surface">
+    <div
+      className={
+        plain ? '' : 'rounded-card border border-line bg-surface'
+      }
+    >
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-2 px-[13px] py-[10px] text-left"
+        className={
+          plain
+            ? 'flex w-full items-center gap-2 text-left'
+            : 'flex w-full items-center gap-2 px-[13px] py-[10px] text-left'
+        }
       >
         <span className="flex h-[20px] w-[20px] flex-none items-center justify-center rounded-ctl border border-line-2 bg-surface text-[11px] text-text-2">
           {open ? '▾' : '▸'}
@@ -30,7 +41,13 @@ export function Expand({
         ) : null}
       </button>
       {open ? (
-        <div className="border-t border-line px-[13px] py-[12px]">{children}</div>
+        <div
+          className={
+            plain ? '' : 'border-t border-line px-[13px] py-[12px]'
+          }
+        >
+          {children}
+        </div>
       ) : null}
     </div>
   )

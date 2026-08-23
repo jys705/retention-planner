@@ -118,7 +118,7 @@ describe('앱 전체', () => {
     await user.click(screen.getByRole('button', { name: '목표 화면' }))
     await user.click(await screen.findByRole('button', { name: /지울 목표/ }))
 
-    await user.click(await screen.findByRole('button', { name: '목표 삭제' }))
+    await pickFromMenu(user, '이 목표 더보기', '목표 삭제')
     await user.click(screen.getByRole('button', { name: '지우기' }))
 
     expect(await screen.findByText(/목표는 폴더가 아니라/)).toBeInTheDocument()
