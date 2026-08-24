@@ -132,7 +132,7 @@ export function QuickAdd({
       {detailOpen ? (
         <div className="grid grid-cols-[1fr_268px] border-t border-line">
           <div className="flex flex-col gap-[14px] py-[14px] pl-[43px] pr-[20px]">
-            <Field label="처음 공부한 날">
+            <Field label="공부한 날">
               <div className="flex flex-wrap items-center gap-[6px]">
                 <Chip
                   active={firstStudiedAt === today}
@@ -151,7 +151,7 @@ export function QuickAdd({
                   today={today}
                   max={today}
                   onChange={setFirstStudiedAt}
-                  label="처음 공부한 날 고르기"
+                  label="공부한 날 고르기"
                   text={pickedOther ? monthDay(firstStudiedAt) : '다른 날'}
                   active={pickedOther}
                 />

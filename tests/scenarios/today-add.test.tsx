@@ -20,7 +20,7 @@ const TODAY = '2026-10-01'
 afterEach(teardownApp)
 
 async function openDetail(user: ReturnType<typeof render>['user']) {
-  if (!screen.queryByLabelText('처음 공부한 날 고르기')) {
+  if (!screen.queryByLabelText('공부한 날 고르기')) {
     await user.click(screen.getByRole('button', { name: /상세 설정/ }))
   }
 }
@@ -61,16 +61,16 @@ describe('오늘 화면: 항목 적기', () => {
   it('S-004 상세 설정을 펼치고 접는다', async () => {
     await setupApp(TODAY, { goals: [aGoal({ id: 'g1', name: 'AWS SCS-C03' })] })
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
-    expect(screen.queryByText('처음 공부한 날')).toBeNull()
+    expect(screen.queryByText('공부한 날')).toBeNull()
 
     await user.click(screen.getByRole('button', { name: /상세 설정/ }))
-    expect(screen.getByText('처음 공부한 날')).toBeInTheDocument()
+    expect(screen.getByText('공부한 날')).toBeInTheDocument()
     expect(screen.getByText('소속 목표')).toBeInTheDocument()
     expect(screen.getByText('목표 시점')).toBeInTheDocument()
     expect(screen.getByText('복습 강도')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /상세 설정/ }))
-    expect(screen.queryByText('처음 공부한 날')).toBeNull()
+    expect(screen.queryByText('공부한 날')).toBeNull()
   })
 
   it('S-004b 목표가 하나도 없으면 소속 목표 칸을 안 보여준다', async () => {
@@ -79,12 +79,12 @@ describe('오늘 화면: 항목 적기', () => {
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.click(screen.getByRole('button', { name: /상세 설정/ }))
 
-    expect(screen.getByText('처음 공부한 날')).toBeInTheDocument()
+    expect(screen.getByText('공부한 날')).toBeInTheDocument()
     expect(screen.queryByText('소속 목표')).toBeNull()
     expect(screen.getByText('목표 시점')).toBeInTheDocument()
   })
 
-  it('S-005 처음 공부한 날 오늘', async () => {
+  it('S-005 공부한 날 오늘', async () => {
     await setupApp(TODAY)
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '오늘 것')
@@ -96,7 +96,7 @@ describe('오늘 화면: 항목 적기', () => {
     expect(usePlanner.getState().items[0].due).toBe('2026-10-03')
   })
 
-  it('S-006 처음 공부한 날 어제', async () => {
+  it('S-006 공부한 날 어제', async () => {
     await setupApp(TODAY)
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '어제 것')
@@ -108,7 +108,7 @@ describe('오늘 화면: 항목 적기', () => {
     expect(usePlanner.getState().items[0].due).toBe('2026-10-02')
   })
 
-  it('S-007 처음 공부한 날 다른 날', async () => {
+  it('S-007 공부한 날 다른 날', async () => {
     await setupApp(TODAY)
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '다른 날 것')
@@ -118,7 +118,7 @@ describe('오늘 화면: 항목 적기', () => {
 
     await setDateInput(
       user,
-      screen.getByLabelText('처음 공부한 날 고르기'),
+      screen.getByLabelText('공부한 날 고르기'),
       '2026-09-21'
     )
     // 고른 뒤에는 그 날짜가 보인다.
@@ -165,13 +165,13 @@ describe('오늘 화면: 항목 적기', () => {
     expect(usePlanner.getState().items[0].goal_id).toBeNull()
   })
 
-  it('S-015 처음 공부한 날은 미래로 못 고른다', async () => {
+  it('S-015 공부한 날은 미래로 못 고른다', async () => {
     await setupApp(TODAY)
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await openDetail(user)
     const grid = await openCalendar(
       user,
-      screen.getByLabelText('처음 공부한 날 고르기')
+      screen.getByLabelText('공부한 날 고르기')
     )
     expect(within(grid).getByRole('button', { name: fullDate(TODAY) })).toBeEnabled()
     expect(
@@ -250,12 +250,12 @@ describe('오늘 화면: 항목 적기', () => {
     await user.click(screen.getByRole('button', { name: '어제' }))
     await setDateInput(
       user,
-      screen.getByLabelText('처음 공부한 날 고르기'),
+      screen.getByLabelText('공부한 날 고르기'),
       TODAY
     )
     // 두 표시가 어긋나면 안 된다. 오늘을 골랐으면 날짜 단추는 '다른 날' 로 돌아가고
     // 지난 날짜에만 나오는 등급 칸도 사라져야 한다.
-    expect(screen.getByLabelText('처음 공부한 날 고르기')).toHaveTextContent(
+    expect(screen.getByLabelText('공부한 날 고르기')).toHaveTextContent(
       '다른 날'
     )
     expect(screen.queryByText('그날 얼마나 기억났나요?')).toBeNull()

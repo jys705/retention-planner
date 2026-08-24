@@ -24,7 +24,7 @@ const noop = () => {}
 afterEach(teardownApp)
 
 async function openDetail(user: ReturnType<typeof render>['user']) {
-  if (!screen.queryByText('처음 공부한 날')) {
+  if (!screen.queryByText('공부한 날')) {
     await user.click(screen.getByRole('button', { name: /상세 설정/ }))
   }
 }

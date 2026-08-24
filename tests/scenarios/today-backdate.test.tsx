@@ -17,7 +17,7 @@ afterEach(teardownApp)
 
 describe('오늘 화면: 소급 입력', () => {
   // 강도 표준이면 S0(3) = 2.3065 이고 I(0.9, S) = round(2.3065) = 2 다.
-  // 그래서 다음에 볼 날은 언제나 처음 공부한 날 + 2일이다.
+  // 그래서 다음에 볼 날은 언제나 공부한 날 + 2일이다.
   const cases: { id: string; back: number; due: string; overdue: number }[] = [
     { id: 'S-011', back: 1, due: '2026-10-02', overdue: 0 },
     { id: 'S-012', back: 3, due: '2026-09-30', overdue: 1 },
@@ -35,7 +35,7 @@ describe('오늘 화면: 소급 입력', () => {
       await user.click(screen.getByRole('button', { name: /상세 설정/ }))
       await setDateInput(
         user,
-        screen.getByLabelText('처음 공부한 날 고르기'),
+        screen.getByLabelText('공부한 날 고르기'),
         firstStudiedAt
       )
       await user.click(screen.getByRole('button', { name: /적어두기/ }))

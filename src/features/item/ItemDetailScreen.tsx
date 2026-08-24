@@ -419,7 +419,7 @@ export function ItemDetailScreen({
           </h2>
           {view.reviews.length === 0 ? (
             <p className="px-[20px] text-[13px] text-text-3">
-              아직 평가한 적이 없어요. 처음 공부한 날만 기록돼 있습니다.
+              아직 평가한 적이 없어요. 공부한 날만 기록돼 있습니다.
             </p>
           ) : (
             <div role="table" aria-label="평가 이력">
