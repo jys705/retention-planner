@@ -83,7 +83,7 @@ export function AppShell({
     // 한 겹 더 그리면 창 속에 창이 든 것처럼 보인다. 창을 그대로 채운다.
     <div className="flex h-full bg-bg">
       <div className="flex h-full w-full overflow-hidden">
-        <nav className="flex w-[196px] flex-none flex-col justify-between border-r border-line bg-surface py-5">
+        <nav className="flex w-[196px] flex-none flex-col justify-between border-r border-line bg-rail py-5">
           {/*
             창을 작게 쓰면 다가오는 목록이 아래를 밀어내 설정이 화면 밖으로 나갔다.
             위쪽만 스스로 굴러가게 두면 창이 얼마나 작든 설정은 늘 바닥에 남는다.
@@ -97,13 +97,13 @@ export function AppShell({
                 aria-label={`${entry.label} 화면`}
                 onClick={() => onNavigate(entry.key)}
                 className={cn(
-                  'flex items-center justify-between rounded-ctl px-[10px] py-[7px] text-[13.5px] transition-colors',
+                  'flex items-center justify-between rounded-[7px] px-[10px] py-[7px] text-[13px] transition-colors',
                   screen === entry.key
                     ? 'bg-accent-soft font-semibold text-accent'
                     : 'text-text-2 hover:bg-hover'
                 )}
               >
-                <span className="flex items-center gap-[8px]">
+                <span className="flex items-center gap-[9px]">
                   <span
                     aria-hidden
                     className="h-[5px] w-[5px] flex-none rounded-full"
@@ -203,7 +203,7 @@ export function AppShell({
             aria-label="설정 화면"
             onClick={() => onNavigate('settings')}
             className={cn(
-              'mx-3 mt-2 flex-none rounded-ctl px-[10px] py-[7px] text-left text-[13.5px] transition-colors',
+              'mx-3 mt-2 flex-none rounded-[7px] px-[10px] py-[7px] text-left text-[13px] transition-colors',
               screen === 'settings'
                 ? 'bg-accent-soft font-semibold text-accent'
                 : 'text-text-2 hover:bg-hover'

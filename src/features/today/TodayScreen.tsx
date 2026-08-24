@@ -42,7 +42,7 @@ export function TodayScreen({
   }
 
   return (
-    <div ref={listRef} className="mx-auto w-full max-w-[940px] px-6 py-7">
+    <div ref={listRef} className="mx-auto w-full max-w-[940px] px-6 pb-7 pt-10">
       <header className="flex items-end justify-between pb-5">
         <div className="flex flex-col gap-1">
           <span className="text-[12.5px] text-text-3">{fullDate(today)}</span>

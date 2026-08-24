@@ -62,7 +62,7 @@ export function LibraryScreen({
   const narrowed = matched.length !== whole.length
 
   return (
-    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 py-7">
+    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 pb-7 pt-10">
       <header className="flex flex-col gap-[10px]">
         <div className="flex items-baseline gap-3">
           <h1 className="text-[22px] font-semibold">서재</h1>

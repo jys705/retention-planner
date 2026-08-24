@@ -44,7 +44,7 @@ export function GoalDetailScreen({
   const goal = goals.find((g) => g.id === goalId)
   if (!goal) {
     return (
-      <div className="mx-auto w-full max-w-[940px] px-6 py-7 text-[13px] text-text-2">
+      <div className="mx-auto w-full max-w-[940px] px-6 pb-7 pt-10 text-[13px] text-text-2">
         목표를 찾을 수 없어요.
       </div>
     )
@@ -105,7 +105,7 @@ export function GoalDetailScreen({
   ).length
 
   return (
-    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 py-7">
+    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 pb-7 pt-10">
       <header className="grid grid-cols-[1fr_268px] items-start gap-6">
         <div className="flex min-w-0 flex-col gap-[7px]">
           <div className="flex items-center gap-[9px]">

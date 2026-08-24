@@ -91,7 +91,7 @@ export function ItemDetailScreen({
 
   if (!item) {
     return (
-      <div className="mx-auto w-full max-w-[940px] px-6 py-7 text-[13px] text-text-2">
+      <div className="mx-auto w-full max-w-[940px] px-6 pb-7 pt-10 text-[13px] text-text-2">
         항목을 찾을 수 없어요.
       </div>
     )
@@ -135,7 +135,7 @@ export function ItemDetailScreen({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-[14px] px-6 py-7">
+    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-[14px] px-6 pb-7 pt-10">
       <div>
         <div className="flex items-center justify-between pr-[18px]">
           <button

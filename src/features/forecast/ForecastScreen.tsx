@@ -98,7 +98,7 @@ export function ForecastScreen() {
     }))
 
   return (
-    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 py-7">
+    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 pb-7 pt-10">
       <header className="grid grid-cols-[1fr_268px] items-start gap-6">
         <div className="min-w-0">
           <h1 className="text-[24px] font-semibold tracking-[-0.02em]">예보</h1>

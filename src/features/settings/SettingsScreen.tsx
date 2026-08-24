@@ -113,7 +113,7 @@ export function SettingsScreen() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 py-7">
+    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 pb-7 pt-10">
       <h1 className="text-[24px] font-semibold tracking-[-0.02em]">설정</h1>
 
       <section className="overflow-hidden rounded-panel border border-line bg-surface">
