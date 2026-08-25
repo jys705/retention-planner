@@ -90,6 +90,9 @@ export function PlanPreview({
   })
 
   const dates = future.map((f) => f.date)
+  // 지난 날짜로 적으면 이미 볼 때가 지난 것이라 적자마자 오늘 목록에 오른다.
+  // 적기 전에 알려야 "왜 바로 뜨지" 하고 놀라지 않는다.
+  const dueNow = initial.due <= today
   // 각 복습이 그 앞의 복습에서 며칠 뒤인지. 첫 줄만 오늘을 기준으로 센다.
   const steps = dates.map((date, index) => ({
     date,
@@ -114,6 +117,12 @@ export function PlanPreview({
           {until ? '목표한 날까지' : '앞으로 넉 달 동안'}{' '}
           <span className="num">{dates.length}번</span> 보게 돼요
         </span>
+        {dueNow ? (
+          <span className="text-[11.5px] leading-relaxed text-imp-fg">
+            공부한 날이 지나서 볼 때가 이미 됐어요. 적으면 바로 오늘 목록에
+            올라옵니다.
+          </span>
+        ) : null}
 
           {/*
             날짜를 시간 축 위에 점으로 찍으면 초반 이삼일 간격이 왼쪽 끝에 뭉친다.

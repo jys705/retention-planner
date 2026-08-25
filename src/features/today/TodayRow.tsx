@@ -67,6 +67,9 @@ export function TodayRow({
 
   const badge = statusBadgeOf(item.due_kind, item.goal_risk)
   const parts = splitTitle(item.title)
+  // '다시' 를 누른 것은 다음 날짜가 내일이어도 오늘 목록에 남는다. 그 까닭을
+  // 안 적으면 눌렀는데 그대로 있는 걸 보고 안 눌린 줄 안다.
+  const relearning = item.state === 'relearning' && item.last_review === today
 
   return (
     <div
@@ -104,6 +107,14 @@ export function TodayRow({
             <span className="num text-[14px] font-medium">{parts.num}</span>
             <span className="text-text-2">{parts.post}</span>
           </button>
+          {relearning ? (
+            <span
+              title="하나도 기억 안 났다고 하셨어요. 오늘 안에 한 번 더 보면 훨씬 오래 갑니다."
+              className="flex-none rounded-[5px] bg-imp-bg px-[7px] py-[2px] text-[11px] font-medium text-imp-fg"
+            >
+              오늘 한 번 더
+            </span>
+          ) : null}
           {badge ? <Badge kind={badge} /> : null}
           {item.due_source === 'spread' ? (
             <AdjustedBadge hint="하루에 볼 게 많아서 날짜를 옮겼어요." />
@@ -121,6 +132,12 @@ export function TodayRow({
         <div className="px-[18px] pb-4 pl-[40px] pt-[2px]">
           <div className="flex items-baseline gap-[10px] pb-[9px]">
             <span className="text-[13px] text-text-2">얼마나 기억났나요?</span>
+            {relearning ? (
+              <span className="text-[12px] text-imp-fg">
+                아까 하나도 기억 안 났다고 하셨어요. 오늘 안에 한 번 더 보시고
+                그때 다시 골라주세요.
+              </span>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-[repeat(4,minmax(0,168px))] gap-2">

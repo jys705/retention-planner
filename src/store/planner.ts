@@ -309,7 +309,11 @@ export const usePlanner = create<PlannerState>((set, get) => ({
         config.postGoalMode
       ),
       ...(options.memo ? { memo: options.memo } : {}),
-      ...(applied.postGoalReached && config.postGoalMode === 'archive'
+      // 등급이 '다시' 면 보관하지 않는다. 상태와 보관 날짜가 서로 다른 말을 하면
+      // 목록에서는 사라졌는데 상태는 relearning 인 유령이 남는다.
+      ...(applied.postGoalReached &&
+      config.postGoalMode === 'archive' &&
+      grade !== 1
         ? { archived_at: nowIso() }
         : {}),
     }
@@ -471,11 +475,15 @@ function nextItemState(
   grade: Grade,
   postGoalMode: PostGoalMode
 ): ItemRow['state'] {
+  // '다시' 는 하나도 기억 안 났다는 뜻이다. 목표가 지났든 목표 기간 안이든
+  // 그 사실은 같다. 여기서 등급을 안 보고 보관해 버리면 앱이 "끝났으니 됐다" 고
+  // 사용자 대신 정하는 셈이 되고, 목표 기간 안에서는 그날 다시 볼 자리도 사라진다.
+  if (grade === 1) return 'relearning'
   if (postGoalReached) {
     return postGoalMode === 'archive' ? 'archived' : 'maintaining'
   }
   if (inPlateau) return 'holding'
-  return grade === 1 ? 'relearning' : 'review'
+  return 'review'
 }
 
 /**
