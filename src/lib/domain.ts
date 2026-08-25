@@ -2,7 +2,13 @@ import type { MemoryState } from '../core/fsrs/types'
 import type { Horizon } from '../core/horizon/horizon'
 import type { Intensity } from '../core/policy/constraints'
 import type { DateOnly } from './date'
-import type { GoalRow, HorizonKind, ItemRow, PostGoalMode } from '../db/types'
+import type {
+  GoalRow,
+  HorizonKind,
+  ItemRow,
+  PostGoalMode,
+  ReviewRow,
+} from '../db/types'
 import type { Settings } from './settings'
 
 /**
@@ -141,4 +147,41 @@ export const GOAL_COLORS = [
 export function goalColor(goal: GoalRow | null, index: number): string {
   if (goal?.color) return goal.color
   return GOAL_COLORS[index % GOAL_COLORS.length]
+}
+
+/**
+ * 오늘 평가할 때 기준으로 삼을 기억 상태와 '마지막으로 본 날'.
+ *
+ * 같은 날 두 번째부터는 그날 첫 평가 직전으로 되짚는다. 지난 시간이 0 인 평가가
+ * 겹쳐 쌓이면 기억 지속력이 무너지는데 화면의 날짜는 그대로라 안 보인다.
+ * 하루에 몇 번을 누르든 그날의 마지막 답 하나만 반영한다.
+ *
+ * 저장할 때와 버튼에 미리 적을 때가 같은 값을 봐야 한다. 갈라지면 버튼이
+ * 약속한 날짜와 실제로 잡히는 날짜가 달라진다.
+ */
+export function stateForRating(
+  item: ItemRow,
+  reviews: readonly ReviewRow[],
+  reviewedAt: DateOnly
+): { state: MemoryState | null; lastReview: DateOnly | null } {
+  if (item.last_review !== reviewedAt) {
+    return { state: memoryStateOf(item), lastReview: item.last_review }
+  }
+
+  const today = reviews
+    .filter((r) => r.item_id === item.id && r.reviewed_at === reviewedAt)
+    .sort((a, b) => (a.recorded_at < b.recorded_at ? -1 : 1))
+  const first = today[0]
+  if (!first || first.s_before === null || first.d_before === null) {
+    return { state: memoryStateOf(item), lastReview: item.last_review }
+  }
+
+  const earlier = reviews
+    .filter((r) => r.item_id === item.id && r.reviewed_at < reviewedAt)
+    .map((r) => r.reviewed_at)
+    .sort()
+  return {
+    state: { stability: first.s_before, difficulty: first.d_before },
+    lastReview: earlier.length > 0 ? earlier[earlier.length - 1] : null,
+  }
 }

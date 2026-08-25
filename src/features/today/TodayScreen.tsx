@@ -20,7 +20,7 @@ export function TodayScreen({
 }: {
   onOpenItem: (itemId: string) => void
 }) {
-  const { items, goals, settings, today } = usePlanner()
+  const { items, goals, reviews, settings, today } = usePlanner()
   const rateItem = usePlanner((s) => s.rateItem)
   const addItem = usePlanner((s) => s.addItem)
 
@@ -106,6 +106,7 @@ export function TodayScreen({
                   <TodayRow
                     key={item.id}
                     item={item}
+                    reviews={reviews}
                     goal={goals.find((g) => g.id === item.goal_id) ?? null}
                     goalIndex={goalIndex < 0 ? 0 : goalIndex}
                     settings={settings}

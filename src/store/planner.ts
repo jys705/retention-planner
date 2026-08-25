@@ -46,6 +46,7 @@ import {
   isActive,
   memoryStateOf,
   spreadGroupKey,
+  stateForRating,
   type EffectiveConfig,
 } from '../lib/domain'
 import {
@@ -258,11 +259,16 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       item.last_review,
       today
     )
-    const before = memoryStateOf(item)
+    // 저장할 때와 버튼에 미리 적을 때가 같은 계산을 봐야 한다.
+    const { state: before, lastReview } = stateForRating(
+      item,
+      get().reviews,
+      reviewedAt
+    )
 
     const applied = applyReview({
       reviewedAt,
-      lastReview: item.last_review,
+      lastReview,
       state: before,
       grade,
       horizon: config.horizon,

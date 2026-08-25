@@ -1,7 +1,7 @@
 import type { Grade } from '../../core/fsrs/types'
 import { AdjustedBadge, Badge } from '../../components/Badge'
 import { RailRow } from '../../components/Rail'
-import type { GoalRow, ItemRow } from '../../db/types'
+import type { GoalRow, ItemRow, ReviewRow } from '../../db/types'
 import { statusBadgeOf, dueReason } from '../../lib/badge'
 import { cn } from '../../lib/cn'
 import type { DateOnly } from '../../lib/date'
@@ -9,6 +9,7 @@ import {
   effectiveConfig,
   goalColor,
   memoryStateOf,
+  stateForRating,
   splitTitle,
 } from '../../lib/domain'
 import { dueLabel, percent } from '../../lib/format'
@@ -20,6 +21,8 @@ import { gradeOptions } from './gradeOptions'
 
 export interface TodayRowProps {
   item: ItemRow
+  /** 같은 날 다시 누를 때 그날 첫 평가 직전으로 되짚기 위해 필요하다. */
+  reviews: readonly ReviewRow[]
   goal: GoalRow | null
   goalIndex: number
   settings: Settings
@@ -42,9 +45,12 @@ export function TodayRow({
   onToggle,
   onRate,
   onOpen,
+  reviews,
 }: TodayRowProps) {
   const config = effectiveConfig(item, goal, settings)
   const state = memoryStateOf(item)
+  // 저장할 때와 같은 계산을 봐야 버튼이 약속한 날짜가 실제로 잡힌다.
+  const rating = stateForRating(item, reviews, today)
   const retention = state && item.last_review
     ? defaultFsrs.retrievability(
         Math.max(0, diffDays(item.last_review, today)),
@@ -54,8 +60,8 @@ export function TodayRow({
 
   const options = gradeOptions({
     reviewedAt: today,
-    lastReview: item.last_review,
-    state,
+    lastReview: rating.lastReview,
+    state: rating.state,
     horizon: config.horizon,
     intensity: config.intensity,
     targetRetention: config.targetRetention,
@@ -107,14 +113,6 @@ export function TodayRow({
             <span className="num text-[14px] font-medium">{parts.num}</span>
             <span className="text-text-2">{parts.post}</span>
           </button>
-          {relearning ? (
-            <span
-              title="하나도 기억 안 났다고 하셨어요. 오늘 안에 한 번 더 보면 훨씬 오래 갑니다."
-              className="flex-none rounded-[5px] bg-imp-bg px-[7px] py-[2px] text-[11px] font-medium text-imp-fg"
-            >
-              오늘 한 번 더
-            </span>
-          ) : null}
           {badge ? <Badge kind={badge} /> : null}
           {item.due_source === 'spread' ? (
             <AdjustedBadge hint="하루에 볼 게 많아서 날짜를 옮겼어요." />
@@ -122,7 +120,9 @@ export function TodayRow({
         </div>
         <RailRow
           retention={percent(retention)}
-          due={dueLabel(today, item.due ?? today)}
+          // 줄은 오늘 목록에 있는데 '모레' 라고 적히면 서로 어긋난다.
+          // 정식 다음 날짜와 별개로, 오늘 한 번 더 보는 자리라는 걸 여기서 말한다.
+          due={relearning ? '오늘 또' : dueLabel(today, item.due ?? today)}
           goalName={goal?.name ?? null}
           goalColor={goalColor(goal, goalIndex)}
         />
