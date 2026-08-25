@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { usePlanner } from '../../src/store/planner'
 import { addDays } from '../../src/lib/date'
+import { effectiveConfig, stateForRating } from '../../src/lib/domain'
+import { gradeOptions } from '../../src/features/today/gradeOptions'
 import { aGoal, anItem, render, setupApp, teardownApp } from './harness'
 
 const TODAY = '2026-10-01'
@@ -11,7 +13,7 @@ const noop = () => {}
 afterEach(teardownApp)
 
 describe('다시 를 눌렀을 때', () => {
-  it('S-170 오늘 목록에 남는 것과 날짜 칸이 어긋나지 않는다', async () => {
+  it('S-170 가장 짧은 간격으로 다시 잡고 목록에서 내려간다', async () => {
     await setupApp(TODAY, {
       items: [anItem({ id: 'i1', title: '못 외운 것', due: TODAY })],
     })
@@ -20,9 +22,9 @@ describe('다시 를 눌렀을 때', () => {
     await user.click(screen.getByRole('checkbox', { name: '못 외운 것 평가하기' }))
     await user.click(screen.getByRole('button', { name: /다시/ }))
 
-    // 줄이 오늘 목록에 남는다. 날짜 칸이 '모레' 라고 적혀 서로 어긋나면 안 된다.
-    expect(usePlanner.getState().items[0].state).toBe('relearning')
-    expect(screen.getByText('오늘 또')).toBeInTheDocument()
+    const after = usePlanner.getState().items[0]
+    expect(after.due! > TODAY).toBe(true)
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
   })
 
   it('S-171 목표가 지났어도 다시 는 보관하지 않는다', async () => {
@@ -91,31 +93,94 @@ describe('같은 날 여러 번 누르면', () => {
     expect(after.stability).toBeGreaterThan(once!)
     expect(after.state).toBe('review')
   })
+
+  it('S-175 한참 만에 본 것도 고쳐 누른 값이 흔들리지 않는다', async () => {
+    // 그날 첫 평가가 며칠 만이었는지를 평가 목록만 훑어 찾으면, 그 앞의 기록이
+    // 없을 때 하루도 안 지난 것처럼 되어 두 번째부터 답이 달라진다.
+    await setupApp(TODAY, {
+      items: [
+        anItem({
+          id: 'i1',
+          first_studied_at: '2026-08-01',
+          last_review: addDays(TODAY, -21),
+          due: TODAY,
+          stability: 14.5,
+          reps: 4,
+        }),
+      ],
+    })
+    await usePlanner.getState().rateItem('i1', 1, { reviewedAt: TODAY })
+    const once = usePlanner.getState().items[0]
+
+    for (let n = 0; n < 3; n += 1) {
+      await usePlanner.getState().rateItem('i1', 1, { reviewedAt: TODAY })
+      expect(usePlanner.getState().items[0].stability).toBeCloseTo(
+        once.stability!,
+        8
+      )
+      expect(usePlanner.getState().items[0].due).toBe(once.due)
+    }
+
+    // 다른 등급으로 갔다가 돌아와도 처음 값 그대로여야 한다.
+    await usePlanner.getState().rateItem('i1', 4, { reviewedAt: TODAY })
+    await usePlanner.getState().rateItem('i1', 1, { reviewedAt: TODAY })
+    expect(usePlanner.getState().items[0].stability).toBeCloseTo(
+      once.stability!,
+      8
+    )
+    expect(usePlanner.getState().items[0].due).toBe(once.due)
+  })
+
+  it('S-176 적은 날 바로 고쳐 눌러도 겹쳐 깎이지 않는다', async () => {
+    // 적을 때 고른 등급과 그날 다시 고른 등급이 겹치면 안 된다. 나중 것이 그날의 답이다.
+    await setupApp(TODAY, { items: [] })
+    await usePlanner
+      .getState()
+      .addItem({ title: '오늘 공부한 것', firstStudiedAt: TODAY, initialGrade: 3 })
+    const id = usePlanner.getState().items[0].id
+
+    await usePlanner.getState().rateItem(id, 1, { reviewedAt: TODAY })
+    const once = usePlanner.getState().items[0]
+    for (let n = 0; n < 3; n += 1) {
+      await usePlanner.getState().rateItem(id, 1, { reviewedAt: TODAY })
+      expect(usePlanner.getState().items[0].stability).toBeCloseTo(
+        once.stability!,
+        8
+      )
+    }
+  })
 })
 
 describe('버튼이 약속한 날짜', () => {
-  it('S-174 다시 를 거듭 눌러도 버튼과 결과가 같다', async () => {
-    // 저장할 때와 미리 적을 때가 다른 계산을 보면 버튼이 거짓말을 한다.
+  it('S-174 미리보기와 저장이 같은 계산을 본다', async () => {
+    // 갈라 두면 버튼이 약속한 날짜와 실제로 잡히는 날짜가 달라진다.
     await setupApp(TODAY, {
       items: [anItem({ id: 'i1', title: '못 외운 것', due: TODAY })],
     })
-    const { user } = render(<TodayScreen onOpenItem={noop} />)
-    await screen.findByText('오늘 볼 항목')
+    const { items, reviews, settings, goals } = usePlanner.getState()
+    const item = items[0]
+    const config = effectiveConfig(item, goals[0] ?? null, settings)
+    const rating = stateForRating(item, reviews, TODAY)
+    const preview = gradeOptions({
+      reviewedAt: TODAY,
+      lastReview: rating.lastReview,
+      state: rating.state,
+      horizon: config.horizon,
+      intensity: config.intensity,
+      targetRetention: config.targetRetention,
+      minReviews: config.minReviews,
+      repsSinceGoal: item.reps_since_goal,
+      bufferDays: settings.bufferDays,
+      maxIntervalDays: config.maxIntervalDays,
+    })
 
-    for (let round = 0; round < 3; round += 1) {
-      await user.click(
-        screen.getByRole('checkbox', { name: '못 외운 것 평가하기' })
-      )
-      const again = screen.getByRole('button', { name: /다시/ })
-      const promised = again.textContent ?? ''
-      await user.click(again)
-      const due = usePlanner.getState().items[0].due!
-      const days = Math.round(
-        (new Date(due).getTime() - new Date(TODAY).getTime()) / 864e5
-      )
-      // 버튼에 '내일' 이라 적혔으면 실제로도 하루 뒤여야 한다.
-      if (promised.includes('내일')) expect(days).toBe(1)
-      else expect(promised).toContain(`${days}일 뒤`)
-    }
+    await usePlanner.getState().rateItem('i1', 1, { reviewedAt: TODAY })
+    const due = usePlanner.getState().items[0].due!
+    const days = Math.round(
+      (new Date(due).getTime() - new Date(TODAY).getTime()) / 864e5
+    )
+    const again = preview.find((o) => o.grade === 1)!
+    if (again.next.includes('내일')) expect(days).toBe(1)
+    else expect(again.next).toContain(`${days}일 뒤`)
   })
 })

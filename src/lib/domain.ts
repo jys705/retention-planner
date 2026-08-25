@@ -1,7 +1,7 @@
 import type { MemoryState } from '../core/fsrs/types'
 import type { Horizon } from '../core/horizon/horizon'
 import type { Intensity } from '../core/policy/constraints'
-import type { DateOnly } from './date'
+import { addDays, type DateOnly } from './date'
 import type {
   GoalRow,
   HorizonKind,
@@ -172,16 +172,25 @@ export function stateForRating(
     .filter((r) => r.item_id === item.id && r.reviewed_at === reviewedAt)
     .sort((a, b) => (a.recorded_at < b.recorded_at ? -1 : 1))
   const first = today[0]
-  if (!first || first.s_before === null || first.d_before === null) {
-    return { state: memoryStateOf(item), lastReview: item.last_review }
+  if (!first) return { state: memoryStateOf(item), lastReview: item.last_review }
+
+  // 그날 첫 평가가 며칠 만이었는지는 그 기록이 들고 있다. 평가 목록을 거슬러
+  // 훑으면 그 앞의 기록이 빠져 있을 때 하루도 안 지난 것처럼 되고, 같은 날
+  // 고쳐 누를 때마다 답이 달라진다.
+  const lastReview =
+    first.s_before === null
+      ? null
+      : addDays(reviewedAt, -Math.max(0, Math.round(first.elapsed_days)))
+
+  // 그날의 첫 평가 앞이 비어 있으면 그때 이 항목은 아직 처음이었다는 뜻이다.
+  // 여기서 지금 값을 그대로 돌려주면 되감기가 안 되고, 같은 날 고쳐 누를 때마다
+  // 기억 지속력이 겹쳐 깎인다.
+  if (first.s_before === null || first.d_before === null) {
+    return { state: null, lastReview }
   }
 
-  const earlier = reviews
-    .filter((r) => r.item_id === item.id && r.reviewed_at < reviewedAt)
-    .map((r) => r.reviewed_at)
-    .sort()
   return {
     state: { stability: first.s_before, difficulty: first.d_before },
-    lastReview: earlier.length > 0 ? earlier[earlier.length - 1] : null,
+    lastReview,
   }
 }

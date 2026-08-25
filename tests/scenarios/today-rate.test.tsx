@@ -120,18 +120,16 @@ describe('오늘 화면: 평가', () => {
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
   })
 
-  it('S-027 같은 날 두 번 평가한다', async () => {
+  it('S-027 다시 를 눌러도 다른 등급처럼 오늘 목록에서 내려간다', async () => {
+    // 복습은 앱 밖에서 한다. '다시' 는 "다시 보여줘" 가 아니라 "거의 기억
+    // 안 났다" 는 평가고, 앱이 할 일은 간격을 가장 짧게 잡는 것뿐이다.
     await oneDueToday()
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await expandFirstRow(user)
     await user.click(screen.getByRole('button', { name: /다시/ }))
-    // '다시' 를 누르면 오늘 목록에 그대로 남는다.
-    expect(await screen.findAllByRole('checkbox')).toHaveLength(1)
 
-    await expandFirstRow(user)
-    await user.click(screen.getByRole('button', { name: /무난함/ }))
-    expect(usePlanner.getState().reviews).toHaveLength(2)
-    expect(usePlanner.getState().reviews[1].elapsed_days).toBe(0)
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+    expect(usePlanner.getState().reviews).toHaveLength(1)
   })
 
   it('S-028 평가 20회를 넘기면 등급 설명이 줄어든다', async () => {

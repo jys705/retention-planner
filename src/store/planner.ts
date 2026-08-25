@@ -481,9 +481,9 @@ function nextItemState(
   grade: Grade,
   postGoalMode: PostGoalMode
 ): ItemRow['state'] {
-  // '다시' 는 하나도 기억 안 났다는 뜻이다. 목표가 지났든 목표 기간 안이든
-  // 그 사실은 같다. 여기서 등급을 안 보고 보관해 버리면 앱이 "끝났으니 됐다" 고
-  // 사용자 대신 정하는 셈이 되고, 목표 기간 안에서는 그날 다시 볼 자리도 사라진다.
+  // '다시' 는 하나도 기억 안 났다는 뜻이다. 목표가 지났든 아니든 그 사실은 같다.
+  // 여기서 등급을 안 보고 보관해 버리면 앱이 "끝났으니 됐다" 고 사용자 대신
+  // 정하는 셈이 된다.
   if (grade === 1) return 'relearning'
   if (postGoalReached) {
     return postGoalMode === 'archive' ? 'archived' : 'maintaining'
@@ -866,13 +866,10 @@ export function splitTodayItems(state: {
 }): { overdue: ItemRow[]; dueToday: ItemRow[] } {
   const due = state.items
     .filter(isActive)
-    .filter(
-      (i) =>
-        (i.due !== null && i.due <= state.today) ||
-        // 오늘 '다시' 를 누른 것은 다음 날짜가 내일로 잡혀도 오늘 목록에 남긴다.
-        // 따로 대기열을 두지 않고 이 조건 하나로 처리한다.
-        (i.state === 'relearning' && i.last_review === state.today)
-    )
+    // 복습은 앱 밖에서 한다. '다시' 는 "다시 보여줘" 가 아니라 "거의 기억 안 났다"
+    // 는 평가고, 앱이 할 일은 간격을 가장 짧게 잡는 것뿐이다. 그날 다시 띄우는
+    // 것은 암기 카드 앱의 방식이지 이 앱의 것이 아니다.
+    .filter((i) => i.due !== null && i.due <= state.today)
 
   const overdue = due
     .filter((i) => i.due !== null && i.due < state.today)
