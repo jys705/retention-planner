@@ -19,26 +19,15 @@ export function RailRow({
   due,
   goalName,
   goalColor,
-  muted,
 }: {
   retention: string
   due: string
   goalName?: string | null
   goalColor?: string
-  /** 숫자가 아니라 상태를 적을 때. 고정폭과 진한 색을 빼서 숫자로 안 읽히게 한다. */
-  muted?: boolean
 }) {
   return (
     <div className="rail-panel num grid w-[268px] flex-none grid-cols-[52px_76px_1fr] items-center gap-[14px] pr-[18px]">
-      <div
-        className={
-          muted
-            ? 'text-right font-sans text-[12px] text-text-3'
-            : 'text-right text-[13px] text-text'
-        }
-      >
-        {retention}
-      </div>
+      <div className="text-right text-[13px] text-text">{retention}</div>
       <div className="text-right text-[12.5px] text-text-2">{due}</div>
       {/* 목표가 없어도 칸을 비우지 않는다. 비워 두면 그 자리가 무엇을 말하는지 안 보인다. */}
       <div className="flex min-w-0 items-center gap-[6px]">

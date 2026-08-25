@@ -121,11 +121,7 @@ export function TodayRow({
           ) : null}
         </div>
         <RailRow
-          // 방금 '다시' 를 누른 줄에는 숫자를 안 적는다. 100% 는 잘 외운 줄과
-          // 구별이 안 되고, 평가 직전 값을 적으면 모델의 예상이지 못 떠올린
-          // 사실이 아니라서 둘 다 거짓말이 된다.
-          retention={relearning ? '방금 못 봄' : percent(retention)}
-          muted={relearning}
+          retention={percent(retention)}
           due={dueLabel(today, item.due ?? today)}
           goalName={goal?.name ?? null}
           goalColor={goalColor(goal, goalIndex)}
