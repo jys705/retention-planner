@@ -224,13 +224,14 @@ describe('오늘 화면: 항목 적기', () => {
     expect(item.intensity).toBeNull()
   })
 
-  it('S-149 지난 날짜로 적을 때 그날 등급을 고른다', async () => {
+  it('S-149 적은 날에 맞춰 등급을 묻고 그 답이 출발점이 된다', async () => {
     await setupApp(TODAY)
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '어제 본 것')
     await openDetail(user)
-    // 오늘로 적을 때는 물어보지 않는다.
-    expect(screen.queryByText('그날 얼마나 기억났나요?')).toBeNull()
+    // 오늘 공부한 것도 스스로 매긴 등급이 있다. 안 묻고 무난함으로 적어 버리면
+    // 어려웠던 것과 쉬웠던 것이 같은 날짜로 잡힌다.
+    expect(screen.getByText('오늘 어땠나요?')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '어제' }))
     expect(screen.getByText('그날 얼마나 기억났나요?')).toBeInTheDocument()
@@ -241,6 +242,28 @@ describe('오늘 화면: 항목 적기', () => {
     expect(item.first_studied_at).toBe(shift(TODAY, -1))
     // 무난함으로 적었을 때보다 기억 지속력이 낮게 잡힌다.
     expect(item.stability).toBeLessThan(2.4)
+  })
+
+  it('S-152 오늘 고른 등급이 첫 날짜를 바꾼다', async () => {
+    // 안 묻고 무난함으로 적어 버리면 어려웠던 것과 쉬웠던 것이 같은 날로 잡힌다.
+    await setupApp(TODAY)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
+
+    await user.type(screen.getByLabelText('새 항목 제목'), '오늘 어려웠던 것')
+    await openDetail(user)
+    await user.click(screen.getByRole('button', { name: '어려움' }))
+    await user.click(screen.getByRole('button', { name: /적어두기/ }))
+
+    await user.type(screen.getByLabelText('새 항목 제목'), '오늘 쉬웠던 것')
+    await openDetail(user)
+    await user.click(screen.getByRole('button', { name: '쉬움' }))
+    await user.click(screen.getByRole('button', { name: /적어두기/ }))
+
+    const { items } = usePlanner.getState()
+    const hard = items.find((i) => i.title === '오늘 어려웠던 것')!
+    const easy = items.find((i) => i.title === '오늘 쉬웠던 것')!
+    expect(hard.stability!).toBeLessThan(easy.stability!)
+    expect(hard.due! < easy.due!).toBe(true)
   })
 
   it('S-150 달력으로 오늘을 고르면 오늘 칩이 켜진다', async () => {
@@ -254,11 +277,11 @@ describe('오늘 화면: 항목 적기', () => {
       TODAY
     )
     // 두 표시가 어긋나면 안 된다. 오늘을 골랐으면 날짜 단추는 '다른 날' 로 돌아가고
-    // 지난 날짜에만 나오는 등급 칸도 사라져야 한다.
+    // 등급 칸의 물음도 오늘 것으로 바뀌어야 한다.
     expect(screen.getByLabelText('공부한 날 고르기')).toHaveTextContent(
       '다른 날'
     )
-    expect(screen.queryByText('그날 얼마나 기억났나요?')).toBeNull()
+    expect(screen.getByText('오늘 어땠나요?')).toBeInTheDocument()
     await user.type(screen.getByLabelText('새 항목 제목'), '오늘로 되돌린 것')
     await user.click(screen.getByRole('button', { name: /적어두기/ }))
     expect(usePlanner.getState().items[0].first_studied_at).toBe(TODAY)

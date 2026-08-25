@@ -218,10 +218,9 @@ export function QuickAdd({
               </>
             )}
 
-            {backdated ? (
-              <Field
-                label="그날 얼마나 기억났나요?"
-                hint="지난 날짜로 적으면 그날 한 번 본 것으로 칩니다. 이 등급이 다음 복습일을 계산하는 출발점이에요."
+            <Field
+                label={backdated ? '그날 얼마나 기억났나요?' : '오늘 어땠나요?'}
+                hint="이 등급이 다음 복습일을 계산하는 출발점이에요. 어려웠으면 더 일찍 올라옵니다."
               >
                 <div className="flex flex-wrap gap-[6px]">
                   {GRADE_META.map((meta) => (
@@ -235,8 +234,7 @@ export function QuickAdd({
                     </Chip>
                   ))}
                 </div>
-              </Field>
-            ) : null}
+            </Field>
 
             <Field label="메모 (선택)">
               <input
