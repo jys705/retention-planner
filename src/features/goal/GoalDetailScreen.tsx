@@ -465,7 +465,9 @@ function didSentence(
     parts.push(`한 번으로 모자란 ${atRisk}개는 두 번씩 잡았습니다.`)
   }
   if (overdue > 0) {
-    parts.push(`밀린 ${overdue}개는 다시 계산해서 앞으로 당겼어요.`)
+    // 밀린 것은 앱이 옮기지 않는다. 날짜를 흔드는 쪽이 오늘이거나 지난 날짜를
+    // 건너뛰기 때문이다. 당겼다고 적으면 안 한 일을 했다고 말하는 것이 된다.
+    parts.push(`밀린 ${overdue}개는 오늘 목록에 그대로 올려뒀어요.`)
   }
   return parts.join(' ')
 }

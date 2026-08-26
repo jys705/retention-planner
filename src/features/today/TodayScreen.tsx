@@ -8,6 +8,7 @@ import { fullDate, monthDay, percent, shortDate } from '../../lib/format'
 import { GRADE_HELP_THRESHOLD } from '../../lib/settings'
 import {
   selectOverallRetention,
+  selectTodayItems,
   selectUpcoming,
   splitTodayItems,
   usePlanner,
@@ -30,7 +31,7 @@ export function TodayScreen({
   const listRef = useRef<HTMLDivElement>(null)
 
   const { overdue, dueToday } = splitTodayItems({ items, today })
-  const todayItems = [...overdue, ...dueToday]
+  const todayItems = selectTodayItems({ items, today })
   const upcoming = selectUpcoming(items, today)
   const overall = selectOverallRetention(items, today)
   const showFullGradeHelp = settings.ratingCount < GRADE_HELP_THRESHOLD
@@ -47,8 +48,12 @@ export function TodayScreen({
         <div className="flex flex-col gap-1">
           <span className="text-[12.5px] text-text-3">{fullDate(today)}</span>
           <div className="flex items-baseline gap-2">
+            {/*
+              목록에 선 줄 수를 그대로 센다. 따로 세면 밀린 줄이 넷 보이는데
+              머리는 '0 개' 라고 적는 일이 생긴다. 옆줄 배지와 알림도 이 수다.
+            */}
             <span className="font-display text-[52px] font-semibold leading-none tracking-[-0.03em] num">
-              {dueToday.length}
+              {todayItems.length}
             </span>
             <span className="text-[20px] font-semibold tracking-[-0.01em]">
               개
@@ -58,15 +63,10 @@ export function TodayScreen({
             </span>
           </div>
           {overdue.length > 0 ? (
-            <div className="flex items-baseline gap-[6px] pt-[2px]">
-              <span className="text-[13px] text-text-2">밀린 것</span>
-              <span className="num text-[13px] font-semibold text-imp-fg">
-                {overdue.length}개
-              </span>
-              <span className="text-[12px] text-text-3">
-                지난 날짜에 잡혀 있던 것들이에요. 오늘 같이 보면 됩니다.
-              </span>
-            </div>
+            <OverdueNote
+              overdue={overdue.length}
+              mixed={dueToday.length > 0}
+            />
           ) : null}
         </div>
         <RailPanel>
@@ -154,6 +154,34 @@ export function TodayScreen({
         <QuickAddHint detailOpen={detailOpen} />
       </div>
 
+    </div>
+  )
+}
+
+/**
+ * 큰 숫자 가운데 몇이 밀린 것인지 알리는 줄.
+ *
+ * 큰 숫자가 이제 밀린 것까지 세므로 여기 수는 그 안쪽 몫이다. '이 가운데' 를
+ * 앞에 두어 따로 더할 수가 아니라는 걸 밝힌다. 다 밀린 날에는 같이 볼 오늘 것이
+ * 없으니 '같이' 라는 말을 빼고, 그때도 수는 같은 색으로 세워 둔다.
+ *
+ * '밀린 것' 이라는 말은 예보와 항목 상세도 쓴다. 화면마다 다른 이름으로 부르면
+ * 같은 것을 가리키는 줄 모른다.
+ */
+function OverdueNote({ overdue, mixed }: { overdue: number; mixed: boolean }) {
+  return (
+    <div className="flex items-baseline gap-[6px] pt-[2px]">
+      <span className="text-[13px] text-text-2">
+        {mixed ? '이 가운데 밀린 것' : '밀린 것'}
+      </span>
+      <span className="num text-[13px] font-semibold text-imp-fg">
+        {overdue}개
+      </span>
+      <span className="text-[12px] text-text-3">
+        {mixed
+          ? '볼 날이 지났어요. 오늘 같이 보면 됩니다.'
+          : '모두 볼 날이 지났어요.'}
+      </span>
     </div>
   )
 }

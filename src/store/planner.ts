@@ -857,8 +857,10 @@ export function selectTodayItems(state: {
 /**
  * 오늘 목록을 밀린 것과 오늘 것으로 가른다.
  *
- * 둘을 한 덩어리로 세면 "오늘 볼 항목 8개" 가 사실이 아니게 된다.
- * 그중 셋이 지난주에 봤어야 할 것이면 오늘 생긴 일이 아니다.
+ * 가르는 것은 줄 차례를 정하고 밀린 것이 몇인지 따로 알리기 위해서다.
+ * 세는 데는 쓰지 않는다. 화면 머리의 큰 숫자, 옆줄 배지, 알림은 모두 합인
+ * `selectTodayItems` 를 센다. 한쪽만 따로 세면 밀린 줄이 넷 보이는데 머리는
+ * '0 개' 라고 적는 일이 생긴다.
  */
 export function splitTodayItems(state: {
   items: ItemRow[]

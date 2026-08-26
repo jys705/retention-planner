@@ -20,7 +20,7 @@ function overdueItem(id: string, title: string, due: string) {
 }
 
 describe('오늘 화면: 밀린 항목', () => {
-  it('S-029 밀린 것과 오늘 것을 따로 센다', async () => {
+  it('S-029 큰 숫자는 목록에 선 줄 수와 같다', async () => {
     await setupApp(TODAY, {
       items: [
         overdueItem('a', '많이 밀린 것', '2026-09-23'),
@@ -31,10 +31,11 @@ describe('오늘 화면: 밀린 항목', () => {
     render(<TodayScreen onOpenItem={() => {}} />)
 
     expect(await screen.findByText('오늘 볼 항목')).toBeInTheDocument()
-    expect(screen.getByText('밀린 것')).toBeInTheDocument()
+    expect(screen.getByText('이 가운데 밀린 것')).toBeInTheDocument()
     expect(screen.getByText('2개')).toBeInTheDocument()
-    // 큰 숫자는 오늘 것만 센다.
-    expect(screen.getByText('1')).toBeInTheDocument()
+    // 큰 숫자는 줄 수 그대로다. 밀린 2 + 오늘 1 이면 3 이다.
+    expect(screen.getByText('3')).toBeInTheDocument()
+    expect(screen.getAllByRole('checkbox')).toHaveLength(3)
     // 넣어둔 날짜가 그대로 남아 있어야 한다. 켤 때마다 바뀌면 안 된다.
     expect(
       usePlanner.getState().items.map((i) => i.due).sort()
@@ -45,7 +46,48 @@ describe('오늘 화면: 밀린 항목', () => {
     await setupApp(TODAY, { items: [overdueItem('c', '오늘 것', TODAY)] })
     render(<TodayScreen onOpenItem={() => {}} />)
     expect(await screen.findAllByRole('checkbox')).toHaveLength(1)
-    expect(screen.queryByText('밀린 것')).toBeNull()
+    expect(screen.queryByText(/밀린 것/)).toBeNull()
+    expect(screen.getByText('1')).toBeInTheDocument()
+  })
+
+  it('S-177 다 밀린 날에도 큰 숫자가 줄 수를 센다', async () => {
+    // 여기가 감사에서 나온 자리다. 줄이 넷 보이는데 머리가 '0 개' 라고 적었다.
+    await setupApp(TODAY, {
+      items: [
+        overdueItem('a', '밀린 것 1', '2026-09-23'),
+        overdueItem('b', '밀린 것 2', '2026-09-28'),
+        overdueItem('c', '밀린 것 3', '2026-09-30'),
+      ],
+    })
+    render(<TodayScreen onOpenItem={() => {}} />)
+    expect(await screen.findByText('오늘 볼 항목')).toBeInTheDocument()
+    expect(screen.getByText('3')).toBeInTheDocument()
+    expect(screen.queryByText('0')).toBeNull()
+
+    // 같이 볼 오늘 것이 없으니 '같이' 라고 말하지 않는다.
+    expect(screen.getByText('모두 볼 날이 지났어요.')).toBeInTheDocument()
+    expect(screen.getByText('밀린 것')).toBeInTheDocument()
+    // 다 밀린 날에도 밀린 수는 눈에 띄게 세워 둔다.
+    expect(screen.getByText('3개')).toHaveClass('text-imp-fg')
+  })
+
+  it('S-178 오늘 것을 하나 끝내도 큰 숫자가 늘지 않는다', async () => {
+    // 오늘 것만 세면 밀린 4 + 오늘 1 인 날 그 하나를 끝냈을 때 1 에서 4 로 커진다.
+    await setupApp(TODAY, {
+      items: [
+        overdueItem('a', '밀린 것 1', '2026-09-23'),
+        overdueItem('b', '밀린 것 2', '2026-09-28'),
+        overdueItem('c', '오늘 것', TODAY),
+      ],
+    })
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
+    expect(await screen.findByText('3')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('checkbox', { name: /오늘 것/ }))
+    await user.click(screen.getByRole('button', { name: /쉬움/ }))
+
+    expect(await screen.findByText('2')).toBeInTheDocument()
+    expect(screen.queryByText('3')).toBeNull()
   })
 
   it('S-031 밀린 것이 위에, 오래 밀린 것부터 온다', async () => {

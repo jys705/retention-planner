@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { cn } from '../../lib/cn'
 import { addDays } from '../../lib/date'
 import { horizonLabel, shortDate } from '../../lib/format'
-import { usePlanner } from '../../store/planner'
+import { selectTodayItems, usePlanner } from '../../store/planner'
 import { goalColor, isActive } from '../../lib/domain'
 
 export type ScreenKey = 'today' | 'forecast' | 'goals' | 'library' | 'settings'
@@ -45,9 +45,8 @@ export function AppShell({
   children: ReactNode
 }) {
   const { items, goals, today } = usePlanner()
-  const dueCount = items.filter(
-    (i) => isActive(i) && i.due !== null && i.due <= today
-  ).length
+  // 오늘 화면 머리의 큰 숫자와 같은 수여야 한다. 따로 세면 둘이 갈라진다.
+  const dueCount = selectTodayItems({ items, today }).length
   // 가까운 것부터 올린다. 만들어 둔 차례대로 자르면 '다가오는' 이 아니게 된다.
   const goalCutoff = addDays(today, GOAL_HORIZON_DAYS)
   const dated = goals

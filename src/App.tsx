@@ -29,10 +29,9 @@ const SettingsScreen = lazy(() =>
   }))
 )
 import { Onboarding } from './features/onboarding/Onboarding'
-import { isActive } from './lib/domain'
 import { nowMinutes, today as clockToday } from './lib/clock'
 import { notifyDueCount, shouldNotify } from './lib/notify'
-import { usePlanner } from './store/planner'
+import { selectTodayItems, usePlanner } from './store/planner'
 
 type Route =
   | { screen: ScreenKey }
@@ -87,9 +86,8 @@ export function App() {
     ) {
       return
     }
-    const due = items.filter(
-      (i) => isActive(i) && i.due !== null && i.due <= today
-    ).length
+    // 알림이 말하는 수와 화면 머리의 큰 숫자가 같은 데서 나와야 한다.
+    const due = selectTodayItems({ items, today }).length
     void notifyDueCount(due, today).then((sent) => {
       if (sent) void saveSetting('lastNotifiedDate', today)
     })
