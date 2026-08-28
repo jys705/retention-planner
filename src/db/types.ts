@@ -127,6 +127,8 @@ export interface Repository {
   listReviews(): Promise<ReviewRow[]>
   listReviewsByItem(itemId: string): Promise<ReviewRow[]>
   insertReview(review: ReviewRow): Promise<void>
+  /** 방금 넣은 평가를 물릴 때 쓴다. 없는 id 면 아무 일도 안 한다. */
+  deleteReview(id: string): Promise<void>
 
   getSetting(key: string): Promise<string | null>
   setSetting(key: string, value: string): Promise<void>

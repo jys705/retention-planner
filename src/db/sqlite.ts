@@ -188,6 +188,10 @@ export class SqliteRepository implements Repository {
     )
   }
 
+  async deleteReview(id: string): Promise<void> {
+    await this.handle.execute('DELETE FROM reviews WHERE id = $1', [id])
+  }
+
   async getSetting(key: string): Promise<string | null> {
     const rows = await this.handle.select<{ value: string }[]>(
       'SELECT value FROM settings WHERE key = $1',

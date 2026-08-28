@@ -119,10 +119,29 @@ export function yesterdayOf(today: DateOnly): DateOnly {
  * 앞말에 맞는 조사를 고른다.
  *
  * 사용자가 지은 제목이 그대로 문장에 들어가므로 조사를 하나로 못 박을 수 없다.
- * 받침이 있으면 앞엣것, 없으면 뒤엣것을 쓴다. 한글이 아니면 받침 없는 쪽으로 둔다.
+ * 받침이 있으면 앞엣것, 없으면 뒤엣것을 쓴다.
+ *
+ * 제목은 '1~10번' 이나 '3장' 처럼 숫자로 끝나는 일이 잦다. 숫자는 읽는 소리로
+ * 받침을 가른다. 0(영), 1(일), 3(삼), 6(육), 7(칠), 8(팔) 은 받침이 있고
+ * 2(이), 4(사), 5(오), 9(구) 는 없다.
  */
+const DIGIT_HAS_FINAL: Record<string, boolean> = {
+  '0': true,
+  '1': true,
+  '2': false,
+  '3': true,
+  '4': false,
+  '5': false,
+  '6': true,
+  '7': true,
+  '8': true,
+  '9': false,
+}
+
 export function josa(word: string, withFinal: string, withoutFinal: string): string {
   const last = word.trim().slice(-1)
+  const digit = DIGIT_HAS_FINAL[last]
+  if (digit !== undefined) return digit ? withFinal : withoutFinal
   const code = last.charCodeAt(0)
   if (Number.isNaN(code) || code < 0xac00 || code > 0xd7a3) return withoutFinal
   return (code - 0xac00) % 28 === 0 ? withoutFinal : withFinal

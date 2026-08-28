@@ -124,6 +124,10 @@ export class MemoryRepository implements Repository {
     }
     this.reviews.set(review.id, clone(review))
   }
+  async deleteReview(id: string): Promise<void> {
+    this.reviews.delete(id)
+  }
+
 
   async getSetting(key: string): Promise<string | null> {
     return this.settings.get(key) ?? null

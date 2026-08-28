@@ -78,6 +78,32 @@ export interface NewGoalDraft {
   color?: string | null
 }
 
+/**
+ * 방금 한 평가를 물릴 손잡이.
+ *
+ * 평가 직전의 사진을 그대로 들고 있다가 되돌릴 때 도로 써 넣는다. 이력에서
+ * 되짚는 방식은 못 쓴다. due_kind 와 due_source 와 메모는 평가 기록에 칸이
+ * 없고, 다시 계산으로 채우면 평가 전과 같아진다는 보장이 없다.
+ *
+ * `seq` 는 이 사진을 찍은 뒤로 다른 쓰기가 끼어들었는지 가리는 표다. 오늘
+ * 화면은 평가를 기다리지 않고 부르므로, 평가가 도는 동안 항목을 적거나 다른
+ * 줄을 평가하는 일이 실제로 생긴다. 그때 낡은 사진을 써 넣으면 방금 적은
+ * 항목이 사라지거나 이력과 항목이 서로 다른 말을 하게 된다.
+ */
+export interface LastRating {
+  seq: number
+  reviewId: string
+  itemId: string
+  title: string
+  grade: Grade
+  /** 되돌린 뒤 그 줄을 다시 펴 주려고 들고 있다. */
+  archived: boolean
+  due: DateOnly | null
+  itemsBefore: ItemRow[]
+  plannedBefore: PlannedReviewRow[]
+  ratingCountBefore: number
+}
+
 interface PlannerState {
   ready: boolean
   today: DateOnly
@@ -87,6 +113,9 @@ interface PlannerState {
   /** 앞으로 잡아둔 복습. 다시 계산할 때마다 통째로 새로 만든다. */
   planned: PlannedReviewRow[]
   settings: Settings
+  /** 저장소에 쓸 때마다 하나씩 오른다. 사진이 아직 쓸모 있는지 가리는 데 쓴다. */
+  writeSeq: number
+  lastRating: LastRating | null
 
   load(): Promise<void>
   setToday(date: DateOnly): void
@@ -105,6 +134,15 @@ interface PlannerState {
   saveSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void>
   importAll(backup: Backup): Promise<void>
   recomputeAll(): Promise<void>
+  undoLastRating(): Promise<void>
+}
+
+/** 손잡이가 아직 방금 것을 가리키는가. 그 사이 다른 쓰기가 있었으면 아니다. */
+export function canUndo(state: {
+  lastRating: LastRating | null
+  writeSeq: number
+}): boolean {
+  return state.lastRating !== null && state.lastRating.seq === state.writeSeq
 }
 
 let repository: Repository | null = null
@@ -129,6 +167,8 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   reviews: [],
   planned: [],
   settings: DEFAULT_SETTINGS,
+  writeSeq: 0,
+  lastRating: null,
 
   async load() {
     const db = await repo()
@@ -253,6 +293,10 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const goal = item.goal_id
       ? (get().goals.find((g) => g.id === item.goal_id) ?? null)
       : null
+    const itemsBefore = get().items
+    const plannedBefore = get().planned
+    const ratingCountBefore = settings.ratingCount
+    const seqBefore = get().writeSeq
     const config = effectiveConfig(item, goal, settings)
     const reviewedAt = clampReviewDate(
       options.reviewedAt ?? today,
@@ -333,6 +377,58 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     })
     await get().saveSetting('ratingCount', settings.ratingCount + 1)
     await get().recomputeAll()
+
+    // 이 평가가 올린 표는 제 recomputeAll 하나뿐이어야 한다. 더 올라가 있으면
+    // 그 사이 남이 저장소에 썼다는 뜻이고, 사진은 이미 낡았다. 그 사진으로
+    // 되돌리면 남이 적은 항목이 사라지거나 기록과 항목이 어긋난다.
+    if (get().writeSeq !== seqBefore + 1) return
+
+    const after = get().items.find((i) => i.id === itemId)
+    set({
+      lastRating: {
+        seq: get().writeSeq,
+        reviewId: review.id,
+        itemId,
+        title: item.title,
+        grade,
+        archived: after?.archived_at !== null && after !== undefined,
+        due: after?.due ?? null,
+        itemsBefore,
+        plannedBefore,
+        ratingCountBefore,
+      },
+    })
+  },
+
+  async undoLastRating() {
+    const last = get().lastRating
+    if (last === null || !canUndo(get())) return
+    const db = await repo()
+
+    // 항목과 잡아둔 복습을 먼저 되돌리고 평가 기록을 맨 뒤에 지운다. 중간에
+    // 끊기면 항목은 평가 전인데 기록만 남는데, 그건 남은 기록으로 고칠 수 있다.
+    // 반대로 기록부터 지우면 고칠 근거가 먼저 사라진다.
+    const nowItems = get().items
+    for (const before of last.itemsBefore) {
+      const now = nowItems.find((i) => i.id === before.id)
+      if (now !== before) await db.updateItem(before.id, before)
+    }
+    await db.replacePlannedReviews(last.plannedBefore)
+    await db.deleteReview(last.reviewId)
+
+    if (get().settings.ratingCount !== last.ratingCountBefore) {
+      await get().saveSetting('ratingCount', last.ratingCountBefore)
+    }
+
+    set({
+      items: last.itemsBefore,
+      planned: last.plannedBefore,
+      reviews: get().reviews.filter((r) => r.id !== last.reviewId),
+      lastRating: null,
+      // 사진을 그대로 되돌렸으니 다시 계산하지 않는다. 다시 계산하면 오늘
+      // 기준으로 새로 잡아서 평가 전과 다른 날짜가 나올 수 있다.
+      writeSeq: get().writeSeq + 1,
+    })
   },
 
   async createGoal(draft) {
@@ -433,6 +529,9 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   },
 
   async recomputeAll() {
+    // 쓸 때마다 표를 올린다. 평가가 도는 동안 남이 끼어들면 그 평가의 사진이
+    // 낡았다는 것을 이 표 하나로 알 수 있다.
+    set({ writeSeq: get().writeSeq + 1 })
     const db = await repo()
     const { items, goals, settings, today } = get()
     const { patches, planned } = computeSpread(items, goals, settings, today)

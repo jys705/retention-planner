@@ -7,6 +7,7 @@ import { addDays, type DateOnly } from '../../lib/date'
 import { fullDate, monthDay, percent, shortDate } from '../../lib/format'
 import { GRADE_HELP_THRESHOLD } from '../../lib/settings'
 import {
+  canUndo,
   selectOverallRetention,
   selectTodayItems,
   selectUpcoming,
@@ -14,6 +15,7 @@ import {
   usePlanner,
 } from '../../store/planner'
 import { QuickAdd, QuickAddHint } from '../newitem/QuickAdd'
+import { JustDone } from './JustDone'
 import { TodayRow } from './TodayRow'
 
 export function TodayScreen({
@@ -21,9 +23,12 @@ export function TodayScreen({
 }: {
   onOpenItem: (itemId: string) => void
 }) {
-  const { items, goals, reviews, settings, today } = usePlanner()
+  const state = usePlanner()
+  const { items, goals, reviews, settings, today } = state
   const rateItem = usePlanner((s) => s.rateItem)
   const addItem = usePlanner((s) => s.addItem)
+  const undoLastRating = usePlanner((s) => s.undoLastRating)
+  const undoable = canUndo(state) ? state.lastRating : null
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
   // 적어두기 줄은 카드 안에 있고 안내문은 카드 밖에 있다. 둘이 같은 상태를 봐야 한다.
@@ -36,10 +41,27 @@ export function TodayScreen({
   const overall = selectOverallRetention(items, today)
   const showFullGradeHelp = settings.ratingCount < GRADE_HELP_THRESHOLD
 
+  // 평가가 끝나기 전에 또 누르면 되돌릴 사진이 낡는다. 저장소가 표로 걸러
+  // 내지만, 그러면 되돌리기 자리가 조용히 사라져 사람이 영문을 모른다.
+  const [rating, setRating] = useState(false)
+
   async function handleRate(itemId: string, grade: Grade) {
+    if (rating) return
+    setRating(true)
     setExpandedId(null)
-    // 여기는 '오늘' 화면이다. 오늘 본 것으로만 기록한다.
-    await rateItem(itemId, grade, { reviewedAt: today })
+    try {
+      // 여기는 '오늘' 화면이다. 오늘 본 것으로만 기록한다.
+      await rateItem(itemId, grade, { reviewedAt: today })
+    } finally {
+      setRating(false)
+    }
+  }
+
+  async function handleUndo() {
+    const itemId = undoable?.itemId ?? null
+    await undoLastRating()
+    // 되돌린 사람은 대개 다른 등급을 고르려던 참이다. 그 줄을 다시 펴 준다.
+    if (itemId !== null) setExpandedId(itemId)
   }
 
   return (
@@ -83,6 +105,13 @@ export function TodayScreen({
       </header>
 
       <div className="flex flex-col">
+        {undoable ? (
+          <JustDone
+            last={undoable}
+            today={today}
+            onUndo={() => void handleUndo()}
+          />
+        ) : null}
         {/*
           목록과 적어두기 줄이 카드 한 장 안에 있고, 그 안 오른쪽 268px 에 레일 띠가 깔린다.
           왼쪽은 사람이 쓴 말, 오른쪽은 앱이 계산한 숫자다. 그 경계를 정렬로만 두면

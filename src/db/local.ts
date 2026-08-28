@@ -129,6 +129,11 @@ export class LocalRepository implements Repository {
     await this.save()
   }
 
+  async deleteReview(id: string): Promise<void> {
+    await this.inner.deleteReview(id)
+    await this.save()
+  }
+
   getSetting(key: string): Promise<string | null> {
     return this.inner.getSetting(key)
   }
