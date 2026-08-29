@@ -144,3 +144,72 @@ describe('예보', () => {
     expect(screen.queryByRole('region', { name: '그날 무엇을 보나' })).toBeNull()
   })
 })
+
+describe('예보가 보여주는 기간', () => {
+  it('S-192 목표 시점을 안 정했으면 예순 날을 본다', async () => {
+    await setupApp(TODAY, {
+      goals: [aGoal({ id: 'g1', horizon_kind: 'open', ready_at: null, hold_until: null })],
+      items: many(3, '2026-10-05'),
+    })
+    render(<ForecastScreen />)
+    expect((await screen.findAllByText('앞으로 60일'))[0]).toBeInTheDocument()
+  })
+
+  it('S-193 목표한 날을 정했으면 그 날에서 끊는다', async () => {
+    // 그 뒤는 물어본 적이 없는 구간이다. 길게 그리면 목표까지의 모양이 납작해진다.
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({
+          id: 'g1',
+          horizon_kind: 'date',
+          ready_at: '2026-10-25',
+          hold_until: '2026-10-25',
+        }),
+      ],
+      items: many(3, '2026-10-05'),
+    })
+    render(<ForecastScreen />)
+    expect((await screen.findAllByText('앞으로 24일'))[0]).toBeInTheDocument()
+    expect(screen.queryAllByText('앞으로 60일')).toHaveLength(0)
+  })
+
+  it('S-194 대략으로 잡았으면 늦은 쪽 끝에서 끊는다', async () => {
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({
+          id: 'g1',
+          horizon_kind: 'window',
+          ready_at: '2026-10-20',
+          hold_until: '2026-11-05',
+        }),
+      ],
+      items: many(3, '2026-10-05'),
+    })
+    render(<ForecastScreen />)
+    expect((await screen.findAllByText('앞으로 35일'))[0]).toBeInTheDocument()
+  })
+
+  it('S-195 목표가 여럿이면 가장 늦은 것에 맞춘다', async () => {
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({ id: 'g1', horizon_kind: 'date', ready_at: '2026-10-10', hold_until: '2026-10-10' }),
+        aGoal({ id: 'g2', horizon_kind: 'date', ready_at: '2026-10-30', hold_until: '2026-10-30' }),
+      ],
+      items: many(3, '2026-10-05'),
+    })
+    render(<ForecastScreen />)
+    expect((await screen.findAllByText('앞으로 29일'))[0]).toBeInTheDocument()
+  })
+
+  it('S-196 목표가 코앞이어도 볼 만한 길이는 남긴다', async () => {
+    // 막대 두어 개짜리 그림에는 읽을 것이 없다.
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({ id: 'g1', horizon_kind: 'date', ready_at: '2026-10-03', hold_until: '2026-10-03' }),
+      ],
+      items: many(3, '2026-10-02'),
+    })
+    render(<ForecastScreen />)
+    expect((await screen.findAllByText('앞으로 14일'))[0]).toBeInTheDocument()
+  })
+})

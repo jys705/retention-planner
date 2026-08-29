@@ -16,6 +16,7 @@ import {
   addDays,
   diffDays,
   fromEpochDay,
+  maxDate,
   minDate,
   toEpochDay,
   type DateOnly,
@@ -102,11 +103,13 @@ export function buildItemView(
 
   const from = minDate(item.first_studied_at, today)
   const lastFuture = future[future.length - 1]?.date
-  const to = maxOf([
-    addDays(today, 30),
-    lastFuture ?? addDays(today, 30),
-    holdUntil ? addDays(holdUntil, 7) : addDays(today, 30),
-  ])
+  // 목표한 날을 정해 둔 항목은 그 날에서 곡선을 끊는다. 그 뒤는 물어본 적이
+  // 없는 구간이고, 길게 그리면 목표까지의 모양이 그만큼 납작해져 안 보인다.
+  // 목표를 고치면 이 값도 따라 움직인다.
+  const goalEnd = holdUntil ?? readyAt
+  const to = goalEnd
+    ? maxDate(goalEnd, addDays(today, 1))
+    : maxOf([addDays(today, 30), lastFuture ?? addDays(today, 30)])
 
   const curve = memoryCurve({ history, future, from, to, today })
 

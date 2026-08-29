@@ -1,5 +1,12 @@
 import { useState } from 'react'
-import { addDays, maxDate, minDate, type DateOnly } from '../../lib/date'
+import {
+  addDays,
+  diffDays,
+  maxDate,
+  minDate,
+  type DateOnly,
+} from '../../lib/date'
+import type { GoalRow } from '../../db/types'
 import { dueReason, statusBadgeOf } from '../../lib/badge'
 import { fullDate, monthDay, percent } from '../../lib/format'
 import { cn } from '../../lib/cn'
@@ -9,19 +16,40 @@ import {
   CalendarHeatmap,
   CalendarLegend,
 } from '../charts/CalendarHeatmap'
-import { monthKey, monthLabel } from '../charts/calendar'
+import { monthKey, monthLabel, nextMonthKey } from '../charts/calendar'
 import { LoadBars, type LoadBar } from '../charts/LoadBars'
 import { LOAD_SERIES } from '../charts/loadSeries'
 import { dailyCountOf, rollout, type PlannedItem } from './rollout'
 
-const HORIZON_DAYS = 60
+/** 목표 시점을 아무것도 안 정해 뒀을 때 보여줄 기간. */
+const OPEN_HORIZON_DAYS = 60
+/** 목표가 코앞이어도 이만큼은 보여준다. 막대 몇 개짜리 그림은 읽을 게 없다. */
+const MIN_HORIZON_DAYS = 14
 /** 머리 문장이 보는 기간. 예보의 물음은 '곧 얼마나 바쁜가' 다. */
 const SOON_DAYS = 14
+
+/**
+ * 어디까지 그릴지.
+ *
+ * 목표한 날을 정해 둔 목표가 있으면 그중 가장 늦은 날에서 끊는다. 그 뒤는
+ * 물어본 적이 없는 구간이고, 길게 그리면 정작 목표까지의 모양이 납작해진다.
+ * 목표를 고치거나 지우면 이 값도 따라 움직인다.
+ */
+function horizonDaysOf(goals: GoalRow[], today: DateOnly): number {
+  const dated = goals
+    .filter((g) => g.archived_at === null && g.horizon_kind !== 'open')
+    .map((g) => g.hold_until ?? g.ready_at)
+    .filter((d): d is DateOnly => d !== null && d >= today)
+  if (dated.length === 0) return OPEN_HORIZON_DAYS
+  const last = dated.reduce((a, b) => (a > b ? a : b))
+  return Math.max(MIN_HORIZON_DAYS, Math.min(OPEN_HORIZON_DAYS, diffDays(today, last)))
+}
 
 export function ForecastScreen() {
   const { items, goals, settings, today } = usePlanner()
   const [selected, setSelected] = useState<DateOnly | null>(null)
   const [hovered, setHovered] = useState<DateOnly | null>(null)
+  const horizonDays = horizonDaysOf(goals, today)
 
   // 항목마다 따로 굴려서 더하면 날짜 조정 층이 빠진다. 하루씩 실제로 살아 보면
   // 앱이 그날 잡을 날짜가 그대로 나온다.
@@ -30,7 +58,7 @@ export function ForecastScreen() {
     goals,
     settings,
     from: today,
-    days: HORIZON_DAYS,
+    days: horizonDays,
   })
   const dailyCount = dailyCountOf(plan)
   const byDate = new Map(plan.map((day) => [day.date, day.items]))
@@ -63,7 +91,7 @@ export function ForecastScreen() {
   )
   const overCap = bars.filter((b) => b.count > settings.dailyCap)
 
-  const months = [monthKey(today), monthKey(addDays(today, 32))]
+  const months = [monthKey(today), nextMonthKey(today)]
   const monthCounts = months.map((m) => ({
     month: m,
     count: countInMonth(dailyCount, m),
@@ -73,7 +101,7 @@ export function ForecastScreen() {
     bars[0] ?? { date: today, count: 0 }
   )
 
-  const horizonEnd = addDays(today, HORIZON_DAYS)
+  const horizonEnd = addDays(today, horizonDays)
   const live = goals.filter((g) => g.archived_at === null)
   const marks = live
     .filter((g) => g.ready_at !== null && g.ready_at >= today && g.ready_at <= horizonEnd)
@@ -119,7 +147,7 @@ export function ForecastScreen() {
         </div>
 
         <div className="rail-panel num flex flex-col gap-[6px] pr-[18px] text-[12.5px]">
-          <RailRow label={`앞으로 ${HORIZON_DAYS}일`} value={`${total}개`} />
+          <RailRow label={`앞으로 ${horizonDays}일`} value={`${total}개`} />
           <RailRow label={`다음 ${SOON_DAYS}일 하루 평균`} value={`${average}개`} />
           <RailRow
             label="하루 상한"
@@ -130,7 +158,7 @@ export function ForecastScreen() {
       </header>
 
       <section
-        aria-label={`앞으로 ${HORIZON_DAYS}일`}
+        aria-label={`앞으로 ${horizonDays}일`}
         className="relative overflow-hidden rounded-panel border border-line bg-surface"
       >
         <div
@@ -141,7 +169,7 @@ export function ForecastScreen() {
           <div className="min-w-0 px-[20px] py-[16px]">
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
               <h2 className="text-[13px] font-semibold">
-                앞으로 {HORIZON_DAYS}일
+                앞으로 {horizonDays}일
               </h2>
               <div className="flex flex-wrap items-center gap-[12px] text-[11px] text-text-3">
                 {[...LOAD_SERIES].reverse().map((series) => (

@@ -70,6 +70,15 @@ export function LoadBars({
   marks?: GoalMark[]
   bands?: GoalBand[]
 }) {
+  // 목표한 날이 그림의 오른쪽 끝에 서면 가운데 맞춘 이름표가 밖으로 잘린다.
+  // 끝자락에 선 것은 안쪽으로 붙여 세운다.
+  const lastDate = bars[bars.length - 1]?.date ?? null
+  const nearEnd = (date: DateOnly) => {
+    if (lastDate === null || bars.length === 0) return false
+    const at = bars.findIndex((b) => b.date === date)
+    return at < 0 || at >= bars.length - Math.max(2, Math.round(bars.length * 0.12))
+  }
+
   return (
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -128,7 +137,7 @@ export function LoadBars({
                   mark.label.length > 10
                     ? `${mark.label.slice(0, 10)}...`
                     : mark.label,
-                position: 'top',
+                position: nearEnd(mark.date) ? 'insideTopRight' : 'top',
                 fill: mark.color,
                 fontSize: 10.5,
               }}
