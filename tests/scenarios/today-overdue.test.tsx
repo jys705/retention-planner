@@ -3,7 +3,8 @@ import { screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { usePlanner } from '../../src/store/planner'
-import { anItem, render, setupApp, teardownApp } from './harness'
+import { addDays as shift } from '../../src/lib/date'
+import { aGoal, anItem, render, setupApp, teardownApp } from './harness'
 
 const TODAY = '2026-10-01'
 
@@ -142,5 +143,115 @@ describe('오늘 화면: 밀린 항목', () => {
     expect(
       usePlanner.getState().items.every((i) => i.due === '2026-09-25')
     ).toBe(true)
+  })
+})
+
+describe('밀린 것과 하루 최대 개수', () => {
+  /** 밀린 것 n개 + 내일로 몰아둔 것 30개. */
+  function pile(overdue: number, goalId: string | null) {
+    const items = []
+    for (let i = 0; i < overdue; i += 1) {
+      items.push(
+        anItem({
+          id: `o${i}`,
+          title: `밀린 ${i}`,
+          goal_id: goalId,
+          first_studied_at: '2026-08-01',
+          last_review: shift(TODAY, -20 - i),
+          due: shift(TODAY, -1 - (i % 12)),
+          stability: 9 + (i % 7),
+          reps: 3,
+        })
+      )
+    }
+    for (let i = 0; i < 30; i += 1) {
+      items.push(
+        anItem({
+          id: `a${i}`,
+          title: `앞날 ${i}`,
+          goal_id: 'g1',
+          first_studied_at: '2026-08-01',
+          last_review: shift(TODAY, -8),
+          due: shift(TODAY, 1),
+          stability: 6 + (i % 5),
+          reps: 3,
+        })
+      )
+    }
+    return items
+  }
+
+  const goal = () =>
+    aGoal({
+      id: 'g1',
+      horizon_kind: 'date' as const,
+      ready_at: shift(TODAY, 25),
+      hold_until: shift(TODAY, 25),
+    })
+
+  it('S-188 밀린 것이 상한 안이면 오늘 줄 수가 상한을 안 넘는다', async () => {
+    // 밀린 것을 안 세면 오늘이 빈 날로 보여서 앱이 그 위에 상한만큼 더 얹는다.
+    await setupApp(TODAY, {
+      goals: [goal()],
+      items: pile(5, null),
+      settings: { dailyCap: '10' },
+    })
+    render(<TodayScreen onOpenItem={() => {}} />)
+    await screen.findByText('오늘 볼 항목')
+    expect(screen.getAllByRole('checkbox').length).toBeLessThanOrEqual(10)
+  })
+
+  it('S-189 밀린 것이 상한을 넘으면 오늘에 새로 얹지 않는다', async () => {
+    await setupApp(TODAY, {
+      goals: [goal()],
+      items: pile(15, null),
+      settings: { dailyCap: '10' },
+    })
+    render(<TodayScreen onOpenItem={() => {}} />)
+    await screen.findByText('오늘 볼 항목')
+    // 밀린 15줄 그대로. 앱이 그 위에 더 얹지 않는다.
+    expect(screen.getAllByRole('checkbox')).toHaveLength(15)
+    const state = usePlanner.getState()
+    expect(state.items.filter((i) => i.id.startsWith('a') && i.due === TODAY)).toHaveLength(0)
+  })
+
+  it('S-190 목표에 묶인 밀린 것도 앞으로 옮기지 않는다', async () => {
+    // 옮기면 줄이 오늘 목록에서 사라져서 '오늘 볼 건 다 봤어요' 가 뜬다.
+    await setupApp(TODAY, {
+      goals: [goal()],
+      items: pile(15, 'g1'),
+      settings: { dailyCap: '10' },
+    })
+    render(<TodayScreen onOpenItem={() => {}} />)
+    await screen.findByText('오늘 볼 항목')
+    const escaped = usePlanner
+      .getState()
+      .items.filter((i) => i.id.startsWith('o') && i.due! > TODAY)
+    expect(escaped).toHaveLength(0)
+    expect(screen.getAllByRole('checkbox')).toHaveLength(15)
+  })
+
+  it('S-191 밀린 것이 쌓여도 앞날 예정일이 날마다 뒤로 가지 않는다', async () => {
+    // 밀린 것을 덜어내기 쪽에 세면, 안 본 날이 하루 늘 때마다 앞으로 잡아둔
+    // 날짜가 통째로 뒤로 도망간다.
+    await setupApp(TODAY, {
+      goals: [goal()],
+      items: pile(15, null),
+      settings: { dailyCap: '10' },
+    })
+    render(<TodayScreen onOpenItem={() => {}} />)
+    await screen.findByText('오늘 볼 항목')
+    const first = usePlanner
+      .getState()
+      .items.filter((i) => i.id.startsWith('a'))
+      .map((i) => i.due)
+    for (let n = 0; n < 5; n += 1) {
+      await usePlanner.getState().recomputeAll()
+    }
+    const after = usePlanner
+      .getState()
+      .items.filter((i) => i.id.startsWith('a'))
+      .map((i) => i.due)
+    expect(after).toEqual(first)
   })
 })

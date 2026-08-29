@@ -286,3 +286,63 @@ describe('목표 상세', () => {
     expect(usePlanner.getState().goals[0].name).toBe('새 이름')
   })
 })
+
+describe('목표한 날 기억률', () => {
+  it('S-187 밀린 기간을 빼먹지 않는다', async () => {
+    // 지난 날수를 오늘부터 세면 밀린 기간이 통째로 빠진다. 스무 날 밀린 것과
+    // 이틀 전에 본 것이 같은 수를 적고, 위태로운 줄이 맨 위로 안 올라온다.
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({
+          id: 'g1',
+          horizon_kind: 'date',
+          ready_at: '2026-10-13',
+          hold_until: '2026-10-13',
+        }),
+      ],
+      items: [
+        anItem({
+          id: 'ontime',
+          title: '제때 본 것',
+          goal_id: 'g1',
+          first_studied_at: '2026-08-01',
+          last_review: '2026-09-29',
+          due: '2026-10-05',
+          stability: 8,
+          difficulty: 5.2,
+          reps: 3,
+        }),
+        anItem({
+          id: 'late',
+          title: '밀린 것',
+          goal_id: 'g1',
+          first_studied_at: '2026-08-01',
+          last_review: '2026-09-11',
+          due: '2026-09-25',
+          stability: 8,
+          difficulty: 5.2,
+          reps: 3,
+        }),
+      ],
+    })
+    render(<GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />)
+    await screen.findByText('목표한 날 기억률')
+
+    const rows = [
+      ...screen.getByText('목표한 날 기억률').closest('table')!
+        .querySelectorAll('tbody tr'),
+    ]
+    const read = (title: string) => {
+      const row = rows.find((r) => r.textContent?.includes(title))!
+      return Number(row.querySelectorAll('td')[2].textContent!.replace('%', ''))
+    }
+
+    // 기억 지속력이 같아도 밀린 쪽이 목표한 날 더 낮아야 한다.
+    expect(read('밀린 것')).toBeLessThan(read('제때 본 것'))
+    // 복습을 안 했는데 기억률이 오르는 그림이 나오면 안 된다.
+    expect(read('밀린 것')).toBeLessThan(83)
+
+    // 정렬은 낮은 것부터. 가장 위태로운 줄이 맨 위에 온다.
+    expect(rows[0].textContent).toContain('밀린 것')
+  })
+})

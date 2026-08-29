@@ -37,10 +37,25 @@ export interface CapResult {
  */
 export function applyDailyCap(
   candidates: readonly CapCandidate[],
-  cap: number
+  cap: number,
+  /**
+   * 옮길 수 없는 채로 그 날에 이미 서 있는 줄. 밀린 항목이 여기 든다.
+   *
+   * 두 문에 서로 다르게 센다. **자리가 있는가** 를 볼 때는 센다. 이미 밀린
+   * 것으로 찬 날 위에 앱이 더 얹으면 안 된다. **덜어낼까** 를 볼 때는 안 센다.
+   * 밀린 것 때문에 남을 밀어내기 시작하면, 안 본 날이 하루 늘 때마다 앞으로
+   * 잡아둔 날짜가 통째로 뒤로 도망간다. 밀린 것은 사용자 몫이고 앱의 계획을
+   * 흔들 자리가 아니다.
+   */
+  fixedLoad: ReadonlyMap<DateOnly, number> = new Map()
 ): CapResult {
   if (cap <= 0 || candidates.length === 0) {
     return { moved: {}, stillOver: [] }
+  }
+
+  const fixed = new Map<number, number>()
+  for (const [date, count] of fixedLoad) {
+    fixed.set(toEpochDay(date), count)
   }
 
   const load = new Map<number, number>()
@@ -52,6 +67,8 @@ export function applyDailyCap(
   }
 
   const moved: Record<string, DateOnly> = {}
+  /** 그 날에 실제로 서는 줄 수. 옮길 수 있는 것과 못 하는 것을 합친 값이다. */
+  const total = (day: number) => (load.get(day) ?? 0) + (fixed.get(day) ?? 0)
 
   // 이른 날부터 훑는다. 앞에서 덜어낸 결과가 뒤쪽 계산에 그대로 반영돼야 한다.
   const days = [...load.keys()].sort((a, b) => a - b)
@@ -68,7 +85,7 @@ export function applyDailyCap(
 
       let movedOne = false
       for (const candidate of onDay) {
-        const target = findRoom(candidate, day, load, cap)
+        const target = findRoom(candidate, day, total, cap)
         if (target === null) continue
         load.set(day, (load.get(day) ?? 1) - 1)
         load.set(target, (load.get(target) ?? 0) + 1)
@@ -82,8 +99,10 @@ export function applyDailyCap(
     }
   }
 
-  const stillOver = days
-    .filter((day) => (load.get(day) ?? 0) > cap)
+  // 넘친 날은 밀린 것까지 세어 가린다. 밀린 것만으로 넘친 날도 넘친 날이다.
+  const stillOver = [...new Set([...days, ...fixed.keys()])]
+    .sort((a, b) => a - b)
+    .filter((day) => total(day) > cap)
     .map(fromEpochDay)
 
   return { moved, stillOver }
@@ -98,7 +117,7 @@ export function applyDailyCap(
 function findRoom(
   candidate: CapCandidate,
   from: number,
-  load: Map<number, number>,
+  total: (day: number) => number,
   cap: number
 ): number | null {
   const lower = toEpochDay(candidate.notBefore)
@@ -109,9 +128,9 @@ function findRoom(
 
   for (let step = 1; step <= 60; step += 1) {
     const earlier = from - step
-    if (earlier >= lower && (load.get(earlier) ?? 0) < cap) return earlier
+    if (earlier >= lower && total(earlier) < cap) return earlier
     const later = from + step
-    if (later <= upper && (load.get(later) ?? 0) < cap) return later
+    if (later <= upper && total(later) < cap) return later
   }
   return null
 }

@@ -720,9 +720,14 @@ export function computeSpread(
       if (!item) continue
 
       const patch: Partial<ItemRow> = {}
+      // 밀린 것은 옮기지 않는다. 여기서 미래로 보내면 줄이 오늘 목록에서
+      // 사라져서, 이틀 밀린 것이 둘 있는데 '오늘 볼 건 다 봤어요' 가 뜬다.
+      const standing = item.due !== null && item.due <= today
       const source: DueSource = moved.has(id) ? 'spread' : 'fsrs'
-      if (item.due !== placed) patch.due = placed
-      if (item.due_source !== source) patch.due_source = source
+      if (!standing) {
+        if (item.due !== placed) patch.due = placed
+        if (item.due_source !== source) patch.due_source = source
+      }
       const risk = candidate.interval.atRisk ? 'at_risk' : 'safe'
       if (item.goal_risk !== risk) patch.goal_risk = risk
       if (candidate.interval.atRisk && item.due_kind !== 'deadline_pull') {
@@ -769,9 +774,16 @@ export function computeSpread(
   // 마지막으로 모든 목표를 합쳐서 하루 총량을 본다.
   // 각 목표가 잘 펴져 있어도 셋이 겹치면 하루에 서른 개가 될 수 있다.
   const capCandidates: CapCandidate[] = []
+  // 밀린 것은 오늘 목록에 이미 서 있다. 옮기지는 않지만 자리는 차지한다.
+  // 안 세면 오늘이 빈 날로 보여서, 앱이 다른 날의 넘침을 오늘로 끌어온다.
+  const standingLoad = new Map<DateOnly, number>()
   for (const item of active) {
     const due = patches.get(item.id)?.due ?? item.due
-    if (!due || due < today) continue
+    if (!due) continue
+    if (due < today) {
+      standingLoad.set(today, (standingLoad.get(today) ?? 0) + 1)
+      continue
+    }
     const goal = item.goal_id ? (goalById.get(item.goal_id) ?? null) : null
     const config = effectiveConfig(item, goal, settings)
     const resolved = resolveHorizon(config.horizon)
@@ -795,7 +807,7 @@ export function computeSpread(
     })
   }
 
-  const capped = applyDailyCap(capCandidates, settings.dailyCap)
+  const capped = applyDailyCap(capCandidates, settings.dailyCap, standingLoad)
   for (const [itemId, date] of Object.entries(capped.moved)) {
     const before = patches.get(itemId)?.due ?? itemsById.get(itemId)?.due
     patches.set(itemId, {

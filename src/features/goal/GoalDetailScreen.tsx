@@ -61,10 +61,13 @@ export function GoalDetailScreen({
             state.stability
           )
         : 1
+    // 지난 날수는 마지막으로 본 날부터 센다. 오늘부터 세면 밀린 기간이 통째로
+    // 빠져서, 스무 날 밀린 것과 어제 본 것이 목표한 날 기억률을 같게 적는다.
+    // 복습을 안 했는데 기억률이 오르는 그림까지 나온다.
     const retentionAtGoal =
-      state && goal.ready_at
+      state && goal.ready_at && item.last_review
         ? defaultFsrs.retrievability(
-            Math.max(0, diffDays(today, goal.ready_at)),
+            Math.max(0, diffDays(item.last_review, goal.ready_at)),
             state.stability
           )
         : retention
