@@ -310,3 +310,33 @@ describe('목표한 날 당일', () => {
     expect(screen.getByText(/오늘은 보실 게 없습니다/)).toBeInTheDocument()
   })
 })
+
+describe('밀린 항목의 배지', () => {
+  it('S-209 밀린 것도 오늘 기준으로 다시 셈해 배지를 붙인다', async () => {
+    // 마지막으로 본 날에서 재면 목표까지 남은 날이 실제보다 길게 잡혀 제약이
+    // 느슨해진다. 그래서 스무 날 밀린 것이 '평범한 복습' 으로 분류되고,
+    // 건너뛰어도 목표를 지킨다는 사실을 화면이 말해 주지 못한다.
+    const READY = shift(TODAY, 14)
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({ id: 'g1', horizon_kind: 'date', ready_at: READY, hold_until: READY, min_reviews: 3 }),
+      ],
+      items: [
+        anItem({
+          id: 'late', title: '20일 밀린 것', goal_id: 'g1',
+          first_studied_at: '2026-08-01', last_review: shift(TODAY, -20),
+          due: shift(TODAY, -6), stability: 15, difficulty: 5, reps: 3, reps_since_goal: 1,
+        }),
+      ],
+    })
+    render(<TodayScreen onOpenItem={() => {}} />)
+    await screen.findByText('오늘 볼 항목')
+
+    const late = usePlanner.getState().items[0]
+    // 목표까지 남은 날을 오늘부터 세면 건너뛰어도 지킨다는 판정이 나온다.
+    expect(late.due_kind).toBe('final_check')
+    expect(late.goal_risk).toBe('safe')
+    // 그러고도 날짜는 안 움직인다. 밀린 것은 앱이 옮기지 않는다.
+    expect(late.due).toBe(shift(TODAY, -6))
+  })
+})

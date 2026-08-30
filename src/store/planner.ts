@@ -642,10 +642,21 @@ function naturalScheduleOf(
   item: ItemRow,
   config: EffectiveConfig,
   state: MemoryState,
-  settings: Settings
+  settings: Settings,
+  /**
+   * 이미 목록에 서 있는 항목은 오늘 기준으로 다시 셈한다.
+   *
+   * 마지막으로 본 날에서 재면 목표까지 남은 날이 실제보다 길게 잡혀 제약이
+   * 느슨해진다. 그래서 스무 날 밀린 것이 '평범한 복습' 으로 분류되어, 건너뛰어도
+   * 목표를 지킨다는 사실('여유' 배지)을 말해 주지 못한다.
+   *
+   * FSRS 가 내는 간격은 기억 지속력만 보므로 이 값에 안 흔들린다. 바뀌는 것은
+   * 목표까지 남은 날을 세는 쪽뿐이다.
+   */
+  standingOn: DateOnly | null = null
 ) {
   return schedule({
-    from: item.last_review ?? item.first_studied_at,
+    from: standingOn ?? item.last_review ?? item.first_studied_at,
     state,
     horizon: config.horizon,
     intensity: config.intensity,
@@ -706,6 +717,8 @@ export function computeSpread(
   const extraDates = new Map<string, DateOnly[]>()
 
   const groups = new Map<string, SpreadCandidate[]>()
+  /** 오늘 기준으로 다시 셈한 갈래. 목록에 서 있는 항목의 배지가 이걸 읽는다. */
+  const naturalKind = new Map<string, DueKind>()
   const openItems: ItemRow[] = []
   // 날짜 조정이 자리를 잡아준 항목들. 뒤에 오는 하루 상한 층이 이 구간을 넘으면 안 된다.
   const placedIntervals = new Map<string, FeasibleInterval>()
@@ -736,9 +749,17 @@ export function computeSpread(
 
     // 옮길 수 있는 구간은 마무리 복습에 대한 것이다.
     // 아직 평소 간격으로 도는 항목은 건드리지 않는다. 그쪽은 몰림의 원인이 아니다.
-    const natural = naturalScheduleOf(item, config, state, settings)
+    const standing = item.due !== null && item.due <= today
+    const natural = naturalScheduleOf(
+      item,
+      config,
+      state,
+      settings,
+      standing ? today : null
+    )
     if (!isPulledByDeadline(natural.dueKind) && !interval.atRisk) continue
 
+    if (standing) naturalKind.set(item.id, natural.dueKind)
     const list = groups.get(key) ?? []
     list.push({ interval, naturalDue: natural.due })
     groups.set(key, list)
@@ -772,6 +793,11 @@ export function computeSpread(
       if (item.goal_risk !== risk) patch.goal_risk = risk
       if (candidate.interval.atRisk && item.due_kind !== 'deadline_pull') {
         patch.due_kind = 'deadline_pull'
+      } else if (standing && item.due_kind !== naturalKind.get(id)) {
+        // 갈래는 마지막으로 평가할 때 정해진 뒤로 안 고쳐진다. 목록에 서 있는
+        // 동안 목표는 계속 가까워지므로 그때 값은 낡는다. 배지가 그 값을 읽는다.
+        const kind = naturalKind.get(id)
+        if (kind !== undefined) patch.due_kind = kind
       }
       if (Object.keys(patch).length > 0) patches.set(id, patch)
     }
@@ -1010,7 +1036,14 @@ export function spreadPreview(
       targetRetention: config.targetRetention,
     })
     if (!interval.hasRoomBeforeGoal) continue
-    const natural = naturalScheduleOf(item, config, state, settings)
+    const standing = item.due !== null && item.due <= today
+    const natural = naturalScheduleOf(
+      item,
+      config,
+      state,
+      settings,
+      standing ? today : null
+    )
     if (!isPulledByDeadline(natural.dueKind) && !interval.atRisk) continue
     candidates.push({ interval, naturalDue: natural.due })
   }
