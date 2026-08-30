@@ -33,7 +33,7 @@ describe('핵심 루프', () => {
 
   it('목표를 만들고 항목을 넣고 평가까지 완주한다', async () => {
     const goal = await usePlanner.getState().createGoal({
-      name: 'AWS SCS-C03',
+      name: '시험 준비',
       horizon: { kind: 'date', at: addDays(TODAY, 45) },
       intensity: 'standard',
     })
@@ -41,7 +41,7 @@ describe('핵심 루프', () => {
 
     // 사흘 전에 공부해 두고 오늘 복습한 상황이다.
     const item = await usePlanner.getState().addItem({
-      title: 'AWS SCS-C03 1~10번 문제 풀이',
+      title: '1~10번 문제 풀이',
       goalId: goal.id,
       firstStudiedAt: addDays(TODAY, -3),
     })

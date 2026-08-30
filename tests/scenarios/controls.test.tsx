@@ -235,7 +235,7 @@ describe('나머지 조작 요소', () => {
       goals: [
         aGoal({
           id: 'g1',
-          name: 'AWS SCS-C03',
+          name: '시험 준비',
           horizon_kind: 'date',
           ready_at: '2026-11-14',
           hold_until: '2026-11-14',
@@ -254,7 +254,7 @@ describe('나머지 조작 요소', () => {
         <p>본문</p>
       </AppShell>
     )
-    await user.click(screen.getByRole('button', { name: /AWS SCS-C03/ }))
+    await user.click(screen.getByRole('button', { name: /시험 준비/ }))
     expect(opened).toBe('g1')
   })
 

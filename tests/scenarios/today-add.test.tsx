@@ -31,11 +31,11 @@ describe('오늘 화면: 항목 적기', () => {
     await setupApp(TODAY)
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     const input = screen.getByLabelText('새 항목 제목')
-    await user.type(input, 'AWS SCS-C03 1~10번 문제 풀이{Enter}')
+    await user.type(input, '1~10번 문제 풀이{Enter}')
 
     const items = usePlanner.getState().items
     expect(items).toHaveLength(1)
-    expect(items[0].title).toBe('AWS SCS-C03 1~10번 문제 풀이')
+    expect(items[0].title).toBe('1~10번 문제 풀이')
     expect(items[0].first_studied_at).toBe(TODAY)
     expect(items[0].due).toBe('2026-10-03')
     expect((input as HTMLInputElement).value).toBe('')
@@ -60,7 +60,7 @@ describe('오늘 화면: 항목 적기', () => {
   })
 
   it('S-004 상세 설정을 펼치고 접는다', async () => {
-    await setupApp(TODAY, { goals: [aGoal({ id: 'g1', name: 'AWS SCS-C03' })] })
+    await setupApp(TODAY, { goals: [aGoal({ id: 'g1', name: '시험 준비' })] })
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     expect(screen.queryByText('공부한 날')).toBeNull()
 
@@ -140,11 +140,11 @@ describe('오늘 화면: 항목 적기', () => {
   })
 
   it('S-009 소속 목표를 골라 적는다', async () => {
-    await setupApp(TODAY, { goals: [aGoal({ id: 'g1', name: 'AWS SCS-C03' })] })
+    await setupApp(TODAY, { goals: [aGoal({ id: 'g1', name: '시험 준비' })] })
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '목표에 넣기')
     await openDetail(user)
-    await pickSelect(user, '소속 목표', 'AWS SCS-C03')
+    await pickSelect(user, '소속 목표', '시험 준비')
     await user.click(screen.getByRole('button', { name: /적어두기/ }))
 
     expect(usePlanner.getState().items[0].goal_id).toBe('g1')
@@ -157,7 +157,7 @@ describe('오늘 화면: 항목 적기', () => {
   })
 
   it('S-010 소속 목표를 없음으로 둔다', async () => {
-    await setupApp(TODAY, { goals: [aGoal({ id: 'g1', name: 'AWS SCS-C03' })] })
+    await setupApp(TODAY, { goals: [aGoal({ id: 'g1', name: '시험 준비' })] })
     const { user } = render(<TodayScreen onOpenItem={() => {}} />)
     await user.type(screen.getByLabelText('새 항목 제목'), '목표 없이')
     await openDetail(user)

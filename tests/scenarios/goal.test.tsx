@@ -41,7 +41,7 @@ describe('목표 만들기', () => {
   it('S-048 정확한 날짜', async () => {
     await setupApp(TODAY)
     const { user } = render(<GoalListScreen onOpenGoal={noop} />)
-    await newGoal(user, 'AWS SCS-C03')
+    await newGoal(user, '시험 준비')
     await user.click(screen.getByRole('radio', { name: '정확한 날짜' }))
     await setDateInput(
       user,
@@ -158,7 +158,7 @@ describe('목표 상세', () => {
       goals: [
         aGoal({
           id: 'g1',
-          name: 'AWS SCS-C03',
+          name: '시험 준비',
           horizon_kind: 'date',
           ready_at: '2026-11-14',
           hold_until: '2026-11-14',

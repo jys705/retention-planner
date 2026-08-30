@@ -88,7 +88,7 @@ export function render(node: ReactElement) {
 export function aGoal(over: Partial<GoalRow> = {}): GoalRow {
   return {
     id: 'g1',
-    name: 'AWS SCS-C03',
+    name: '시험 준비',
     horizon_kind: 'open',
     ready_at: null,
     hold_until: null,

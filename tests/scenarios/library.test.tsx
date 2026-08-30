@@ -11,7 +11,7 @@ afterEach(teardownApp)
 
 function mixed() {
   return {
-    goals: [aGoal({ id: 'g1', name: 'AWS SCS-C03' })],
+    goals: [aGoal({ id: 'g1', name: '시험 준비' })],
     items: [
       anItem({
         id: 'a',
@@ -47,7 +47,7 @@ describe('서재', () => {
     render(<LibraryScreen onOpenItem={noop} onOpenGoal={noop} />)
     // 바깥 묶음 머리글이 소속 목표다.
     expect(
-      await screen.findByRole('button', { name: 'AWS SCS-C03 접기' })
+      await screen.findByRole('button', { name: '시험 준비 접기' })
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: '목표 없음 접기' })
@@ -59,7 +59,7 @@ describe('서재', () => {
     render(<LibraryScreen onOpenItem={noop} onOpenGoal={noop} />)
     // 이미 그 목표 안이라 줄마다 또 적을 이유가 없다.
     const row = await screen.findByRole('button', { name: '가나다 문제' })
-    expect(within(row).queryByText('AWS SCS-C03')).toBeNull()
+    expect(within(row).queryByText('시험 준비')).toBeNull()
     expect(row.textContent).toMatch(/%/)
   })
 
@@ -122,11 +122,11 @@ describe('서재', () => {
       await screen.findByRole('button', { name: '가나다 문제' })
     ).toBeInTheDocument()
     await user.click(
-      screen.getByRole('button', { name: 'AWS SCS-C03 접기' })
+      screen.getByRole('button', { name: '시험 준비 접기' })
     )
     expect(screen.queryByRole('button', { name: '가나다 문제' })).toBeNull()
     await user.click(
-      screen.getByRole('button', { name: 'AWS SCS-C03 펼치기' })
+      screen.getByRole('button', { name: '시험 준비 펼치기' })
     )
     expect(
       screen.getByRole('button', { name: '가나다 문제' })

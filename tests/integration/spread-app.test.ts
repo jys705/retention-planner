@@ -26,14 +26,14 @@ async function seed(count: number): Promise<string> {
   // 여유 강도는 FSRS 간격을 길게 잡아서 마감선 제약이 이기는 상태를 만든다.
   // 표준으로 두면 항목이 안 봐도 목표 기억률을 지켜서 마감선이 아예 안 당긴다.
   const goal = await usePlanner.getState().createGoal({
-    name: 'AWS SCS-C03',
+    name: '시험 준비',
     horizon: { kind: 'date', at: EXAM },
     intensity: 'easy',
   })
 
   for (let i = 0; i < count; i += 1) {
     await usePlanner.getState().addItem({
-      title: `AWS SCS-C03 ${i * 10 + 1}~${i * 10 + 10}번 문제 풀이`,
+      title: `${i * 10 + 1}~${i * 10 + 10}번 문제 풀이`,
       goalId: goal.id,
       firstStudiedAt: addDays(TODAY, -(2 + (i % 26))),
     })

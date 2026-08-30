@@ -15,7 +15,7 @@ afterEach(teardownApp)
 async function withItem(over = {}) {
   await setupApp(TODAY, {
     goals: [
-      aGoal({ id: 'g1', name: 'AWS SCS-C03' }),
+      aGoal({ id: 'g1', name: '시험 준비' }),
       aGoal({ id: 'g2', name: '정보보안 개념 정리' }),
     ],
     items: [
@@ -181,7 +181,7 @@ describe('항목 지우기', () => {
 describe('목표 지우기', () => {
   async function withGoal() {
     await setupApp(TODAY, {
-      goals: [aGoal({ id: 'g1', name: 'AWS SCS-C03' })],
+      goals: [aGoal({ id: 'g1', name: '시험 준비' })],
       items: [
         anItem({ id: 'i1', goal_id: 'g1', title: '가', due: '2026-10-05' }),
         anItem({ id: 'i2', goal_id: 'g1', title: '나', due: '2026-10-06' }),

@@ -61,8 +61,8 @@ describe('내보내기와 가져오기', () => {
   it('내보낸 것을 그대로 다시 읽어들인다', () => {
     const backup = toBackup(
       {
-        goals: [goal('g1', 'AWS SCS-C03')],
-        items: [item('i1', 'AWS SCS-C03 1~10번 문제 풀이', { goal_id: 'g1' })],
+        goals: [goal('g1', '시험 준비')],
+        items: [item('i1', '1~10번 문제 풀이', { goal_id: 'g1' })],
         reviews: [],
         settings: { theme: 'dark' },
       },
@@ -111,15 +111,15 @@ describe('내보내기와 가져오기', () => {
 describe('CSV 내보내기', () => {
   it('사람이 읽는 열 이름으로 내보낸다', () => {
     const csv = toCsv(
-      [item('i1', 'AWS SCS-C03 1~10번 문제 풀이', { goal_id: 'g1' })],
-      [goal('g1', 'AWS SCS-C03')]
+      [item('i1', '1~10번 문제 풀이', { goal_id: 'g1' })],
+      [goal('g1', '시험 준비')]
     )
     const lines = csv.split('\r\n')
     expect(lines[0]).toBe(
       '제목,메모,소속 목표,공부한 날,다음에 볼 날,지금까지 본 횟수,잊은 횟수,기억 지속력(일)'
     )
     expect(lines[1]).toBe(
-      'AWS SCS-C03 1~10번 문제 풀이,,AWS SCS-C03,2026-08-01,2026-08-13,2,1,12.35'
+      '1~10번 문제 풀이,,시험 준비,2026-08-01,2026-08-13,2,1,12.35'
     )
   })
 
