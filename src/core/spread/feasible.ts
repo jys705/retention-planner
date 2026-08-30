@@ -1,4 +1,5 @@
 import { fromEpochDay, toEpochDay, type DateOnly } from '../../lib/date'
+import { MIN_BUFFER_DAYS } from '../policy/constraints'
 import { defaultFsrs, Fsrs6 } from '../fsrs/fsrs6'
 import { Rating, type MemoryState } from '../fsrs/types'
 
@@ -72,7 +73,12 @@ export function retentionAtGoal(
  */
 export function feasibleInterval(input: FeasibleInput): FeasibleInterval {
   const notBeforeDay = toEpochDay(input.notBefore)
-  const latest = toEpochDay(input.readyAt) - input.bufferDays
+  // 늦은 쪽 끝은 목표한 날 전날까지다. 목표한 날은 이미 준비돼 있어야 하는
+  // 날이라 그날 잡으면 늦는다. 전날에 자리가 없을 때만 당일까지 쓴다.
+  const readyDay = toEpochDay(input.readyAt)
+  const preferred = readyDay - Math.max(MIN_BUFFER_DAYS, input.bufferDays)
+  const latest =
+    preferred >= notBeforeDay ? preferred : readyDay - input.bufferDays
 
   // 마감선 안에 잡을 수 있는 날이 아예 없는 경우.
   // 배치는 해야 하므로 창을 오늘 하루로 좁히고 부족으로 표시한다.

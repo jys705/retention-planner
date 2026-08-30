@@ -103,7 +103,7 @@ export interface ScheduleResult {
  * 들이밀면 계획이 아니라 짐이다. 준비는 늦어도 전날까지 끝나 있어야 하고,
  * 목표한 날에 보는 것은 해도 되고 안 해도 되는 일이어야 한다.
  */
-const MIN_BUFFER_DAYS = 1
+export const MIN_BUFFER_DAYS = 1
 
 function readyConstraint(
   horizon: ResolvedHorizon,

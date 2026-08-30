@@ -8,6 +8,7 @@ import {
   initialSchedule,
   schedule,
   type Intensity,
+  MIN_BUFFER_DAYS,
 } from '../core/policy/constraints'
 import {
   spread,
@@ -798,10 +799,17 @@ export function computeSpread(
       notBefore: placed
         ? maxDate(today, fromEpochDay(placed.earliest))
         : today,
+      // 목표한 날 당일로는 못 밀어낸다. 전날에 자리가 없을 때만 당일까지 쓴다.
       notAfter: placed
         ? fromEpochDay(placed.latest)
         : Number.isFinite(resolved.readyAt)
-          ? fromEpochDay(resolved.readyAt - settings.bufferDays)
+          ? fromEpochDay(
+              lastSchedulableDay(
+                resolved.readyAt,
+                settings.bufferDays,
+                toEpochDay(today)
+              )
+            )
           : null,
       pushPriority: pushPriorityOf(item, resolved.readyAt, state, today),
     })
@@ -830,6 +838,21 @@ export function computeSpread(
 
   const planned = buildPlannedReviews(active, patches, extraDates)
   return { patches, planned }
+}
+
+/**
+ * 목표한 날 앞에서 마지막으로 잡을 수 있는 날.
+ *
+ * 목표한 날은 시험을 보거나 발표를 하는 날이다. 그날은 이미 준비돼 있어야 하니
+ * 전날까지가 마지막이다. 전날이 이미 지났을 때만 당일까지 쓴다.
+ */
+function lastSchedulableDay(
+  readyAt: number,
+  bufferDays: number,
+  todayDay: number
+): number {
+  const preferred = readyAt - Math.max(MIN_BUFFER_DAYS, bufferDays)
+  return preferred >= todayDay ? preferred : readyAt - bufferDays
 }
 
 /** 배정 결과를 항목별 날짜 목록으로 모은다. */
