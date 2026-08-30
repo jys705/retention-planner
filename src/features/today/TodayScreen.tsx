@@ -37,7 +37,11 @@ export function TodayScreen({
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
   // 적어두기 줄은 카드 안에 있고 안내문은 카드 밖에 있다. 둘이 같은 상태를 봐야 한다.
-  const [detailOpen, setDetailOpen] = useState(false)
+  // 펼친 상태도 저장소에 둔다. 상세 설정을 펴 놓고 다른 탭에 갔다 오면
+  // 접혀 있는 것도 쓰던 것을 잃는 것과 같다.
+  const detailOpen = state.draft.detailOpen
+  const setDetailOpen = (open: boolean) =>
+    usePlanner.getState().setDraft({ detailOpen: open })
   const listRef = useRef<HTMLDivElement>(null)
 
   const { overdue, dueToday } = splitTodayItems({ items, today })

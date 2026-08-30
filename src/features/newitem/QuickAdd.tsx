@@ -1,8 +1,6 @@
-import { useState } from 'react'
 import type { Grade } from '../../core/fsrs/types'
 import type { Horizon } from '../../core/horizon/horizon'
 import {
-  DEFAULT_INITIAL_GRADE,
   type Intensity,
 } from '../../core/policy/constraints'
 import { Chip, Hint } from '../../components/Chip'
@@ -14,6 +12,7 @@ import { GoalSettingsReadout } from '../goal/GoalSettingsReadout'
 import { addDays, type DateOnly } from '../../lib/date'
 import { goalColor } from '../../lib/domain'
 import { horizonLabel, monthDay } from '../../lib/format'
+import { EMPTY_DRAFT, usePlanner } from '../../store/planner'
 import { GRADE_META } from '../../lib/grade'
 import { INTENSITY_META, intensityName } from '../../lib/intensity'
 import type { Settings } from '../../lib/settings'
@@ -44,24 +43,26 @@ export function QuickAdd({
   onDetailOpenChange: setDetailOpen,
   onAdd,
 }: QuickAddProps) {
-  const [title, setTitle] = useState('')
-  const [goalId, setGoalId] = useState<string | null>(null)
-  const [firstStudiedAt, setFirstStudiedAt] = useState<DateOnly>(today)
-  const [horizon, setHorizon] = useState<Horizon | null>(null)
-  const [intensity, setIntensity] = useState<Intensity | null>(null)
-  const [initialGrade, setInitialGrade] = useState<Grade>(DEFAULT_INITIAL_GRADE)
-  const [memo, setMemo] = useState('')
+  // 쓰다 만 것은 저장소에 둔다. 화면 안에 두면 다른 탭에 갔다 오는 사이에
+  // 컴포넌트가 내려갔다 올라와서 쓰던 글이 사라진다.
+  const draft = usePlanner((s) => s.draft)
+  const setDraft = usePlanner((s) => s.setDraft)
+
+  const { title, goalId, horizon, intensity, initialGrade, memo } = draft
+  // 안 고른 채로 날이 바뀌어도 '오늘' 이 오늘을 가리키게 비워 둔 채로 들고 있다.
+  const firstStudiedAt = draft.firstStudiedAt ?? today
+  const setTitle = (v: string) => setDraft({ title: v })
+  const setGoalId = (v: string | null) => setDraft({ goalId: v })
+  const setFirstStudiedAt = (v: DateOnly) => setDraft({ firstStudiedAt: v })
+  const setHorizon = (v: Horizon | null) => setDraft({ horizon: v })
+  const setIntensity = (v: Intensity | null) => setDraft({ intensity: v })
+  const setInitialGrade = (v: Grade) => setDraft({ initialGrade: v })
+  const setMemo = (v: string) => setDraft({ memo: v })
 
   function reset() {
-    setTitle('')
-    setMemo('')
-    setDetailOpen(false)
     // 직전에 쓴 설정을 다음 항목에 물려주지 않는다. 늘 같은 자리에서 시작한다.
-    setGoalId(null)
-    setFirstStudiedAt(today)
-    setHorizon(null)
-    setIntensity(null)
-    setInitialGrade(DEFAULT_INITIAL_GRADE)
+    setDraft(EMPTY_DRAFT)
+    setDetailOpen(false)
   }
 
   function submit() {

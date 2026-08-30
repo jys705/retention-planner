@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { screen, within } from '@testing-library/react'
+import { cleanup, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { usePlanner } from '../../src/store/planner'
@@ -330,5 +330,33 @@ describe('앞으로 보게 될 횟수', () => {
       )
       expect(label[1]).toBe(days <= 0 ? '오늘' : `${days}일 뒤`)
     }
+  })
+})
+
+describe('쓰다 만 것', () => {
+  it('S-207 다른 탭에 갔다 와도 쓰던 글이 남아 있다', async () => {
+    await setupApp(TODAY)
+    const first = render(<TodayScreen onOpenItem={() => {}} />)
+    await first.user.type(screen.getByLabelText('새 항목 제목'), '쓰다 만 제목')
+    await openDetail(first.user)
+
+    // 다른 탭으로 갔다가 돌아오는 것은 이 화면이 내려갔다 올라오는 것과 같다.
+    cleanup()
+    render(<TodayScreen onOpenItem={() => {}} />)
+
+    expect(await screen.findByLabelText('새 항목 제목')).toHaveValue('쓰다 만 제목')
+    // 펴 둔 상세 설정도 그대로 있어야 한다.
+    expect(screen.getByLabelText('앞으로 보게 될 횟수')).toBeInTheDocument()
+  })
+
+  it('S-208 적어두고 나면 빈 줄로 돌아온다', async () => {
+    await setupApp(TODAY)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
+    await user.type(screen.getByLabelText('새 항목 제목'), '적을 것')
+    await user.click(screen.getByRole('button', { name: /적어두기/ }))
+
+    cleanup()
+    render(<TodayScreen onOpenItem={() => {}} />)
+    expect(await screen.findByLabelText('새 항목 제목')).toHaveValue('')
   })
 })

@@ -105,6 +105,35 @@ export interface LastRating {
   ratingCountBefore: number
 }
 
+/**
+ * 적어두기 줄에 쓰다 만 것.
+ *
+ * 화면 안에 두면 다른 탭에 갔다 오는 사이에 컴포넌트가 내려갔다 올라와서
+ * 쓰던 글이 사라진다. 저장소에 두면 탭을 옮겨도 그대로 있다.
+ * 저장 장치에는 안 남긴다. 앱을 껐다 켜면 빈 줄에서 시작한다.
+ */
+export interface QuickAddDraft {
+  title: string
+  goalId: string | null
+  firstStudiedAt: DateOnly | null
+  horizon: Horizon | null
+  intensity: Intensity | null
+  initialGrade: Grade
+  memo: string
+  detailOpen: boolean
+}
+
+export const EMPTY_DRAFT: QuickAddDraft = {
+  title: '',
+  goalId: null,
+  firstStudiedAt: null,
+  horizon: null,
+  intensity: null,
+  initialGrade: DEFAULT_INITIAL_GRADE,
+  memo: '',
+  detailOpen: false,
+}
+
 interface PlannerState {
   ready: boolean
   today: DateOnly
@@ -117,6 +146,7 @@ interface PlannerState {
   /** 저장소에 쓸 때마다 하나씩 오른다. 사진이 아직 쓸모 있는지 가리는 데 쓴다. */
   writeSeq: number
   lastRating: LastRating | null
+  draft: QuickAddDraft
 
   load(): Promise<void>
   setToday(date: DateOnly): void
@@ -136,6 +166,7 @@ interface PlannerState {
   importAll(backup: Backup): Promise<void>
   recomputeAll(): Promise<void>
   undoLastRating(): Promise<void>
+  setDraft(patch: Partial<QuickAddDraft>): void
 }
 
 /** 손잡이가 아직 방금 것을 가리키는가. 그 사이 다른 쓰기가 있었으면 아니다. */
@@ -170,6 +201,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   writeSeq: 0,
   lastRating: null,
+  draft: EMPTY_DRAFT,
 
   async load() {
     const db = await repo()
@@ -186,6 +218,9 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       settings: parseSettings(rawSettings),
       today: clockToday(),
       ready: true,
+      // 쓰다 만 것은 이번 실행에만 산다. 껐다 켜면 빈 줄에서 시작한다.
+      draft: EMPTY_DRAFT,
+      lastRating: null,
     })
     await get().recomputeAll()
   },
@@ -399,6 +434,10 @@ export const usePlanner = create<PlannerState>((set, get) => ({
         ratingCountBefore,
       },
     })
+  },
+
+  setDraft(patch) {
+    set({ draft: { ...get().draft, ...patch } })
   },
 
   async undoLastRating() {
