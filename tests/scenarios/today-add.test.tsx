@@ -10,8 +10,9 @@ import {
   setDateInput,
   setupApp,
   shift,
-  teardownApp,
+  pickCard,
   pickSelect,
+  teardownApp,
 } from './harness'
 import { fullDate } from '../../src/lib/format'
 
@@ -297,5 +298,37 @@ describe('오늘 화면: 항목 적기', () => {
     const item = usePlanner.getState().items[0]
     expect(item.first_studied_at).toBe(TODAY)
     expect(item.last_review).toBe(TODAY)
+  })
+})
+
+describe('앞으로 보게 될 횟수', () => {
+  it('S-205 오른쪽 숫자는 오늘로부터 며칠 뒤인지다', async () => {
+    // 앞 복습과의 간격을 'N일 뒤' 라고 적으면 8월 31일과 9월 1일이 나란히
+    // '1일 뒤' 가 되어 셈이 틀린 것처럼 보인다.
+    await setupApp(TODAY)
+    const { user } = render(<TodayScreen onOpenItem={() => {}} />)
+    await user.type(screen.getByLabelText('새 항목 제목'), '오늘 적는 것')
+    await openDetail(user)
+    // 간격이 짧으면 앞 복습과의 사이가 1, 1, 2 처럼 되풀이된다. 그때
+    // 간격을 그대로 적으면 같은 수가 잇달아 서서 셈이 틀린 것처럼 보인다.
+    await pickCard(user, '복습 강도', '최대')
+
+    const rail = screen.getByLabelText('앞으로 보게 될 횟수')
+    // 한 줄에 '10월 5일 (월)' 과 '4일 뒤' 가 나란히 선다. 둘이 서로 맞는지 본다.
+    const rows = [...rail.querySelectorAll('div')].filter((el) =>
+      /\d+월 \d+일/.test(el.textContent ?? '')
+    )
+    expect(rows.length).toBeGreaterThan(2)
+
+    for (const row of rows) {
+      const text = row.textContent ?? ''
+      const date = text.match(/(\d+)월 (\d+)일/)!
+      const label = text.match(/(오늘|\d+일 뒤)/)!
+      const shown = new Date(2026, Number(date[1]) - 1, Number(date[2]))
+      const days = Math.round(
+        (shown.getTime() - new Date(2026, 9, 1).getTime()) / 86_400_000
+      )
+      expect(label[1]).toBe(days <= 0 ? '오늘' : `${days}일 뒤`)
+    }
   })
 })

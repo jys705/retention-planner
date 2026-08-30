@@ -96,6 +96,15 @@ export interface ScheduleResult {
  * 마지막으로 본 날이 언제든 stability 가 얼마든 모두 같은 하루로 빨려든다.
  * 목표는 기억률을 '넘기는' 것이지 그날 기억률을 '가장 높이는' 것이 아니다.
  */
+/**
+ * 목표한 날 당일에는 해야 할 복습을 안 잡는다.
+ *
+ * 목표한 날은 시험을 보거나 발표를 하는 날이다. 그날 아침에 앱이 열두 개를
+ * 들이밀면 계획이 아니라 짐이다. 준비는 늦어도 전날까지 끝나 있어야 하고,
+ * 목표한 날에 보는 것은 해도 되고 안 해도 되는 일이어야 한다.
+ */
+const MIN_BUFFER_DAYS = 1
+
 function readyConstraint(
   horizon: ResolvedHorizon,
   fromDay: number,
@@ -103,8 +112,12 @@ function readyConstraint(
   skipSafe: boolean
 ): number {
   if (skipSafe) return NEVER
-  const beforeReady = horizon.readyAt - bufferDays - fromDay
-  if (beforeReady >= 1) return beforeReady
+  // 하루라도 앞에 자리가 있으면 목표한 날 당일은 비워 둔다. 자리가 없으면
+  // 당일이라도 잡는 편이 낫다. 여기서 손을 놓으면 FSRS 가 목표를 넘어간다.
+  const preferred = horizon.readyAt - Math.max(MIN_BUFFER_DAYS, bufferDays) - fromDay
+  if (preferred >= 1) return preferred
+  const atGoal = horizon.readyAt - bufferDays - fromDay
+  if (atGoal >= 1) return atGoal
   // 준비 마감선까지 남은 날이 없으면 유지 마감선을 기준으로 다시 본다.
   const beforeHold = horizon.holdUntil - bufferDays - fromDay
   if (beforeHold >= 1) return beforeHold
@@ -127,7 +140,9 @@ function sessionsConstraint(
   const remaining = Math.max(0, minReviews - repsSinceGoal)
   if (remaining === 0 || !Number.isFinite(horizon.readyAt)) return NEVER
   // 목표한 날 당일에 잡으면 그날은 이미 준비돼 있어야 하는 날인데 늦는다.
-  const last = horizon.readyAt - bufferDays
+  // 앞에 자리가 없을 때만 당일까지 쓴다.
+  const preferred = horizon.readyAt - Math.max(MIN_BUFFER_DAYS, bufferDays)
+  const last = fromDay < preferred ? preferred : horizon.readyAt - bufferDays
   if (fromDay >= last) return NEVER
   return Math.floor((last - fromDay) / remaining)
 }

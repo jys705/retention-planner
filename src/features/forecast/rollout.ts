@@ -6,6 +6,8 @@ import { addDays, diffDays, type DateOnly } from '../../lib/date'
 import { effectiveConfig, isActive, memoryStateOf } from '../../lib/domain'
 import type { Settings } from '../../lib/settings'
 import { computeSpread } from '../../store/planner'
+import { resolveHorizon } from '../../core/horizon/horizon'
+import { fromEpochDay } from '../../lib/date'
 
 /** 앞으로의 평가를 몇 점으로 가정할지. */
 const ASSUMED_GRADE: Grade = 3
@@ -65,7 +67,13 @@ export function rollout({
     })
 
     const due = current.filter(
-      (item) => isActive(item) && item.due !== null && item.due <= date
+      (item) =>
+        isActive(item) &&
+        item.due !== null &&
+        item.due <= date &&
+        // 목표 시점을 정해 둔 항목은 그 날이 지나면 예보에서 뺀다. 목표를
+        // 지나서까지 이어 보는 것은 물어본 적이 없는 구간이다.
+        !pastGoal(item, goalById, settings, date)
     )
 
     out.push({
@@ -91,6 +99,27 @@ export function rollout({
   }
 
   return out
+}
+
+/**
+ * 그 날이 이 항목의 목표 시점을 지났는가.
+ *
+ * 항목이 제 시점을 따로 갖고 있으면 그것이 목표의 것을 이긴다.
+ * 아무것도 안 정해 뒀으면 지날 시점이 없으므로 늘 거짓이다.
+ */
+function pastGoal(
+  item: ItemRow,
+  goalById: ReadonlyMap<string, GoalRow>,
+  settings: Settings,
+  date: DateOnly
+): boolean {
+  const goal = item.goal_id ? (goalById.get(item.goal_id) ?? null) : null
+  const resolved = resolveHorizon(effectiveConfig(item, goal, settings).horizon)
+  const end = Number.isFinite(resolved.holdUntil)
+    ? resolved.holdUntil
+    : resolved.readyAt
+  if (!Number.isFinite(end)) return false
+  return date > fromEpochDay(end)
 }
 
 /** 그날 그 항목을 떠올릴 확률. */

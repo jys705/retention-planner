@@ -93,10 +93,14 @@ export function PlanPreview({
   // 지난 날짜로 적으면 이미 볼 때가 지난 것이라 적자마자 오늘 목록에 오른다.
   // 적기 전에 알려야 "왜 바로 뜨지" 하고 놀라지 않는다.
   const dueNow = initial.due <= today
-  // 각 복습이 그 앞의 복습에서 며칠 뒤인지. 첫 줄만 오늘을 기준으로 센다.
+  // 막대 길이는 앞 복습과의 간격이다. 간격이 점점 길어지는 흐름을 그린다.
+  // 오른쪽 글자는 오늘로부터 며칠 뒤인지다. 둘을 한 수로 합치면 안 된다.
+  // 간격을 '1일 뒤' 라고 적으면 8월 31일과 9월 1일이 나란히 '1일 뒤' 가 되어
+  // 셈이 틀린 것처럼 보인다.
   const steps = dates.map((date, index) => ({
     date,
     gap: diffDays(index === 0 ? today : dates[index - 1], date),
+    fromToday: diffDays(today, date),
   }))
   const shown = steps.slice(0, SHOWN)
   const rest = steps.length - shown.length
@@ -153,7 +157,7 @@ export function PlanPreview({
                   </span>
                 </span>
                 <span className="num relative text-[11px] text-text-3">
-                  {step.gap}일 뒤
+                  {step.fromToday <= 0 ? '오늘' : `${step.fromToday}일 뒤`}
                 </span>
               </div>
             ))}

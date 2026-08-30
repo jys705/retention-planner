@@ -2,6 +2,8 @@
 import { screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ForecastScreen } from '../../src/features/forecast/ForecastScreen'
+import { rollout } from '../../src/features/forecast/rollout'
+import { usePlanner } from '../../src/store/planner'
 import { aGoal, anItem, render, setupApp, teardownApp } from './harness'
 
 const TODAY = '2026-10-01'
@@ -211,5 +213,36 @@ describe('예보가 보여주는 기간', () => {
     })
     render(<ForecastScreen />)
     expect((await screen.findAllByText('앞으로 14일'))[0]).toBeInTheDocument()
+  })
+})
+
+describe('목표를 지난 항목', () => {
+  it('S-201 목표한 날이 지나면 예보에 안 나온다', async () => {
+    // 목표를 지나서까지 이어 보는 것은 물어본 적이 없는 구간이다.
+    await setupApp(TODAY, {
+      goals: [
+        // 목표를 지나도 계속 보는 쪽으로 둬야 걸러내는 일이 실제로 생긴다.
+        // 보관하는 쪽은 목표를 지나면 스스로 사라진다.
+        aGoal({ id: 'g1', horizon_kind: 'date', ready_at: '2026-10-08',
+          hold_until: '2026-10-08', post_goal_mode: 'maintain', max_interval_days: 3 }),
+        aGoal({ id: 'g2', horizon_kind: 'date', ready_at: '2026-10-28',
+          hold_until: '2026-10-28', post_goal_mode: 'maintain' }),
+      ],
+      items: [
+        // 간격이 짧아 목표를 지나서도 계속 올라오는 항목이라야 걸러내는 일이 생긴다.
+        anItem({ id: 'a', title: '이른 목표 것', goal_id: 'g1', due: '2026-10-02',
+          first_studied_at: '2026-09-01', last_review: '2026-09-28',
+          stability: 1.2 }),
+        anItem({ id: 'b', title: '늦은 목표 것', goal_id: 'g2', due: '2026-10-02',
+          first_studied_at: '2026-09-01', last_review: '2026-09-28', stability: 5 }),
+      ],
+    })
+    const s = usePlanner.getState()
+    const days = rollout({ items: s.items, goals: s.goals, settings: s.settings, from: TODAY, days: 27 })
+    const afterFirst = days.filter((d) => d.date > '2026-10-08')
+    // 이른 목표 것은 10월 8일 뒤로 한 번도 안 나온다.
+    expect(afterFirst.some((d) => d.items.some((i) => i.itemId === 'a'))).toBe(false)
+    // 늦은 목표 것은 계속 나온다.
+    expect(afterFirst.some((d) => d.items.some((i) => i.itemId === 'b'))).toBe(true)
   })
 })

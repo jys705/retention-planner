@@ -15,6 +15,7 @@ import {
   usePlanner,
 } from '../../store/planner'
 import { QuickAdd, QuickAddHint } from '../newitem/QuickAdd'
+import { GoalDayNote } from './GoalDayNote'
 import { JustDone } from './JustDone'
 import { TodayRow } from './TodayRow'
 
@@ -29,6 +30,10 @@ export function TodayScreen({
   const addItem = usePlanner((s) => s.addItem)
   const undoLastRating = usePlanner((s) => s.undoLastRating)
   const undoable = canUndo(state) ? state.lastRating : null
+  // 오늘이 목표한 날인 목표들. 준비는 어제까지 끝나 있다.
+  const goalsToday = goals.filter(
+    (g) => g.archived_at === null && g.ready_at === today
+  )
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
   // 적어두기 줄은 카드 안에 있고 안내문은 카드 밖에 있다. 둘이 같은 상태를 봐야 한다.
@@ -105,6 +110,9 @@ export function TodayScreen({
       </header>
 
       <div className="flex flex-col">
+        {goalsToday.length > 0 ? (
+          <GoalDayNote goals={goalsToday} dueCount={todayItems.length} />
+        ) : null}
         {undoable ? (
           <JustDone
             last={undoable}

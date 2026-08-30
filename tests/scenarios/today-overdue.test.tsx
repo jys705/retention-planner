@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { usePlanner } from '../../src/store/planner'
 import { addDays as shift } from '../../src/lib/date'
+import { rollout } from '../../src/features/forecast/rollout'
 import { aGoal, anItem, render, setupApp, teardownApp } from './harness'
 
 const TODAY = '2026-10-01'
@@ -253,5 +254,59 @@ describe('밀린 것과 하루 최대 개수', () => {
       .items.filter((i) => i.id.startsWith('a'))
       .map((i) => i.due)
     expect(after).toEqual(first)
+  })
+})
+
+describe('목표한 날 당일', () => {
+  it('S-202 목표한 날 당일에는 해야 할 복습을 안 잡는다', async () => {
+    // 그날은 시험을 보는 날이다. 준비는 늦어도 전날까지 끝나 있어야 한다.
+    const READY = shift(TODAY, 14)
+    await setupApp(TODAY, {
+      // 버퍼를 0 으로 둬도 당일은 비워 둔다.
+      settings: { bufferDays: '0' },
+      goals: [
+        aGoal({ id: 'g1', horizon_kind: 'date', ready_at: READY, hold_until: READY, min_reviews: 3 }),
+      ],
+      items: Array.from({ length: 12 }, (_, i) =>
+        anItem({
+          id: `i${i}`, title: `항목 ${i}`, goal_id: 'g1',
+          first_studied_at: '2026-09-01',
+          last_review: shift(TODAY, -(2 + (i % 9))),
+          due: shift(TODAY, (i % 5) + 1),
+          stability: 3 + i * 1.5, difficulty: 5, reps: 2, reps_since_goal: 1,
+        })
+      ),
+    })
+    render(<TodayScreen onOpenItem={() => {}} />)
+    await screen.findByText('오늘 볼 항목')
+    // 저장된 예정일은 '다음 한 번' 뿐이라 목표 근처를 못 본다. 하루씩 굴려서 본다.
+    const s = usePlanner.getState()
+    const plan = rollout({
+      items: s.items, goals: s.goals, settings: s.settings, from: TODAY, days: 16,
+    })
+    const at = (d: string) => plan.find((x) => x.date === d)?.items.length ?? 0
+    // 앞에 자리가 있는 만큼은 전날로 당겨 둔다.
+    expect(at(shift(READY, -1))).toBeGreaterThan(at(READY))
+  })
+
+  it('S-203 목표한 날에는 해도 되고 안 해도 된다고 말한다', async () => {
+    await setupApp(TODAY, {
+      goals: [aGoal({ id: 'g1', horizon_kind: 'date', ready_at: TODAY, hold_until: TODAY })],
+      items: [anItem({ id: 'i1', title: '남은 것', goal_id: 'g1', due: TODAY })],
+    })
+    render(<TodayScreen onOpenItem={() => {}} />)
+    await screen.findByText('오늘 볼 항목')
+    expect(screen.getByText(/오늘이/)).toHaveTextContent('목표한 날이에요')
+    expect(screen.getByText(/안 봐도 괜찮습니다/)).toBeInTheDocument()
+  })
+
+  it('S-204 목표한 날에 볼 게 없으면 그렇게 말한다', async () => {
+    await setupApp(TODAY, {
+      goals: [aGoal({ id: 'g1', horizon_kind: 'date', ready_at: TODAY, hold_until: TODAY })],
+      items: [anItem({ id: 'i1', title: '앞날 것', goal_id: 'g1', due: shift(TODAY, 3) })],
+    })
+    render(<TodayScreen onOpenItem={() => {}} />)
+    await screen.findByText('오늘 볼 항목')
+    expect(screen.getByText(/오늘은 보실 게 없습니다/)).toBeInTheDocument()
   })
 })
