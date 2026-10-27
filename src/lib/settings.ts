@@ -28,6 +28,8 @@ export interface Settings {
   lastNotifiedDate: string | null
   /** 평가한 횟수. 20회를 넘기면 등급 설명을 한 줄로 줄인다. */
   ratingCount: number
+  /** 끝났다고 알리고 확인까지 받은 목표들. 목표와 끝나는 날을 같이 적는다. */
+  seenEnded: string[]
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -46,6 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
   onboardingDone: false,
   lastNotifiedDate: null,
   ratingCount: 0,
+  seenEnded: [],
 }
 
 /** 등급 설명을 상시 노출하다가 이 횟수를 넘기면 한 줄로 줄인다. */
@@ -80,14 +83,8 @@ export function parseSettings(raw: Record<string, string>): Settings {
     out.maxIntervalDays =
       raw.maxIntervalDays === '' || !Number.isFinite(parsed) ? null : parsed
   }
-  if (raw.dismissedPrefixes) {
-    try {
-      const parsed: unknown = JSON.parse(raw.dismissedPrefixes)
-      if (Array.isArray(parsed)) out.dismissedPrefixes = parsed as string[]
-    } catch {
-      out.dismissedPrefixes = []
-    }
-  }
+  out.dismissedPrefixes = parseList(raw.dismissedPrefixes)
+  out.seenEnded = parseList(raw.seenEnded)
   if (raw.lastSuggestionDate !== undefined) {
     out.lastSuggestionDate = raw.lastSuggestionDate || null
   }
@@ -99,6 +96,19 @@ export function parseSettings(raw: Record<string, string>): Settings {
   }
 
   return out
+}
+
+/** 목록 값은 JSON 배열로 저장한다. 깨졌으면 빈 목록으로 본다. */
+function parseList(raw: string | undefined): string[] {
+  if (!raw) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed)
+      ? parsed.filter((v): v is string => typeof v === 'string')
+      : []
+  } catch {
+    return []
+  }
 }
 
 export function serializeSetting(value: Settings[keyof Settings]): string {

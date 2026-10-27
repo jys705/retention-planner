@@ -4,6 +4,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { canUndo, usePlanner } from '../../src/store/planner'
 import { freezeToday } from '../../src/lib/clock'
+import { addDays } from '../../src/lib/date'
 import { anItem, render, setupApp, teardownApp } from './harness'
 
 const TODAY = '2026-10-01'
@@ -110,17 +111,22 @@ describe('방금 한 평가 되돌리기', () => {
     }
   })
 
-  it('S-185 목표를 다 채워 내린 것도 되돌리면 돌아온다', async () => {
+  it('S-185 목표 마지막 날의 평가도 되돌리면 돌아온다', async () => {
+    // 예전에는 목표가 지난 항목을 평가하면 그 자리에서 보관했고, 이 시험은 그
+    // 보관까지 되돌리는지를 봤다. 지금은 평가가 보관을 일으키지 않는다. 끝은 날짜가
+    // 정하고, 목표 시점이 지난 다음 날 앱을 켜는 순간 보관된다. 평가가 닿는 마지막
+    // 자리는 목표의 마지막 날이다. 그날의 평가도 되돌리기가 온전히 물려야 하고,
+    // 판은 오지 않을 다음 날짜를 약속하지 않아야 한다.
     await setupApp(TODAY, {
       items: [
         anItem({
           id: 'i1',
-          title: '끝난 것',
+          title: '마지막 날 것',
           due: TODAY,
           last_review: '2026-09-24',
           horizon_kind: 'date',
-          ready_at: '2026-09-25',
-          hold_until: '2026-09-25',
+          ready_at: TODAY,
+          hold_until: TODAY,
           min_reviews: 1,
           reps_since_goal: 3,
         }),
@@ -130,14 +136,25 @@ describe('방금 한 평가 되돌리기', () => {
     await screen.findByText('오늘 볼 항목')
     await usePlanner.getState().rateItem('i1', 4, { reviewedAt: TODAY })
 
+    // 마지막 날에는 아직 목표 안이다. 다음 날짜는 목표 뒤라 판이 날짜를 말하지 않는다.
     const done = usePlanner.getState().items[0]
-    if (done.archived_at !== null) {
-      expect(await screen.findByLabelText('방금 한 일')).toHaveTextContent(
-        '서재에서도 내렸어요'
-      )
-    }
+    expect(done.archived_at).toBeNull()
+    expect(done.due! > TODAY).toBe(true)
+    const panel = await screen.findByLabelText('방금 한 일')
+    expect(panel).toHaveTextContent('목표의 마지막 날이라 다음 날짜는 잡지 않아요')
+    expect(panel).not.toHaveTextContent('올라옵니다')
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+
     await usePlanner.getState().undoLastRating()
+    expect(usePlanner.getState().reviews).toHaveLength(0)
     expect(usePlanner.getState().items[0].archived_at).toBeNull()
+    expect(usePlanner.getState().items[0].state).toBe('review')
+    expect(usePlanner.getState().items[0].due).toBe(TODAY)
     expect(screen.getAllByRole('checkbox')).toHaveLength(1)
+
+    // 다음 날이 되면 평가하지 않아도 목표가 끝난 것으로 넘어간다.
+    usePlanner.getState().setToday(addDays(TODAY, 1))
+    await usePlanner.getState().recomputeAll()
+    expect(usePlanner.getState().items[0].archived_at).not.toBeNull()
   })
 })

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import type { GoalRow, ItemRow } from '../../src/db/types'
 import {
   BackupFormatError,
@@ -140,6 +140,11 @@ describe('앱에서 내보내고 다시 가져오기', () => {
       '../../src/store/planner'
     )
     const TODAY = '2026-10-01'
+    // 시계를 고정한다. 가져오는 순간의 다시 계산이 실제 날짜로 돌면, 그 날이 이
+    // 목표 기간을 지난 뒤에는 항목이 마친 것으로 넘어가 원래대로 돌아오지 않는다.
+    const { freezeToday, unfreezeToday } = await import('../../src/lib/clock')
+    freezeToday(TODAY)
+    onTestFinished(unfreezeToday)
 
     resetRepositoryForTest()
     resetPlannerForTest()
@@ -192,10 +197,14 @@ describe('앱에서 내보내고 다시 가져오기', () => {
     const after = usePlanner.getState()
     expect(after.goals.map((x) => x.id)).toEqual(before.goals.map((x) => x.id))
     expect(after.items.map((x) => x.id)).toEqual(before.items.map((x) => x.id))
-    expect(after.reviews.map((x) => x.id)).toEqual(
-      before.reviews.map((x) => x.id)
-    )
+    // 시계를 고정해서 같은 시각에 적힌 기록은 저장소가 돌려주는 차례가 정해져 있지
+    // 않다. 차례 대신 같은 기록이 같은 값으로 돌아왔는지를 하나씩 본다.
+    const byId = (list: typeof before.reviews) =>
+      [...list].sort((a, b) => (a.id < b.id ? -1 : 1))
+    expect(byId(after.reviews)).toEqual(byId(before.reviews))
     expect(after.items[0].stability).toBeCloseTo(before.items[0].stability!, 12)
     expect(after.items[0].due).toBe(before.items[0].due)
+    expect(after.items[0].state).toBe(before.items[0].state)
+    expect(after.items[0].archived_at).toBe(before.items[0].archived_at)
   })
 })

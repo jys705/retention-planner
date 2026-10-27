@@ -1,7 +1,11 @@
+import { Note, NoteButton } from '../../components/Note'
 import { dueLabel, josa } from '../../lib/format'
 import { gradeName } from '../../lib/grade'
 import type { LastRating } from '../../store/planner'
 import type { DateOnly } from '../../lib/date'
+
+/** 방금 본 것의 다음 날짜가 목표 밖일 때. 마지막 날인지, 그 전인지. */
+export type Ending = 'lastDay' | 'early' | null
 
 /**
  * 방금 한 평가를 물릴 자리.
@@ -13,35 +17,27 @@ import type { DateOnly } from '../../lib/date'
 export function JustDone({
   last,
   today,
+  ending = null,
   onUndo,
 }: {
   last: LastRating
   today: DateOnly
+  ending?: Ending
   onUndo: () => void
 }) {
   return (
-    <section
-      aria-label="방금 한 일"
-      className="mb-[10px] flex items-center gap-3 rounded-card border border-line bg-surface px-[16px] py-[11px]"
+    <Note
+      label="방금 한 일"
+      actions={<NoteButton onClick={onUndo}>되돌리기</NoteButton>}
     >
-      <div className="flex min-w-0 flex-col gap-[2px]">
-        <span className="text-[11.5px] text-text-3">방금 한 일</span>
-        <span className="text-[12.5px] leading-relaxed text-text-2">
-          {/* 제목이 길거나 숫자로 끝나도 문장과 안 엉키게 따옴표로 떼어 놓는다. */}
-          <span className="text-text-1">{`"${last.title}"`}</span>
-          {josa(last.title, '을', '를')}{' '}
-          {gradeName(last.grade)}
-          {josa(gradeName(last.grade), '으로', '로')} 적었어요. {tail(last, today)}
-        </span>
-      </div>
-      <button
-        type="button"
-        onClick={onUndo}
-        className="ml-auto flex-none rounded-ctl border border-line-2 px-[12px] py-[7px] text-[13px] text-text-2 transition-colors hover:bg-hover"
-      >
-        되돌리기
-      </button>
-    </section>
+      <span className="text-[12.5px] leading-relaxed text-text-2">
+        {/* 제목이 길거나 숫자로 끝나도 문장과 안 엉키게 따옴표로 떼어 놓는다. */}
+        <span className="text-text">{`"${last.title}"`}</span>
+        {josa(last.title, '을', '를')}{' '}
+        {gradeName(last.grade)}
+        {josa(gradeName(last.grade), '으로', '로')} 적었어요. {tail(last, today, ending)}
+      </span>
+    </Note>
   )
 }
 
@@ -52,11 +48,17 @@ export function JustDone({
  * 그 뒤 다시 계산이 날짜를 옮기기 때문에 단추의 약속과 실제 날짜가 갈린다.
  * 여기서는 저장된 날짜를 말한다.
  */
-function tail(last: LastRating, today: DateOnly): string {
-  if (last.archived) return '목표를 다 채워서 서재에서도 내렸어요.'
+function tail(last: LastRating, today: DateOnly, ending: Ending): string {
+  if (last.archived) return '목표를 마쳐서 서재의 마친 것으로 옮겼어요.'
+  // 다음 날짜가 목표 밖이면 그 날은 오지 않는다. 날짜를 말하면 거짓 약속이 된다.
+  if (ending === 'lastDay') return '목표의 마지막 날이라 다음 날짜는 잡지 않아요.'
+  if (ending === 'early') return '목표한 날까지는 이것으로 마쳐요.'
   if (last.due === null) return '다음 날짜는 아직 없어요.'
   // 하루 상한이 밀어내면 방금 본 것이 오늘로 도로 잡히기도 한다. 그때
   // '다음은 오늘' 이라고 하면 줄이 그대로 있는 것과 어긋난다.
   if (last.due <= today) return '오늘 목록에 그대로 뒀어요.'
-  return `다음은 ${dueLabel(today, last.due)}에 올라옵니다.`
+  const when = dueLabel(today, last.due)
+  // '내일에' 와 '모레에' 는 어색하다. 날짜나 'N일 뒤' 에만 '에' 를 붙인다.
+  const at = when === '내일' || when === '모레' ? when : `${when}에`
+  return `다음은 ${at} 올라옵니다.`
 }

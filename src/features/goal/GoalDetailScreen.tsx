@@ -13,18 +13,25 @@ import { cn } from '../../lib/cn'
 import { diffDays } from '../../lib/date'
 import { effectiveConfig, goalColor, isActive, memoryStateOf } from '../../lib/domain'
 import {
-  daysLeftLabel,
   dueLabel,
   horizonLabel,
   monthDay,
   percent,
   weekday,
 } from '../../lib/format'
+import {
+  dueBeyondEnd,
+  goalEndDay,
+  goalEnded,
+  goalTimeLabel,
+} from '../../lib/lifecycle'
 import { INTENSITY_META } from '../../lib/intensity'
 import { usePlanner } from '../../store/planner'
 import { LoadBars, type LoadBar } from '../charts/LoadBars'
 import { rollout } from '../forecast/rollout'
 import { HorizonPicker } from '../newitem/HorizonPicker'
+import { FinishedGoal } from './FinishedGoal'
+import { RetentionBar } from './RetentionBar'
 
 export function GoalDetailScreen({
   goalId,
@@ -50,7 +57,20 @@ export function GoalDetailScreen({
     )
   }
 
+  // 목표 시점이 지난 목표는 할 일이 아니라 결과를 보여준다.
+  if (goalEnded(goal, today)) {
+    return (
+      <FinishedGoal goal={goal} onOpenItem={onOpenItem} onDeleted={onDeleted} />
+    )
+  }
+
   const mine = items.filter((i) => i.goal_id === goal.id && isActive(i))
+  const end = goalEndDay(goal)
+  // 대략 목표의 유지 기간에 들어섰으면 준비한 날은 지났다. 그때부터는 기간이
+  // 끝나는 날까지 붙잡는 것이 목표다.
+  const holding =
+    goal.horizon_kind === 'window' && goal.ready_at !== null && today >= goal.ready_at
+  const goalDay = holding ? end : goal.ready_at
   const rows = mine.map((item) => {
     const config = effectiveConfig(item, goal, settings)
     const state = memoryStateOf(item)
@@ -65,9 +85,9 @@ export function GoalDetailScreen({
     // 빠져서, 스무 날 밀린 것과 어제 본 것이 목표한 날 기억률을 같게 적는다.
     // 복습을 안 했는데 기억률이 오르는 그림까지 나온다.
     const retentionAtGoal =
-      state && goal.ready_at && item.last_review
+      state && goalDay && item.last_review
         ? defaultFsrs.retrievability(
-            Math.max(0, diffDays(item.last_review, goal.ready_at)),
+            Math.max(0, diffDays(item.last_review, goalDay)),
             state.stability
           )
         : retention
@@ -78,7 +98,9 @@ export function GoalDetailScreen({
 
   // 이미 잡혀 있는 다음 한 번만 그리면 목표한 날까지의 절반 넘게가 빈칸이 된다.
   // 예보와 같은 방식으로 하루씩 굴려서 목표한 날까지의 계획을 통째로 얻는다.
-  const runway = goal.ready_at ? Math.max(1, diffDays(today, goal.ready_at)) : 60
+  // 대략 목표는 유지 기간 끝까지가 계획이다. 준비한 날에서 끊으면 그 뒤의 붙잡는
+  // 복습이 통째로 빠진다.
+  const runway = end ? Math.max(1, diffDays(today, end)) : 60
   const plan = rollout({ items, goals, settings, from: today, days: runway })
   const bars: LoadBar[] = plan.map((day) => ({
     date: day.date,
@@ -126,7 +148,7 @@ export function GoalDetailScreen({
             />
             {goal.ready_at ? (
               <span className="flex-none rounded-[5px] bg-adj-bg px-[9px] py-[3px] text-[11.5px] font-medium text-adj-fg">
-                {daysLeftLabel(today, goal.ready_at)}
+                {goalTimeLabel(goal, today)}
               </span>
             ) : null}
           </div>
@@ -201,7 +223,7 @@ export function GoalDetailScreen({
       ) : null}
 
       <p className="text-[16px] font-medium leading-relaxed">
-        {didSentence(rows.length, totalReviews, atRisk, overdue, goal)}
+        {didSentence(rows.length, totalReviews, atRisk, overdue, goal, today, target)}
       </p>
 
       <section
@@ -369,7 +391,10 @@ export function GoalDetailScreen({
                         {percent(retentionAtGoal)}
                       </td>
                       <td className="num py-2 text-right text-text-3">
-                        {item.due ? dueLabel(today, item.due) : '없음'}
+                        {/* 목표 뒤로 잡힌 날은 오지 않는다. 그 전에 목표가 끝나 내려간다. */}
+                        {item.due && !dueBeyondEnd(item, goal, settings)
+                          ? dueLabel(today, item.due)
+                          : '없음'}
                       </td>
                     </tr>
                   )
@@ -452,7 +477,9 @@ function didSentence(
   totalReviews: number,
   atRisk: number,
   overdue: number,
-  goal: GoalRow
+  goal: GoalRow,
+  today: string,
+  target: number
 ): string {
   if (count === 0) {
     return '아직 이 목표에 묶인 항목이 없어요. 오늘 화면에서 적고 이 목표에 넣어보세요.'
@@ -460,10 +487,30 @@ function didSentence(
   if (!goal.ready_at) {
     return `${count}개를 마감 없이 계속 볼 수 있게 잡아뒀어요. 잊을 만할 때마다 올라옵니다.`
   }
+  // 목표한 날 당일에는 더 잡아둘 것이 없다. 준비가 어디까지 됐는지만 말한다.
+  if (goal.horizon_kind === 'date' && goal.ready_at === today) {
+    return overdue > 0
+      ? `오늘이 목표한 날이에요. 준비하면서 못 본 ${overdue}개는 오늘 목록에 올려뒀어요.`
+      : '오늘이 목표한 날이에요. 준비는 어제까지 마쳤어요.'
+  }
 
   // 가장 몰리는 날과 하루 상한은 바로 옆 '하루 분량' 과 그림이 이미 말한다.
   // 여기서 또 적으면 같은 말을 두 번 읽게 된다.
-  const parts = [`목표한 날까지 ${totalReviews}번 볼 수 있게 잡아뒀어요.`]
+  const holdEnd = goal.horizon_kind === 'window' ? goal.hold_until : null
+  const holding = holdEnd !== null && today >= goal.ready_at
+  const until = holdEnd !== null ? '목표한 기간이 끝날 때까지' : '목표한 날까지'
+  const parts = holding
+    ? [
+        // 유지 기간에는 준비가 끝났다. 지금 하는 일은 기간 끝까지 붙잡아 두는 것이다.
+        `${monthDay(holdEnd)}까지 ${count}개를 목표 ${percent(target)} 위로 붙잡아 두고 있어요.`,
+        totalReviews > 0 ? `그때까지 ${totalReviews}번 볼 수 있게 잡아뒀어요.` : '',
+      ].filter(Boolean)
+    : [
+        // 남은 것이 모두 목표 뒤로 잡혀 있으면 '0번 잡아뒀어요' 가 된다. 있는 그대로 말한다.
+        totalReviews > 0
+          ? `${until} ${totalReviews}번 볼 수 있게 잡아뒀어요.`
+          : `${until} 더 잡아둔 복습이 없어요.`,
+      ]
   if (atRisk > 0) {
     parts.push(`한 번으로 모자란 ${atRisk}개는 두 번씩 잡았습니다.`)
   }
@@ -473,34 +520,4 @@ function didSentence(
     parts.push(`밀린 ${overdue}개는 오늘 목록에 그대로 올려뒀어요.`)
   }
   return parts.join(' ')
-}
-
-/**
- * 지금 기억률이 목표까지 얼마나 왔는지.
- *
- * 0부터 100까지 그리면 83% 와 90% 가 붙어 보여서 나아가는 느낌이 안 난다.
- * 기억률은 실제로 50 아래로 잘 안 내려가므로 50 부터 그린다.
- */
-function RetentionBar({ now, target }: { now: number; target: number }) {
-  const FLOOR = 0.5
-  const at = (v: number) =>
-    Math.min(100, Math.max(0, ((v - FLOOR) / (1 - FLOOR)) * 100))
-  return (
-    <div
-      className="relative h-[6px] w-full overflow-hidden rounded-full bg-line-2"
-      role="img"
-      aria-label={`목표 ${percent(target)} 가운데 지금 ${percent(now)}`}
-    >
-      <span
-        aria-hidden
-        className="absolute inset-y-0 left-0 rounded-full bg-accent"
-        style={{ width: `${at(now)}%` }}
-      />
-      <span
-        aria-hidden
-        className="absolute inset-y-0 w-[2px] bg-text-3"
-        style={{ left: `${at(target)}%` }}
-      />
-    </div>
-  )
 }

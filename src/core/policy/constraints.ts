@@ -78,7 +78,7 @@ export interface ScheduleResult {
   constraints: ConstraintSet
   /** 고원 구간에서 조여진 뒤의 최종 목표 회상률. */
   desiredRetention: number
-  /** 준비 완료 마감선을 이미 지났는지. 지났으면 목표 후 처리로 넘어간다. */
+  /** 목표 시점을 이미 지났는지. 지났으면 목표 후 처리로 넘어간다. */
   postGoalReached: boolean
   /** 두 마감선 사이에 들어와 기억률을 붙잡아 두는 구간인지. */
   inPlateau: boolean
@@ -165,6 +165,8 @@ export function schedule(input: ScheduleInput): ScheduleResult {
 
   const inPlateau =
     fromDay >= horizon.readyAt && fromDay <= horizon.holdUntil
+  // 마지막 날은 아직 목표 안이다. 그날 본 것을 바로 넘기면 한 목표 안에 마친 것과
+  // 아직 진행 중인 것이 하루 동안 섞인다. 끝은 평가가 아니라 날짜가 정한다.
   const postGoalReached = fromDay > horizon.holdUntil
 
   // 고원 구간에서는 강도가 여유쪽이어도 목표 기억률까지 조여준다.

@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { defaultFsrs } from '../../core/fsrs/fsrs6'
 import { Badge } from '../../components/Badge'
 import { Chip } from '../../components/Chip'
-import type { GoalRow, ItemRow } from '../../db/types'
+import { NumText } from '../../components/NumText'
+import type { GoalRow, ItemRow, ReviewRow } from '../../db/types'
 import { statusBadgeOf } from '../../lib/badge'
 import { cn } from '../../lib/cn'
 import { diffDays, type DateOnly } from '../../lib/date'
@@ -12,7 +13,9 @@ import {
   memoryStateOf,
   splitTitle,
 } from '../../lib/domain'
-import { percent } from '../../lib/format'
+import { monthDay, percent } from '../../lib/format'
+import { goalEndDay, itemEndDay, retentionOn } from '../../lib/lifecycle'
+import type { Settings } from '../../lib/settings'
 import { usePlanner } from '../../store/planner'
 
 type SortKey = 'title' | 'retention'
@@ -29,18 +32,23 @@ export function LibraryScreen({
   onOpenItem: (id: string) => void
   onOpenGoal: (id: string) => void
 }) {
-  const { items, goals, today } = usePlanner()
+  const { items, goals, reviews, settings, today } = usePlanner()
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortKey>('title')
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  // 마친 것은 기본으로 접어 둔다. 펼친 것만 따로 기억한다.
+  const [openedFinished, setOpenedFinished] = useState<Record<string, boolean>>(
+    {}
+  )
 
+  const needle = query.trim().toLowerCase()
+  const hits = (i: ItemRow) => !needle || i.title.toLowerCase().includes(needle)
   const active = items.filter(isActive)
-  const matched = query.trim()
-    ? active.filter((i) =>
-        i.title.toLowerCase().includes(query.trim().toLowerCase())
-      )
-    : active
+  const matched = active.filter(hits)
+  // 마친 것도 찾기에는 걸린다. 빼 버리면 있는 제목을 쳤는데 '찾는 항목이 없어요' 가 뜬다.
+  const finished = items.filter((i) => !isActive(i))
+  const finishedMatched = finished.filter(hits)
 
   const rows = matched.map((item) => ({
     item,
@@ -59,7 +67,8 @@ export function LibraryScreen({
     whole.map((i) => i.goal_id).filter((id): id is string => id !== null)
   ).size
   const looseCount = whole.filter((i) => i.goal_id === null).length
-  const narrowed = matched.length !== whole.length
+  const narrowed =
+    matched.length + finishedMatched.length !== whole.length + finished.length
 
   return (
     <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 pb-7 pt-10">
@@ -67,13 +76,27 @@ export function LibraryScreen({
         <div className="flex items-baseline gap-3">
           <h1 className="text-[22px] font-semibold">서재</h1>
           <span className="text-[13px] text-text-3">
-            항목 <span className="num">{whole.length}</span>개, 목표{' '}
-            <span className="num">{goalCount}</span>개와 낱개{' '}
-            <span className="num">{looseCount}</span>개
+            {whole.length > 0 || finished.length === 0 ? (
+              <>
+                항목 <span className="num">{whole.length}</span>개, 목표{' '}
+                <span className="num">{goalCount}</span>개와 낱개{' '}
+                <span className="num">{looseCount}</span>개
+              </>
+            ) : null}
+            {finished.length > 0 ? (
+              <>
+                {whole.length > 0 ? '. ' : ''}마친 것{' '}
+                <span className="num">{finished.length}</span>개
+              </>
+            ) : null}
             {narrowed ? (
               <span className="text-accent">
                 {' '}
-                (지금 <span className="num">{matched.length}</span>개 보는 중)
+                (지금{' '}
+                <span className="num">
+                  {matched.length + finishedMatched.length}
+                </span>
+                개 보는 중)
               </span>
             ) : null}
           </span>
@@ -104,7 +127,7 @@ export function LibraryScreen({
         </div>
       </header>
 
-      {matched.length === 0 ? (
+      {matched.length === 0 && finishedMatched.length === 0 ? (
         <div className="rounded-card border border-line bg-surface px-[18px] py-[22px]">
           <p className="text-[15px] font-medium">찾는 항목이 없어요.</p>
           <p className="pt-1 text-[13px] text-text-2">
@@ -114,16 +137,199 @@ export function LibraryScreen({
           </p>
         </div>
       ) : (
-        <GroupedList
-          rows={sorted}
-          goals={goals}
-          collapsed={collapsed}
-          onToggle={(key) => setCollapsed((c) => ({ ...c, [key]: !c[key] }))}
-          onOpenItem={onOpenItem}
-          onOpenGoal={onOpenGoal}
-        />
+        <>
+          {sorted.length > 0 ? (
+            <GroupedList
+              rows={sorted}
+              goals={goals}
+              collapsed={collapsed}
+              onToggle={(key) => setCollapsed((c) => ({ ...c, [key]: !c[key] }))}
+              onOpenItem={onOpenItem}
+              onOpenGoal={onOpenGoal}
+            />
+          ) : null}
+          {finishedMatched.length > 0 ? (
+            <FinishedGroups
+              items={finishedMatched}
+              goals={goals}
+              reviews={reviews}
+              settings={settings}
+              today={today}
+              // 찾는 중이면 걸린 줄이 보여야 한다. 접혀 있으면 찾았다는 수만 뜨고 줄은 없다.
+              opened={(key) => needle !== '' || (openedFinished[key] ?? false)}
+              onToggle={(key) =>
+                setOpenedFinished((c) => ({ ...c, [key]: !(c[key] ?? false) }))
+              }
+              onOpenItem={onOpenItem}
+              onOpenGoal={onOpenGoal}
+            />
+          ) : null}
+        </>
       )}
     </div>
+  )
+}
+
+/**
+ * 마친 것.
+ *
+ * 목표 시점이 지나 보관한 항목이다. 지금 보는 것과 섞이면 기억률 낮은순에서 오래
+ * 묵은 것이 맨 위로 올라와 할 일처럼 보인다. 그래서 아래로 따로 내리고 기본으로
+ * 접는다. 묶음 모양은 위와 같고, 오른쪽 숫자만 목표한 날의 기억률이다.
+ */
+function FinishedGroups({
+  items,
+  goals,
+  reviews,
+  settings,
+  today,
+  opened,
+  onToggle,
+  onOpenItem,
+  onOpenGoal,
+}: {
+  items: ItemRow[]
+  goals: GoalRow[]
+  reviews: ReviewRow[]
+  settings: Settings
+  today: DateOnly
+  opened: (key: string) => boolean
+  onToggle: (key: string) => void
+  onOpenItem: (id: string) => void
+  onOpenGoal: (id: string) => void
+}) {
+  const byGoal = new Map<string, ItemRow[]>()
+  for (const item of items) {
+    const key =
+      item.goal_id && goals.some((g) => g.id === item.goal_id)
+        ? item.goal_id
+        : '__none__'
+    byGoal.set(key, [...(byGoal.get(key) ?? []), item])
+  }
+  // 늦게 마친 것이 위다. 목표 없는 것은 늘 맨 아래다.
+  const order = [...byGoal.entries()].sort(([a], [b]) => {
+    if (a === '__none__') return 1
+    if (b === '__none__') return -1
+    const ga = goals.find((g) => g.id === a)
+    const gb = goals.find((g) => g.id === b)
+    return (ga ? (goalEndDay(ga) ?? '') : '') > (gb ? (goalEndDay(gb) ?? '') : '')
+      ? -1
+      : 1
+  })
+
+  return (
+    <section aria-label="마친 것" className="flex flex-col gap-3 pt-3">
+      <div className="flex items-baseline gap-[9px]">
+        <h2 className="text-[13px] font-semibold">마친 것</h2>
+        <span className="num text-[12px] text-text-3">{items.length}개</span>
+        <span className="text-[12px] text-text-3">
+          목표 시점이 지나 보관한 항목이에요. 오늘과 예보에는 안 올라옵니다.
+        </span>
+      </div>
+      {order.map(([goalKey, groupItems]) => {
+        const goal = goals.find((g) => g.id === goalKey) ?? null
+        const rows = groupItems
+          .map((item) => {
+            const end = goal ? goalEndDay(goal) : itemEndDay(item, null, settings)
+            return {
+              item,
+              retention:
+                (end ? retentionOn(item, reviews, end) : null) ??
+                retentionOf(item, today),
+            }
+          })
+          .sort((a, b) => (a.item.title < b.item.title ? -1 : 1))
+        const avg = rows.reduce((sum, r) => sum + r.retention, 0) / rows.length
+        const end = goal ? goalEndDay(goal) : null
+        const isOpen = opened(goalKey)
+        const name = goal?.name ?? '목표 없음'
+        return (
+          <section
+            key={goalKey}
+            className="relative overflow-hidden rounded-panel border border-line bg-surface"
+          >
+            <div
+              aria-hidden
+              className="absolute bottom-0 right-0 top-0 w-[120px] bg-rail"
+            />
+            <button
+              type="button"
+              onClick={() => onToggle(goalKey)}
+              aria-expanded={isOpen}
+              aria-label={`마친 것 ${name} ${isOpen ? '접기' : '펼치기'}`}
+              className={cn(
+                'group relative flex w-full items-center gap-2 px-[14px] py-[11px] text-left transition-colors hover:bg-hover',
+                // 접혔을 때는 아래 꼬리가 제 윗줄을 긋는다. 여기서도 그으면 두 줄이 된다.
+                isOpen ? 'border-b border-line' : ''
+              )}
+            >
+              <span
+                aria-hidden
+                className="h-[7px] w-[7px] flex-none rounded-full"
+                style={{
+                  background: goal
+                    ? goalColor(goal, goals.indexOf(goal))
+                    : 'var(--dot)',
+                }}
+              />
+              <span className="text-[13.5px] font-medium">{name}</span>
+              <span className="num text-[12px] text-text-3">
+                {groupItems.length}개
+              </span>
+              <span className="text-[11.5px] text-text-3">
+                <NumText
+                  text={
+                    end
+                      ? end < today
+                        ? `${monthDay(end)}에 마침`
+                        : '오늘 마침'
+                      : '목표 없이 제 날짜가 지난 항목이에요'
+                  }
+                />
+              </span>
+              <div className="flex-1" />
+              <span
+                aria-hidden
+                className={cn(
+                  'flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full text-[11px] text-text-3 transition-all group-hover:bg-line group-hover:text-text',
+                  isOpen ? '' : '-rotate-90'
+                )}
+              >
+                ▾
+              </span>
+              <span className="w-[120px] flex-none pr-[4px] text-right text-[12px] text-text-2">
+                <NumText text={`목표한 날 ${percent(avg)}`} />
+              </span>
+            </button>
+
+            {isOpen ? (
+              <div className="relative">
+                {rows.map((row) => (
+                  <Row
+                    key={row.item.id}
+                    item={row.item}
+                    retention={row.retention}
+                    plain
+                    onClick={() => onOpenItem(row.item.id)}
+                  />
+                ))}
+              </div>
+            ) : null}
+
+            {goal ? (
+              <button
+                type="button"
+                onClick={() => onOpenGoal(goal.id)}
+                className="relative flex w-full items-center gap-1 border-t border-line px-[14px] py-[7px] text-left text-[11.5px] text-text-3 transition-colors hover:bg-hover hover:text-text-2"
+              >
+                이 목표 자세히 보기
+                <span aria-hidden>›</span>
+              </button>
+            ) : null}
+          </section>
+        )
+      })}
+    </section>
   )
 }
 
@@ -231,8 +437,8 @@ function GroupedList({
               >
                 ▾
               </span>
-              <span className="num w-[120px] flex-none pr-[4px] text-right text-[12px] text-text-2">
-                평균 {percent(avg)}
+              <span className="w-[120px] flex-none pr-[4px] text-right text-[12px] text-text-2">
+                <NumText text={`평균 ${percent(avg)}`} />
               </span>
             </button>
 
@@ -271,6 +477,7 @@ function Row({
   retention,
   goal,
   goalDot,
+  plain = false,
   onClick,
 }: {
   item: ItemRow
@@ -278,9 +485,11 @@ function Row({
   /** 묶음을 풀었을 때만 준다. 목표 안에서는 어느 목표인지 이미 안다. */
   goal?: GoalRow | null
   goalDot?: string | undefined
+  /** 마친 것. 배지는 앞으로 볼 일을 말하는데 마친 것에는 그런 일이 없다. */
+  plain?: boolean
   onClick: () => void
 }) {
-  const badge = statusBadgeOf(item.due_kind, item.goal_risk)
+  const badge = plain ? null : statusBadgeOf(item.due_kind, item.goal_risk)
   const parts = splitTitle(item.title)
   return (
     <button

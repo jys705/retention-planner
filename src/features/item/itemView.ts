@@ -21,7 +21,12 @@ import {
   toEpochDay,
   type DateOnly,
 } from '../../lib/date'
-import { effectiveConfig, memoryStateOf, type EffectiveConfig } from '../../lib/domain'
+import {
+  effectiveConfig,
+  isActive,
+  memoryStateOf,
+  type EffectiveConfig,
+} from '../../lib/domain'
 import type { Settings } from '../../lib/settings'
 
 export interface ItemView {
@@ -75,7 +80,9 @@ export function buildItemView(
     ...points.map((p) => ({ date: p.reviewedAt, state: p.state })),
   ]
 
-  const future = state
+  // 마친 항목은 앞으로 볼 날이 없다. 내다보면 오지 않을 복습을 그리게 된다.
+  const finished = !isActive(item)
+  const future = state && !finished
     ? projectItem({
         itemId: item.id,
         state,
@@ -107,9 +114,13 @@ export function buildItemView(
   // 없는 구간이고, 길게 그리면 목표까지의 모양이 그만큼 납작해져 안 보인다.
   // 목표를 고치면 이 값도 따라 움직인다.
   const goalEnd = holdUntil ?? readyAt
-  const to = goalEnd
-    ? maxDate(goalEnd, addDays(today, 1))
-    : maxOf([addDays(today, 30), lastFuture ?? addDays(today, 30)])
+  // 마친 항목은 목표가 끝난 날에서 끊는다. 그 뒤로 기억이 얼마나 내려갔는지는
+  // 물어본 적이 없는 구간이다.
+  const to = finished
+    ? (goalEnd ?? maxOf([item.last_review ?? item.first_studied_at, from]))
+    : goalEnd
+      ? maxDate(goalEnd, addDays(today, 1))
+      : maxOf([addDays(today, 30), lastFuture ?? addDays(today, 30)])
 
   const curve = memoryCurve({ history, future, from, to, today })
 

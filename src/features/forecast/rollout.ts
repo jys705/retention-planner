@@ -4,6 +4,7 @@ import type { Grade } from '../../core/fsrs/types'
 import type { DueKind, GoalRow, ItemRow } from '../../db/types'
 import { addDays, diffDays, type DateOnly } from '../../lib/date'
 import { effectiveConfig, isActive, memoryStateOf } from '../../lib/domain'
+import { endedPatches } from '../../lib/lifecycle'
 import type { Settings } from '../../lib/settings'
 import { computeSpread } from '../../store/planner'
 import { resolveHorizon } from '../../core/horizon/horizon'
@@ -59,7 +60,21 @@ export function rollout({
   for (let offset = 0; offset <= days; offset += 1) {
     const date = addDays(from, offset)
 
-    // 앱이 그날 켜졌을 때 도는 것과 같은 계산이다.
+    // 앱이 그날 켜졌을 때 도는 것과 같은 계산이다. 목표가 끝난 것은 그날 내려가고,
+    // 내려간 것은 남의 자리를 차지하지 않는다.
+    const ended = endedPatches(
+      current,
+      goals,
+      settings,
+      date,
+      `${date}T00:00:00.000Z`
+    )
+    if (ended.size > 0) {
+      current = current.map((item) => {
+        const patch = ended.get(item.id)
+        return patch ? { ...item, ...patch } : item
+      })
+    }
     const { patches } = computeSpread(current, [...goals], settings, date)
     current = current.map((item) => {
       const patch = patches.get(item.id)

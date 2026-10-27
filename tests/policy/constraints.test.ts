@@ -424,6 +424,28 @@ describe('경계값', () => {
     expect(result.intervalDays).toBeGreaterThanOrEqual(1)
   })
 
+  it('목표의 마지막 날은 아직 목표 안이다', () => {
+    // 끝은 날짜가 정한다. 마지막 날에 본 것을 그 자리에서 넘기면 한 목표 안에
+    // 마친 것과 진행 중인 것이 하루 동안 섞인다. 다음 날부터가 목표 뒤다.
+    const on = (at: string) =>
+      schedule({
+        from: TODAY,
+        state: stateAfter([3, 3]),
+        horizon: { kind: 'date', at },
+        intensity: 'standard',
+      }).postGoalReached
+    expect(on(TODAY)).toBe(false)
+    expect(on(addDays(TODAY, -1))).toBe(true)
+    const window = schedule({
+      from: TODAY,
+      state: stateAfter([3, 3]),
+      horizon: { kind: 'window', readyAt: addDays(TODAY, -5), holdUntil: TODAY },
+      intensity: 'standard',
+    })
+    expect(window.postGoalReached).toBe(false)
+    expect(window.inPlateau).toBe(true)
+  })
+
   it('목표까지 1일', () => {
     const result = schedule({
       from: TODAY,

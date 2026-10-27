@@ -10,7 +10,7 @@ import type { GoalRow } from '../../db/types'
 import { dueReason, statusBadgeOf } from '../../lib/badge'
 import { fullDate, monthDay, percent } from '../../lib/format'
 import { cn } from '../../lib/cn'
-import { goalColor } from '../../lib/domain'
+import { goalColor, isActive } from '../../lib/domain'
 import { usePlanner } from '../../store/planner'
 import {
   CalendarHeatmap,
@@ -89,7 +89,14 @@ export function ForecastScreen() {
     (best, bar) => (bar.count > best.count ? bar : best),
     soon[0] ?? { date: today, count: 0 }
   )
-  const overCap = bars.filter((b) => b.count > settings.dailyCap)
+  // 오늘 칸은 이미 올라온 것이 서 있는 자리다. 올라온 것은 옮기지 않으므로 '그때
+  // 펴서 잡아드릴게요' 라고 할 수 없다. 넘친다는 사실만 따로 말한다.
+  const todayBar = bars.find((b) => b.date === today)
+  const todayOver =
+    todayBar !== undefined && todayBar.count > settings.dailyCap ? todayBar : null
+  const todayOverdue = plan[0]?.items.some((i) => i.overdue) ?? false
+  const overCap = bars.filter((b) => b.date > today && b.count > settings.dailyCap)
+  const finishedOnly = items.length > 0 && !items.some(isActive)
 
   const months = [monthKey(today), nextMonthKey(today)]
   const monthCounts = months.map((m) => ({
@@ -132,11 +139,20 @@ export function ForecastScreen() {
           <h1 className="text-[24px] font-semibold tracking-[-0.02em]">예보</h1>
           <p className="pt-[6px] text-[15px] font-medium leading-relaxed">
             {total === 0
-              ? '앞으로 잡힌 복습이 없어요. 오늘 화면에서 한 줄 적어보세요.'
+              ? finishedOnly
+                ? '앞으로 잡힌 복습이 없어요. 마친 목표의 항목은 보관해 두어서 여기에 안 올라와요.'
+                : '앞으로 잡힌 복습이 없어요. 오늘 화면에서 한 줄 적어보세요.'
               : `다음 ${SOON_DAYS}일 동안 하루 평균 ${average}개예요. ${monthDay(
                   busiest.date
                 )}이 ${busiest.count}개로 가장 많아요.`}
           </p>
+          {todayOver ? (
+            <p className="pt-[6px] text-[13px] text-imp-fg">
+              {`오늘은 ${todayOverdue ? '밀린 것까지 ' : ''}${
+                todayOver.count
+              }개라 하루 상한 ${settings.dailyCap}개를 넘어요. 이미 올라온 것은 옮기지 않아요.`}
+            </p>
+          ) : null}
           {overCap.length > 0 ? (
             <p className="pt-[6px] text-[13px] text-imp-fg">
               {`${monthDay(overCap[0].date)}${
@@ -299,7 +315,7 @@ export function ForecastScreen() {
                   한 달 단위로 보면
                 </span>
                 <p className="text-[12.5px] leading-relaxed text-text-2">
-                  {monthSentence(dailyCount, settings.dailyCap)}
+                  {monthSentence(dailyCount, settings.dailyCap, today)}
                 </p>
                 <p className="text-[11.5px] leading-relaxed text-text-3">
                   칸에 마우스를 올리면 그날 무엇을 보는지 여기 나옵니다. 누르면
@@ -327,9 +343,15 @@ function countInMonth(
 
 function monthSentence(
   counts: Readonly<Record<DateOnly, number>>,
-  cap: number
+  cap: number,
+  today: DateOnly
 ): string {
-  const over = Object.entries(counts).filter(([, count]) => count > cap)
+  if (Object.values(counts).every((count) => count === 0)) {
+    return '두 달 동안 잡힌 복습이 없어요.'
+  }
+  const over = Object.entries(counts).filter(
+    ([date, count]) => date > today && count > cap
+  )
   if (over.length === 0) {
     return '두 달 모두 하루 상한 안에서 고르게 퍼져 있어요.'
   }

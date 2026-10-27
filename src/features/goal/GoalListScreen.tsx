@@ -2,9 +2,16 @@ import { useState } from 'react'
 import type { Horizon } from '../../core/horizon/horizon'
 import { INTENSITY_RETENTION } from '../../core/policy/constraints'
 import { Chip, ChipLabel } from '../../components/Chip'
-import type { Intensity } from '../../db/types'
+import { NumText } from '../../components/NumText'
+import type { GoalRow, Intensity } from '../../db/types'
 import { isActive } from '../../lib/domain'
-import { daysLeftLabel, horizonLabel } from '../../lib/format'
+import { horizonLabel, percent } from '../../lib/format'
+import {
+  averageRetentionOn,
+  goalEndDay,
+  goalEnded,
+  goalTimeLabel,
+} from '../../lib/lifecycle'
 import { INTENSITY_META } from '../../lib/intensity'
 import { usePlanner } from '../../store/planner'
 import { HorizonPicker } from '../newitem/HorizonPicker'
@@ -14,14 +21,21 @@ export function GoalListScreen({
 }: {
   onOpenGoal: (id: string) => void
 }) {
-  const { goals, items, settings, today } = usePlanner()
+  const { goals, items, reviews, settings, today } = usePlanner()
   const createGoal = usePlanner((s) => s.createGoal)
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [horizon, setHorizon] = useState<Horizon>({ kind: 'open' })
   const [intensity, setIntensity] = useState<Intensity>(settings.defaultIntensity)
 
-  const active = goals.filter((g) => g.archived_at === null)
+  const live = goals.filter((g) => g.archived_at === null)
+  // 끝난 목표는 아래 칸으로 내린다. 지울 때까지 기록으로 남는다.
+  const active = live.filter((g) => !goalEnded(g, today))
+  const finished = live
+    .filter((g) => goalEnded(g, today))
+    .sort((a, b) =>
+      (goalEndDay(a) ?? '') > (goalEndDay(b) ?? '') ? -1 : 1
+    )
 
   async function submit() {
     const trimmed = name.trim()
@@ -116,52 +130,101 @@ export function GoalListScreen({
 
       {active.length === 0 && !creating ? (
         <div className="rounded-card border border-line bg-surface px-[18px] py-[22px]">
-          <p className="text-[15px] font-medium">아직 목표가 없어요.</p>
+          <p className="text-[15px] font-medium">
+            {finished.length > 0 ? '진행 중인 목표가 없어요.' : '아직 목표가 없어요.'}
+          </p>
           <p className="pt-1 text-[13px] text-text-2">
-            시험이나 큰 주제가 있으면 목표로 묶어보세요. 날짜를 한 번만 정하면
-            묶인 항목이 전부 그 날짜에 맞춰 잡힙니다.
+            {finished.length > 0
+              ? '새 시험이나 큰 주제가 생기면 목표로 묶어보세요. 마친 목표는 아래에 남아 있어요.'
+              : '시험이나 큰 주제가 있으면 목표로 묶어보세요. 날짜를 한 번만 정하면 묶인 항목이 전부 그 날짜에 맞춰 잡힙니다.'}
           </p>
         </div>
       ) : null}
 
       <div className="flex flex-col gap-2">
         {active.map((goal) => {
-          const count = items.filter(
-            (i) => i.goal_id === goal.id && isActive(i)
-          ).length
-          const atRisk = items.filter(
-            (i) => i.goal_id === goal.id && i.goal_risk === 'at_risk'
-          ).length
+          const mine = items.filter((i) => i.goal_id === goal.id && isActive(i))
+          const atRisk = mine.filter((i) => i.goal_risk === 'at_risk').length
           return (
-            <button
+            <GoalLine
               key={goal.id}
-              type="button"
-              onClick={() => onOpenGoal(goal.id)}
-              className="flex items-center gap-3 rounded-card border border-line bg-surface px-[16px] py-[12px] text-left hover:bg-hover"
+              goal={goal}
+              sub={horizonLabel(goal.horizon_kind, goal.ready_at, goal.hold_until)}
+              onOpen={() => onOpenGoal(goal.id)}
             >
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[14px] font-medium">
-                  {goal.name}
-                </div>
-                <div className="num pt-[2px] text-[11.5px] text-text-3">
-                  {horizonLabel(goal.horizon_kind, goal.ready_at, goal.hold_until)}
-                </div>
-              </div>
               {atRisk > 0 ? <ChipLabel>{`부족 ${atRisk}개`}</ChipLabel> : null}
-              <span className="num text-[12.5px] text-text-2">{count}개</span>
-              {goal.ready_at ? (
-                <span className="num w-[76px] text-right text-[12px] text-text-3">
-                  {daysLeftLabel(today, goal.ready_at)}
-                </span>
-              ) : (
-                <span className="w-[76px] text-right text-[12px] text-text-3">
-                  기한 없음
-                </span>
-              )}
-            </button>
+              <span className="num text-[12.5px] text-text-2">{mine.length}개</span>
+              <span className="w-[110px] text-right text-[12px] text-text-3">
+                <NumText text={goalTimeLabel(goal, today)} />
+              </span>
+            </GoalLine>
           )
         })}
       </div>
+
+      {finished.length > 0 ? (
+        <section aria-label="마친 목표" className="flex flex-col gap-2 pt-3">
+          <div className="flex items-baseline gap-[9px]">
+            <h2 className="text-[13px] font-semibold">마친 목표</h2>
+            <span className="num text-[12px] text-text-3">{finished.length}개</span>
+            <span className="text-[12px] text-text-3">
+              목표 시점이 지나 항목을 보관해 둔 목표예요. 오늘과 예보에는 안 올라옵니다.
+            </span>
+          </div>
+          {finished.map((goal) => {
+            // 보관한 것까지 센다. 살아 있는 것만 세면 마친 목표는 전부 '0개' 다.
+            const members = items.filter((i) => i.goal_id === goal.id)
+            const end = goalEndDay(goal)
+            const result = end ? averageRetentionOn(members, reviews, end) : null
+            return (
+              <GoalLine
+                key={goal.id}
+                goal={goal}
+                sub={goalTimeLabel(goal, today)}
+                onOpen={() => onOpenGoal(goal.id)}
+              >
+                <span className="num text-[12.5px] text-text-2">
+                  {members.length}개
+                </span>
+                <span className="w-[110px] text-right text-[12px] text-text-3">
+                  <NumText
+                    text={result === null ? '결과 없음' : `목표한 날 ${percent(result)}`}
+                  />
+                </span>
+              </GoalLine>
+            )
+          })}
+        </section>
+      ) : null}
     </div>
+  )
+}
+
+/** 목표 한 줄. 진행 중인 것과 마친 것이 같은 꼴을 쓰고 오른쪽 칸만 다르다. */
+function GoalLine({
+  goal,
+  sub,
+  onOpen,
+  children,
+}: {
+  goal: GoalRow
+  sub: string
+  onOpen: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex items-center gap-3 rounded-card border border-line bg-surface px-[16px] py-[12px] text-left hover:bg-hover"
+    >
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[14px] font-medium">{goal.name}</div>
+        <div className="pt-[2px] text-[11.5px] text-text-3">
+          <NumText text={sub} />
+        </div>
+      </div>
+      {children}
+    </button>
   )
 }

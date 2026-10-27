@@ -12,6 +12,7 @@ import { GoalSettingsReadout } from '../goal/GoalSettingsReadout'
 import { addDays, type DateOnly } from '../../lib/date'
 import { goalColor } from '../../lib/domain'
 import { horizonLabel, monthDay } from '../../lib/format'
+import { goalEnded } from '../../lib/lifecycle'
 import { EMPTY_DRAFT, usePlanner } from '../../store/planner'
 import { GRADE_META } from '../../lib/grade'
 import { INTENSITY_META, intensityName } from '../../lib/intensity'
@@ -48,7 +49,13 @@ export function QuickAdd({
   const draft = usePlanner((s) => s.draft)
   const setDraft = usePlanner((s) => s.setDraft)
 
-  const { title, goalId, horizon, intensity, initialGrade, memo } = draft
+  const { title, horizon, intensity, initialGrade, memo } = draft
+  // 끝난 목표에는 넣을 수 없다. 넣는 순간 마친 항목이 되어 오늘에 한 번도 안 선다.
+  // 쓰다 둔 사이에 목표가 끝났으면 고른 것이 없는 것으로 본다.
+  const open = (g: GoalRow) => g.archived_at === null && !goalEnded(g, today)
+  const goalId = goals.some((g) => g.id === draft.goalId && open(g))
+    ? draft.goalId
+    : null
   // 안 고른 채로 날이 바뀌어도 '오늘' 이 오늘을 가리키게 비워 둔 채로 들고 있다.
   const firstStudiedAt = draft.firstStudiedAt ?? today
   const setTitle = (v: string) => setDraft({ title: v })
@@ -160,7 +167,7 @@ export function QuickAdd({
             </Field>
 
             {/* 목표가 하나도 없으면 고를 것이 '없음' 뿐이다. 그 칸은 안 보여준다. */}
-            {goals.length > 0 ? (
+            {goals.some(open) ? (
               <Field
                 label="소속 목표"
                 hint="목표에 넣으면 목표 시점과 강도를 목표에서 한 번만 정하면 돼요. 없음을 고르면 이 항목만의 설정을 여기서 정합니다."
@@ -171,16 +178,23 @@ export function QuickAdd({
                   onChange={setGoalId}
                   options={[
                     { value: null, label: '없음' },
-                    ...goals.map((goal, index) => ({
-                      value: goal.id,
-                      label: goal.name,
-                      dot: goalColor(goal, index),
-                      note: horizonLabel(
-                        goal.horizon_kind,
-                        goal.ready_at,
-                        goal.hold_until
-                      ),
-                    })),
+                    // 색은 전체 목록에서의 자리로 정한다. 거른 뒤에 세면 색이 바뀐다.
+                    ...goals.flatMap((goal, index) =>
+                      open(goal)
+                        ? [
+                            {
+                              value: goal.id,
+                              label: goal.name,
+                              dot: goalColor(goal, index),
+                              note: horizonLabel(
+                                goal.horizon_kind,
+                                goal.ready_at,
+                                goal.hold_until
+                              ),
+                            },
+                          ]
+                        : []
+                    ),
                   ]}
                 />
               </Field>

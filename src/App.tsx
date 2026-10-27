@@ -143,6 +143,7 @@ function renderRoute(
       return (
         <TodayScreen
           onOpenItem={(itemId) => setRoute({ screen: 'library', itemId })}
+          onOpenGoal={(goalId) => setRoute({ screen: 'goals', goalId })}
         />
       )
     case 'forecast':

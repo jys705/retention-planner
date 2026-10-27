@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { Horizon } from '../../core/horizon/horizon'
-import { AdjustedBadge, Badge } from '../../components/Badge'
+import { AdjustedBadge, Badge, FinishedBadge } from '../../components/Badge'
 import { Chip } from '../../components/Chip'
 import { InlineText } from '../../components/InlineText'
 import { OptionCards } from '../../components/OptionCards'
 import { MoreMenu } from '../../components/MoreMenu'
 import type { GoalRow, Intensity, ItemRow } from '../../db/types'
+import { defaultFsrs } from '../../core/fsrs/fsrs6'
 import { dueReason, statusBadgeOf } from '../../lib/badge'
 import { diffDays, type DateOnly } from '../../lib/date'
 import {
@@ -17,7 +18,13 @@ import {
   percent,
   stabilityLabel,
 } from '../../lib/format'
-import { effectiveConfig, goalColor, horizonFields } from '../../lib/domain'
+import { effectiveConfig, goalColor, horizonFields, isActive } from '../../lib/domain'
+import {
+  dueBeyondEnd,
+  goalEnded,
+  itemEndDay,
+  retentionOn,
+} from '../../lib/lifecycle'
 import { gradeColor, gradeName } from '../../lib/grade'
 import { INTENSITY_META, intensityName } from '../../lib/intensity'
 import type { Settings } from '../../lib/settings'
@@ -55,7 +62,9 @@ export function ItemDetailScreen({
   function seed(target: ItemRow) {
     const config = seedConfig(target, goals, settings)
     setDraftGoalId(target.goal_id)
-    setDraftHorizon(config.horizon)
+    // 마친 항목에 지금 시점을 그대로 옮겨 담으면 꺼내자마자 다시 끝난다. 꺼내는
+    // 사람은 계속 보려는 것이므로 정해두지 않음에서 시작한다.
+    setDraftHorizon(isActive(target) ? config.horizon : { kind: 'open' })
     setDraftIntensity(config.intensity)
     setConfirmingDelete(false)
   }
@@ -99,7 +108,22 @@ export function ItemDetailScreen({
 
   const goal = goals.find((g) => g.id === item.goal_id) ?? null
   const view = buildItemView(item, goal, reviews, settings, today)
-  const badge = statusBadgeOf(item.due_kind, item.goal_risk)
+  // 마친 항목은 앞으로 볼 일이 없다. 배지도 다음에 볼 날도 그 일을 말하는 것이라 뺀다.
+  const finished = !isActive(item)
+  const end = itemEndDay(item, goal, settings)
+  const atEnd = finished && end ? retentionOn(item, reviews, end) : null
+  // 다음 날짜가 목표 뒤로 잡혀 있으면 그 날은 오지 않는다. 그 전에 목표가 끝난다.
+  const beyond = !finished && dueBeyondEnd(item, goal, settings)
+  // 목표 뒤로 넘어간 까닭은 둘이다. 안 봐도 충분하거나, 그 전에 더 볼 날이 없거나.
+  // 충분하다고 말하려면 끝나는 날 기억률을 실제로 재 봐야 한다.
+  const enoughAtEnd =
+    beyond && end !== null && view.state !== null && item.last_review !== null
+      ? defaultFsrs.retrievability(
+          Math.max(0, diffDays(item.last_review, end)),
+          view.state.stability
+        ) >= view.config.targetRetention
+      : false
+  const badge = finished ? null : statusBadgeOf(item.due_kind, item.goal_risk)
   const plannedDates = planned
     .filter((p) => p.item_id === item.id)
     .map((p) => p.date)
@@ -172,8 +196,9 @@ export function ItemDetailScreen({
             />
 
             <div className="flex flex-wrap items-center gap-[10px] pt-[7px]">
+              {finished ? <FinishedBadge /> : null}
               {badge ? <Badge kind={badge} /> : null}
-              {item.due_source === 'spread' ? <AdjustedBadge /> : null}
+              {!finished && item.due_source === 'spread' ? <AdjustedBadge /> : null}
               {goal ? (
                 <span className="flex items-center gap-[6px] rounded-full border border-line bg-surface px-[10px] py-[3px] text-[12px] text-text-2">
                   <span
@@ -212,9 +237,11 @@ export function ItemDetailScreen({
           {/* 오른쪽 268px 은 앱이 계산한 숫자 자리다. 한 값만 크게 세운다. */}
           <div className="rail-panel flex flex-col items-end gap-[8px] pr-[18px]">
             <div className="flex flex-col items-end gap-[1px]">
-              <span className="text-[11.5px] text-text-3">지금 기억률</span>
+              <span className="text-[11.5px] text-text-3">
+                {atEnd !== null ? '목표한 날 기억률' : '지금 기억률'}
+              </span>
               <span className="font-display num text-[38px] font-semibold leading-none tracking-[-0.02em]">
-                {percent(view.retention)}
+                {percent(atEnd ?? view.retention)}
               </span>
             </div>
             <div className="num flex gap-4 text-[12.5px]">
@@ -222,8 +249,8 @@ export function ItemDetailScreen({
                 <span className="font-sans text-[11px] text-text-3">
                   다음에 볼 날
                 </span>
-                <span className="text-accent">
-                  {item.due ? dueLabel(today, item.due) : '없음'}
+                <span className={finished || beyond || !item.due ? 'text-text-3' : 'text-accent'}>
+                  {item.due && !finished && !beyond ? dueLabel(today, item.due) : '없음'}
                 </span>
               </span>
               <span className="flex flex-col items-end gap-[2px]">
@@ -251,7 +278,12 @@ export function ItemDetailScreen({
                 없음
               </Chip>
               {goals
-                .filter((g) => g.archived_at === null)
+                // 끝난 목표에는 넣을 수 없다. 이미 그 목표에 있는 것만 제 자리를 보여준다.
+                .filter(
+                  (g) =>
+                    g.archived_at === null &&
+                    (!goalEnded(g, today) || g.id === item.goal_id)
+                )
                 .map((g) => (
                   <Chip
                     key={g.id}
@@ -367,12 +399,20 @@ export function ItemDetailScreen({
           <div className="min-w-0 px-[20px] py-[16px]">
             {/* 한 줄만 읽는다면 이 줄이다. 그림보다 먼저 나와야 한다. */}
             <p className="pb-3 text-[15px] font-medium leading-relaxed">
-              {curveSentence(
-                item,
-                view.retention,
-                view.config.targetRetention,
-                today
-              )}
+              {finished
+                ? finishedSentence(goal, end, atEnd)
+                : beyond
+                  ? `지금 기억률은 ${percent(view.retention)}예요. ${
+                      enoughAtEnd
+                        ? '목표한 날까지 이대로 충분해서 더 잡지 않았어요.'
+                        : '목표한 날 전에 더 볼 날이 없어서 더 잡지 않았어요.'
+                    }`
+                  : curveSentence(
+                      item,
+                      view.retention,
+                      view.config.targetRetention,
+                      today
+                    )}
             </p>
             <MemoryCurveChart
               curve={view.curve}
@@ -387,14 +427,32 @@ export function ItemDetailScreen({
             <div className="h-px bg-line" />
             <div className="flex flex-col gap-[6px]">
               <span className="text-[11.5px] text-text-3">
-                {item.due && item.due <= today
-                  ? '이 항목이 오늘 올라온 이유'
-                  : '다음 날짜를 이렇게 잡은 이유'}
+                {finished || beyond
+                  ? '더 잡지 않는 이유'
+                  : item.due && item.due <= today
+                    ? '이 항목이 오늘 올라온 이유'
+                    : '다음 날짜를 이렇게 잡은 이유'}
               </span>
-              <p className="text-[12.5px] leading-relaxed text-text-2">
-                {whyToday(item, view.retention, view.config.targetRetention, today)}
+              <p className="text-pretty break-keep text-[12.5px] leading-relaxed text-text-2">
+                {finished
+                  ? goal
+                    ? '목표 시점이 지나서 더 잡지 않아요. 다시 보려면 목표 화면에서 계속 기억하기를 고르세요. 이 항목만이라면 설정 편집에서 소속을 없음으로 바꾸면 됩니다.'
+                    : '정해 둔 날짜가 지나서 더 잡지 않아요. 다시 보려면 설정 편집에서 목표 시점을 바꾸세요.'
+                  : beyond && end
+                    ? `${
+                        enoughAtEnd
+                          ? `안 봐도 목표한 날 기억률이 목표 기억률 ${percent(
+                              view.config.targetRetention
+                            )}를 넘어요.`
+                          : '목표한 날 전에 더 잡을 날이 없어요.'
+                      } ${monthDay(end)}이 지나면 마친 것으로 넘어갑니다.`
+                    : whyToday(item, view.retention, view.config.targetRetention, today)}
               </p>
-              {view.feasible?.atRisk ? (
+              {/*
+                마감선 안에 더 잡을 날이 없으면 모자라다고 알려 봐야 할 수 있는 일이 없다.
+                그때는 말하지 않는다.
+              */}
+              {!finished && view.feasible?.atRisk && view.feasible.hasRoomBeforeGoal ? (
                 <p className="text-[12.5px] leading-relaxed text-text-2">
                   {plannedDates.length >= 2
                     ? `한 번 봐서는 목표한 날 기억이 모자라요. 그래서 ${plannedDates
@@ -470,7 +528,7 @@ export function ItemDetailScreen({
                     <div className="num grid grid-cols-2 items-center gap-3 pr-[18px] text-right text-[12.5px]">
                       <span role="cell">{percent(review.r_at_review)}</span>
                       <span role="cell" className="text-text-2">
-                        {next ? monthDay(next.reviewed_at) : '아직'}
+                        {next ? monthDay(next.reviewed_at) : finished ? '없음' : '아직'}
                       </span>
                     </div>
                   </div>
@@ -545,6 +603,20 @@ function DifficultyMeter({ difficulty }: { difficulty: number }) {
       ))}
     </div>
   )
+}
+
+/** 마친 항목의 한 줄. 그날 어땠는지만 적는다. 며칠 지났는지는 적지 않는다. */
+function finishedSentence(
+  goal: GoalRow | null,
+  end: DateOnly | null,
+  atEnd: number | null
+): string {
+  if (!end) return '보관한 항목이에요. 더 올라오지 않아요.'
+  const when = monthDay(end)
+  const head = goal
+    ? `${goal.name}${josa(goal.name, '을', '를')} ${when}에 마쳤어요.`
+    : `정해 둔 날짜 ${when}${josa(when, '이', '가')} 지나 마쳤어요.`
+  return atEnd === null ? head : `${head} 그날 기억률은 ${percent(atEnd)}였어요.`
 }
 
 function curveSentence(

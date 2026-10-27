@@ -69,6 +69,7 @@ export function TodayRow({
     repsSinceGoal: item.reps_since_goal,
     bufferDays: settings.bufferDays,
     maxIntervalDays: config.maxIntervalDays,
+    postGoalMode: config.postGoalMode,
   })
 
   const badge = statusBadgeOf(item.due_kind, item.goal_risk)
@@ -134,6 +135,7 @@ export function TodayRow({
               <button
                 key={option.grade}
                 type="button"
+                title={option.ends ?? undefined}
                 onClick={() => onRate(option.grade)}
                 className="flex flex-col gap-[3px] rounded-[9px] border border-line-2 bg-surface px-[11px] pb-[10px] pt-[9px] text-left transition-colors hover:bg-raise"
                 style={{ borderTopColor: option.color, borderTopWidth: 2 }}

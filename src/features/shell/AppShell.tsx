@@ -4,6 +4,7 @@ import { addDays } from '../../lib/date'
 import { horizonLabel, shortDate } from '../../lib/format'
 import { selectTodayItems, usePlanner } from '../../store/planner'
 import { goalColor, isActive } from '../../lib/domain'
+import { goalEnded } from '../../lib/lifecycle'
 
 export type ScreenKey = 'today' | 'forecast' | 'goals' | 'library' | 'settings'
 
@@ -54,6 +55,8 @@ export function AppShell({
       (g) =>
         g.archived_at === null &&
         g.horizon_kind !== 'open' &&
+        // 이미 끝난 목표는 다가오는 것이 아니다. 목표 화면의 끝난 목표 칸에 선다.
+        !goalEnded(g, today) &&
         (g.ready_at ?? '9999') <= goalCutoff
     )
     .sort((a, b) => ((a.ready_at ?? '9999') < (b.ready_at ?? '9999') ? -1 : 1))

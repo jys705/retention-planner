@@ -26,3 +26,15 @@ export function AdjustedBadge({ hint }: { hint?: string }) {
     </span>
   )
 }
+
+/** 목표 시점이 지나 마친 항목. 앞으로 볼 일이 없다는 표시라 날짜 조정과 같은 무채색이다. */
+export function FinishedBadge() {
+  return (
+    <span
+      title="목표 시점이 지나 보관한 항목이에요. 더 올라오지 않아요."
+      className="flex-none rounded-[5px] bg-adj-bg px-2 py-[3px] text-[11px] font-medium text-adj-fg"
+    >
+      마침
+    </span>
+  )
+}

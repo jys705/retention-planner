@@ -43,6 +43,7 @@ import {
 } from '../lib/date'
 import {
   effectiveConfig,
+  goalHorizon,
   horizonFields,
   isActive,
   memoryStateOf,
@@ -59,6 +60,13 @@ import {
 import type { Backup } from '../lib/transfer'
 import { newId } from './ids'
 import { nowIso, today as clockToday } from '../lib/clock'
+import {
+  endedPatches,
+  goalEnded,
+  itemEndedKey,
+  restoredPatches,
+  scheduledItems,
+} from '../lib/lifecycle'
 
 export interface NewItemDraft {
   title: string
@@ -160,7 +168,10 @@ interface PlannerState {
   updateGoal(id: string, patch: Partial<GoalRow>): Promise<void>
   updateItem(id: string, patch: Partial<ItemRow>): Promise<void>
   deleteItem(id: string): Promise<void>
-  deleteGoal(id: string): Promise<void>
+  /** 항목까지 지우라고 하지 않으면 목표만 지우고 항목은 남긴다. */
+  deleteGoal(id: string, options?: { withItems?: boolean }): Promise<void>
+  /** 끝난 목표를 알리는 줄을 확인했다고 적어 둔다. 같은 끝은 다시 안 알린다. */
+  acknowledgeEnded(keys: string[]): Promise<void>
   attachItemsToGoal(goalId: string, itemIds: string[]): Promise<void>
   saveSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void>
   importAll(backup: Backup): Promise<void>
@@ -324,7 +335,9 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const db = await repo()
     const { settings, today } = get()
     const item = get().items.find((i) => i.id === itemId)
-    if (!item) return
+    // 보관한 항목은 평가할 자리가 없다. 여기로 들어오면 보관 날짜는 찬 채로 상태만
+    // 바뀌어, 목록에서는 사라졌는데 상태는 살아 있는 유령이 된다.
+    if (!item || !isActive(item)) return
 
     const goal = item.goal_id
       ? (get().goals.find((g) => g.id === item.goal_id) ?? null)
@@ -395,12 +408,9 @@ export const usePlanner = create<PlannerState>((set, get) => ({
         config.postGoalMode
       ),
       ...(options.memo ? { memo: options.memo } : {}),
-      // 등급이 '다시' 면 보관하지 않는다. 상태와 보관 날짜가 서로 다른 말을 하면
-      // 목록에서는 사라졌는데 상태는 relearning 인 유령이 남는다.
-      ...(applied.postGoalReached &&
-      config.postGoalMode === 'archive' &&
-      grade !== 1
-        ? { archived_at: nowIso() }
+      // 상태와 보관 날짜는 늘 같은 말을 해야 한다. 둘을 같은 조건으로 정한다.
+      ...(applied.postGoalReached && config.postGoalMode === 'archive'
+        ? { archived_at: nowIso(), goal_risk: null }
         : {}),
     }
 
@@ -500,6 +510,9 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     set({
       goals: get().goals.map((g) => (g.id === id ? { ...g, ...patch } : g)),
     })
+    // 시험이 미뤄지는 일은 흔하다. 목표 날짜를 뒤로 옮기거나 계속 기억하기로 정하면
+    // 끝난 것으로 쳤던 이 목표의 항목이 되살아나야 한다.
+    await restore(get, set, db, (i) => i.goal_id === id)
     await get().recomputeAll()
   },
 
@@ -509,6 +522,14 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     set({
       items: get().items.map((i) => (i.id === id ? { ...i, ...patch } : i)),
     })
+    // 항목이 제 목표 시점을 갖고 있으면 그것을 고치는 것도 되살릴 까닭이 된다.
+    // 소속을 바꾸는 것도 같다. 마친 목표에서 꺼내면 다시 올라와야 한다.
+    const moved =
+      'horizon_kind' in patch ||
+      'ready_at' in patch ||
+      'hold_until' in patch ||
+      'goal_id' in patch
+    if (moved) await restore(get, set, db, (i) => i.id === id)
     await get().recomputeAll()
   },
 
@@ -522,17 +543,61 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     await get().recomputeAll()
   },
 
-  async deleteGoal(id) {
+  async deleteGoal(id, options = {}) {
     const db = await repo()
+    const { goals, items, today } = get()
+    const goal = goals.find((g) => g.id === id)
+    const members = items.filter((i) => i.goal_id === id)
+
+    if (options.withItems) {
+      // 평가 기록과 잡아둔 복습은 항목을 따라 같이 지워진다.
+      for (const item of members) {
+        await db.deleteItem(item.id)
+      }
+      await db.deleteGoal(id)
+      const gone = new Set(members.map((i) => i.id))
+      set({
+        goals: get().goals.filter((g) => g.id !== id),
+        items: get().items.filter((i) => !gone.has(i.id)),
+        reviews: get().reviews.filter((r) => !gone.has(r.item_id)),
+      })
+      await get().recomputeAll()
+      return
+    }
+
+    // 끝난 목표의 소속만 풀 때는 목표 시점을 항목에 옮겨 담는다. 소속만 풀면 항목이
+    // 목표 시점 없는 것이 되어, 마친 것이 무기한으로 되살아나 오늘 목록에 쏟아진다.
+    // 기록을 남기려고 목표만 지웠는데 할 일이 생기면 안 된다.
+    const carried =
+      goal && goalEnded(goal, today) ? horizonFields(goalHorizon(goal)) : null
+    const carry = (item: ItemRow) => carried !== null && !isActive(item)
+    for (const item of members) {
+      if (carry(item)) await db.updateItem(item.id, carried ?? {})
+    }
     await db.deleteGoal(id)
     set({
       goals: get().goals.filter((g) => g.id !== id),
       // 목표를 지워도 항목은 남는다. 소속만 풀린다.
       items: get().items.map((i) =>
-        i.goal_id === id ? { ...i, goal_id: null } : i
+        i.goal_id === id
+          ? { ...i, goal_id: null, ...(carry(i) ? carried : {}) }
+          : i
       ),
     })
+    // 끝난 목표를 지운 사람은 그 끝을 이미 안다. 남긴 항목을 '마친 낱개' 로 또 알리지 않는다.
+    const known = members
+      .filter(carry)
+      .map((i) => itemEndedKey({ ...i, goal_id: null, ...carried }, get().settings))
+      .filter((k): k is string => k !== null)
+    if (known.length > 0) await get().acknowledgeEnded(known)
     await get().recomputeAll()
+  },
+
+  async acknowledgeEnded(keys) {
+    const seen = get().settings.seenEnded
+    const next = [...new Set([...seen, ...keys])]
+    if (next.length === seen.length) return
+    await get().saveSetting('seenEnded', next)
   },
 
   async attachItemsToGoal(goalId, itemIds) {
@@ -574,15 +639,31 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     set({ writeSeq: get().writeSeq + 1 })
     const db = await repo()
     const { items, goals, settings, today } = get()
-    const { patches, planned } = computeSpread(items, goals, settings, today)
 
+    // 목표 시점이 지난 것부터 넘긴다. 앱을 켤 때와 날이 바뀔 때 여기를 지나므로,
+    // 목표를 마치고 평가를 안 했어도 다음에 켜는 순간 보관된다. 분산은 넘긴 뒤의
+    // 목록을 봐야 한다. 안 그러면 끝난 항목이 남의 날짜를 밀어낸다.
+    const ended = endedPatches(items, goals, settings, today, nowIso())
+    const afterEnd =
+      ended.size === 0
+        ? items
+        : items.map((i) => {
+            const patch = ended.get(i.id)
+            return patch ? { ...i, ...patch } : i
+          })
+    const spread = computeSpread(afterEnd, goals, settings, today)
+
+    const patches = new Map(ended)
+    for (const [id, patch] of spread.patches) {
+      patches.set(id, { ...(patches.get(id) ?? {}), ...patch })
+    }
     for (const [id, patch] of patches) {
       await db.updateItem(id, patch)
     }
-    await db.replacePlannedReviews(planned)
+    await db.replacePlannedReviews(spread.planned)
 
     set({
-      planned,
+      planned: spread.planned,
       ...(patches.size > 0
         ? {
             items: get().items.map((i) => {
@@ -594,6 +675,49 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     })
   },
 }))
+
+/**
+ * 고른 범위에서 다시 살아날 항목을 되살려 저장한다.
+ *
+ * 다음 날짜는 오늘부터 다시 잡는다. 보관해 둔 동안의 묵은 날짜를 그대로 살리면
+ * 몇 주 전 날짜가 붙은 것들이 '53일 지남' 으로 한꺼번에 쏟아진다. 볼 때가 이미
+ * 지난 것은 오늘로 모이고, 하루 상한을 넘는 것은 다음 다시 계산이 뒤로 편다.
+ */
+async function restore(
+  get: () => PlannerState,
+  set: (partial: Partial<PlannerState>) => void,
+  db: Repository,
+  inScope: (item: ItemRow) => boolean
+): Promise<void> {
+  const { items, goals, settings, today } = get()
+  const restored = restoredPatches(items, goals, settings, today, inScope)
+  if (restored.size === 0) return
+  for (const [id, patch] of restored) {
+    const item = items.find((i) => i.id === id)
+    const state = item ? memoryStateOf(item) : null
+    if (item && state) {
+      const goal = item.goal_id
+        ? (goals.find((g) => g.id === item.goal_id) ?? null)
+        : null
+      const next = naturalScheduleOf(
+        { ...item, ...patch },
+        effectiveConfig({ ...item, ...patch }, goal, settings),
+        state,
+        settings
+      )
+      patch.due = maxDate(today, next.due)
+      patch.due_kind = next.dueKind
+      patch.due_source = 'fsrs'
+    }
+    await db.updateItem(id, patch)
+  }
+  set({
+    items: get().items.map((i) => {
+      const patch = restored.get(i.id)
+      return patch ? { ...i, ...patch } : i
+    }),
+  })
+}
 
 function horizonReadyAt(horizon: Horizon | null): DateOnly | null {
   return horizon ? horizonFields(horizon).ready_at : null
@@ -620,13 +744,13 @@ function nextItemState(
   grade: Grade,
   postGoalMode: PostGoalMode
 ): ItemRow['state'] {
-  // '다시' 는 하나도 기억 안 났다는 뜻이다. 목표가 지났든 아니든 그 사실은 같다.
-  // 여기서 등급을 안 보고 보관해 버리면 앱이 "끝났으니 됐다" 고 사용자 대신
-  // 정하는 셈이 된다.
+  // 목표가 끝난 뒤의 평가는 앱에서는 생기지 않는다. 끝나는 날을 지나 앱을 켜면
+  // 그 자리에서 보관하기 때문이다. 그래도 들어오면 보관하는 쪽은 등급과 상관없이
+  // 마친다. 다시 잡아 봐야 지킬 목표가 없고, 상태와 보관 날짜도 같은 말을 해야 한다.
+  if (postGoalReached && postGoalMode === 'archive') return 'archived'
+  // '다시' 는 하나도 기억 안 났다는 뜻이다. 계속 보는 쪽에서는 그 사실이 그대로다.
   if (grade === 1) return 'relearning'
-  if (postGoalReached) {
-    return postGoalMode === 'archive' ? 'archived' : 'maintaining'
-  }
+  if (postGoalReached) return 'maintaining'
   if (inPlateau) return 'holding'
   return 'review'
 }
@@ -710,7 +834,9 @@ export function computeSpread(
   today: DateOnly
 ): SpreadOutcome {
   const goalById = new Map(goals.map((g) => [g.id, g]))
-  const active = items.filter(isActive)
+  // 다음 날짜가 목표 뒤로 나간 것은 그 날이 오기 전에 내려간다. 자리를 차지하게
+  // 두면 다른 목표의 복습이 오지도 않을 것에 밀린다.
+  const active = scheduledItems(items, goals, settings)
   const itemsById = new Map(active.map((i) => [i.id, i]))
   const patches = new Map<string, Partial<ItemRow>>()
   // 항목별로 잡아둔 날짜들. 대부분 하나지만 부족한 항목에는 둘이 들어간다.
@@ -1128,15 +1254,20 @@ export function selectUpcoming(
     .map(([date, count]) => ({ date, count }))
 }
 
-/** 활성 항목들의 지금 기억률 평균. 오늘 화면 머리에 걸리는 값이다. */
+/**
+ * 활성 항목들의 지금 기억률 평균. 오늘 화면 머리에 걸리는 값이다.
+ *
+ * 셀 것이 없으면 없음이다. 0 을 돌려주면 목표를 다 마치고 돌아온 날 머리에
+ * '0%' 가 서서, 다 잊어버린 것처럼 읽힌다.
+ */
 export function selectOverallRetention(
   items: ItemRow[],
   today: DateOnly
-): number {
+): number | null {
   const active = items.filter(
     (i) => isActive(i) && i.stability !== null && i.last_review !== null
   )
-  if (active.length === 0) return 0
+  if (active.length === 0) return null
   const total = active.reduce((sum, item) => {
     const elapsed = Math.max(0, diffDays(item.last_review!, today))
     return sum + defaultFsrs.retrievability(elapsed, item.stability!)

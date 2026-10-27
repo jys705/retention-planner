@@ -27,9 +27,13 @@ describe('다시 를 눌렀을 때', () => {
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
   })
 
-  it('S-171 목표가 지났어도 다시 는 보관하지 않는다', async () => {
-    // 목표가 끝났다고 앱이 '됐다' 고 정하면 안 된다. 하나도 기억 안 났다는데
-    // 그 자리에서 치워 버리면 다시 볼 길이 사라진다.
+  it('S-171 목표가 지나 보관돼도 다시 볼 길은 남는다', async () => {
+    // 예전에는 '목표 뒤에 다시를 누르면 보관하지 않는다' 를 지켰다. 하나도 기억 안
+    // 났다는데 그 자리에서 치워 버리면 다시 볼 길이 사라지기 때문이다.
+    // 지금은 목표가 지나면 평가를 기다리지 않고 보관한다(사용자가 목표를 마쳤는데
+    // 계속 복습하라고 뜨는 것을 원하지 않았다). 그러니 목표 뒤에 평가할 일 자체가
+    // 없다. 남는 뜻은 하나다. 보관은 지우는 것이 아니라서, 계속 기억하기로 다시
+    // 열면 항목이 그대로 돌아와야 한다.
     await setupApp(TODAY, {
       goals: [
         aGoal({
@@ -45,13 +49,27 @@ describe('다시 를 눌렀을 때', () => {
         anItem({ id: 'i1', title: '지난 목표 항목', goal_id: 'g1', due: TODAY }),
       ],
     })
+    expect(usePlanner.getState().items[0].archived_at).not.toBeNull()
+    expect(usePlanner.getState().reviews).toHaveLength(0)
+
+    // 계속 기억하기는 목표 시점을 정해두지 않음으로 돌리는 것이다.
+    await usePlanner
+      .getState()
+      .updateGoal('g1', { horizon_kind: 'open', ready_at: null, hold_until: null })
+    const back = usePlanner.getState().items[0]
+    expect(back.archived_at).toBeNull()
+    expect(back.state).not.toBe('archived')
+
+    // 돌아온 뒤에 다시 를 누르면 평소처럼 가장 짧은 간격으로 잡힌다.
     await usePlanner.getState().rateItem('i1', 1, { reviewedAt: TODAY })
     const after = usePlanner.getState().items[0]
     expect(after.state).toBe('relearning')
     expect(after.archived_at).toBeNull()
   })
 
-  it('S-172 목표가 지났고 기억났으면 그때는 보관한다', async () => {
+  it('S-172 목표가 지나면 평가하지 않아도 보관된다', async () => {
+    // 예전에는 목표 뒤에 평가할 때 보관했다. 평가를 안 하면 영영 안 넘어가서,
+    // 목표를 마치고 앱을 안 켠 사람의 오늘 목록에 항목이 밀린 채 남았다.
     await setupApp(TODAY, {
       goals: [
         aGoal({
@@ -67,8 +85,10 @@ describe('다시 를 눌렀을 때', () => {
         anItem({ id: 'i1', title: '지난 목표 항목', goal_id: 'g1', due: TODAY }),
       ],
     })
-    await usePlanner.getState().rateItem('i1', 3, { reviewedAt: TODAY })
+    // 앱을 켜는 것만으로 넘어간다. 평가는 하나도 없다.
+    expect(usePlanner.getState().reviews).toHaveLength(0)
     expect(usePlanner.getState().items[0].state).toBe('archived')
+    expect(usePlanner.getState().items[0].archived_at).not.toBeNull()
   })
 })
 
@@ -172,6 +192,7 @@ describe('버튼이 약속한 날짜', () => {
       repsSinceGoal: item.reps_since_goal,
       bufferDays: settings.bufferDays,
       maxIntervalDays: config.maxIntervalDays,
+      postGoalMode: config.postGoalMode,
     })
 
     await usePlanner.getState().rateItem('i1', 1, { reviewedAt: TODAY })

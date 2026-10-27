@@ -1,11 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { defaultFsrs } from '../../src/core/fsrs/fsrs6'
 import { schedule } from '../../src/core/policy/constraints'
 import { feasibleInterval } from '../../src/core/spread/feasible'
 import { resetRepositoryForTest } from '../../src/db'
 import type { GoalRow, ItemRow } from '../../src/db/types'
+import { freezeToday, unfreezeToday } from '../../src/lib/clock'
 import { addDays, fromEpochDay, toEpochDay } from '../../src/lib/date'
+import { isActive } from '../../src/lib/domain'
 import { resetPlannerForTest, usePlanner } from '../../src/store/planner'
+
+afterEach(unfreezeToday)
 
 const TODAY = '2026-08-22'
 const GOAL_IN = 5
@@ -68,6 +72,10 @@ function makeItem(i: number): ItemRow {
 }
 
 async function setup(): Promise<void> {
+  // 시계를 고정한다. 안 그러면 앱을 켤 때의 다시 계산이 실제 날짜로 돌아, 그 날이
+  // 이 시험의 목표한 날을 지나는 순간 항목이 전부 마친 것으로 넘어가 버린다.
+  // 그러면 아래 시험들은 아무것도 펴지 않은 채로 통과한다.
+  freezeToday(TODAY)
   resetRepositoryForTest()
   resetPlannerForTest()
   usePlanner.setState({
@@ -93,6 +101,8 @@ async function setup(): Promise<void> {
   })
   usePlanner.getState().setToday(TODAY)
   await usePlanner.getState().recomputeAll()
+  // 이 파일의 시험은 전부 살아 있는 항목을 펴는 것에 대한 것이다.
+  expect(usePlanner.getState().items.filter(isActive)).toHaveLength(ITEM_COUNT)
 }
 
 function windowOf() {

@@ -79,7 +79,8 @@ export function toCsv(items: ItemRow[], goals: GoalRow[]): string {
     item.memo,
     item.goal_id ? (goalName.get(item.goal_id) ?? '') : '',
     item.first_studied_at,
-    item.due ?? '',
+    // 마친 항목의 날짜는 오지 않을 날이다. 표에 남기면 할 일처럼 읽힌다.
+    item.archived_at !== null || item.state === 'archived' ? '' : (item.due ?? ''),
     String(item.reps),
     String(item.lapses),
     item.stability === null ? '' : item.stability.toFixed(2),
