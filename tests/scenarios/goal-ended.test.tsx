@@ -9,6 +9,7 @@ import { ItemDetailScreen } from '../../src/features/item/ItemDetailScreen'
 import { LibraryScreen } from '../../src/features/library/LibraryScreen'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { toCsv } from '../../src/lib/transfer'
+import { freezeToday } from '../../src/lib/clock'
 import { isActive } from '../../src/lib/domain'
 import { selectTodayItems, usePlanner } from '../../src/store/planner'
 import type { ItemRow, ReviewRow } from '../../src/db/types'
@@ -520,6 +521,45 @@ describe('마친 목표는 목표 화면에 결과로 남는다', () => {
     expect(await screen.findByText('지금 평균 기억률')).toBeInTheDocument()
   })
 
+  it('S-248 다시 연 목표는 그 자리에서 되돌릴 수 있다', async () => {
+    // 다시 열면 끝난 날짜가 덮이고, 지난 날짜는 다시 고를 수 없다. 잘못 눌렀으면
+    // 평가처럼 그 자리에서 물릴 수 있어야 한다.
+    await setupApp(TODAY, finishedWorld())
+    const before = usePlanner.getState()
+    const { user } = render(
+      <GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />
+    )
+    await user.click(await screen.findByRole('button', { name: '계속 기억하기' }))
+    await user.click(screen.getByRole('button', { name: '다시 올리기' }))
+
+    const note = await screen.findByLabelText('방금 한 일')
+    expect(note).toHaveTextContent('자격증 시험을 다시 열었어요. 항목 27개가 오늘부터 다시 잡혔어요.')
+    await user.click(within(note).getByRole('button', { name: '되돌리기' }))
+
+    const after = usePlanner.getState()
+    expect(after.goals[0]).toEqual(before.goals[0])
+    expect(after.items).toEqual(before.items)
+    expect(after.planned).toEqual(before.planned)
+    expect(selectTodayItems(after)).toHaveLength(0)
+    expectConsistent()
+    expect(await screen.findByText('항목별 결과')).toBeInTheDocument()
+    // 껐다 켜도 되돌린 그대로다.
+    await reopen()
+    expect(usePlanner.getState().goals[0].ready_at).toBe(GOAL_DAY)
+    expect(usePlanner.getState().items.every((i) => !isActive(i))).toBe(true)
+  })
+
+  it('S-249 그 사이 다른 쓰기가 끼면 다시 연 것은 되돌리지 않는다', async () => {
+    await setupApp(TODAY, finishedWorld(3))
+    await usePlanner.getState().reopenGoal('g1', { kind: 'open' })
+    expect(usePlanner.getState().lastReopen).not.toBeNull()
+    await usePlanner.getState().rateItem('i0', 3, { reviewedAt: TODAY })
+    await usePlanner.getState().undoReopen()
+    // 사진이 낡았다. 그대로 되돌리면 방금 한 평가와 항목이 어긋난다.
+    expect(usePlanner.getState().goals[0].horizon_kind).toBe('open')
+    expect(usePlanner.getState().items.every(isActive)).toBe(true)
+  })
+
   it('S-233 날짜 다시 정하기는 새 날짜를 고르는 칸을 연다', async () => {
     await setupApp(TODAY, finishedWorld(3))
     const { user } = render(
@@ -694,6 +734,38 @@ describe('대략 목표의 유지 기간', () => {
     const row = await screen.findByRole('button', { name: /발표 준비/ })
     expect(row).toHaveTextContent('11월 10일까지 유지')
     expect(row).not.toHaveTextContent(/지남/)
+  })
+})
+
+describe('켜는 순간', () => {
+  it('S-246 앱을 켜는 사이에도 끝난 목표의 항목을 세지 않는다', async () => {
+    // 저장소에서 읽은 목록을 먼저 내보내고 나중에 보관하면, 그 틈을 본 알림이
+    // 끝난 27개를 세어 '27개가 기다리고 있어요' 를 보낸다. 셈을 마친 뒤 한 번에 내보낸다.
+    await setupApp(GOAL_DAY, finishedWorld())
+    expect(usePlanner.getState().items.every(isActive)).toBe(true)
+
+    freezeToday(TODAY)
+    const counts: number[] = []
+    const stop = usePlanner.subscribe((state) => {
+      if (state.ready) counts.push(selectTodayItems(state).length)
+    })
+    await usePlanner.getState().load()
+    stop()
+
+    expect(counts.length).toBeGreaterThan(0)
+    expect(counts.every((n) => n === 0)).toBe(true)
+    expect(usePlanner.getState().items.every((i) => !isActive(i))).toBe(true)
+  })
+
+  it('S-247 되살릴 때도 하루 상한을 넘는 수를 한 번도 내보내지 않는다', async () => {
+    await setupApp(TODAY, finishedWorld())
+    const counts: number[] = []
+    const stop = usePlanner.subscribe((state) => {
+      counts.push(selectTodayItems(state).length)
+    })
+    await usePlanner.getState().updateGoal('g1', { horizon_kind: 'open', ready_at: null, hold_until: null })
+    stop()
+    expect(Math.max(...counts)).toBe(20)
   })
 })
 

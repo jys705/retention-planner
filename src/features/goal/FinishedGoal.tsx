@@ -6,7 +6,7 @@ import { NumText } from '../../components/NumText'
 import { OptionCards } from '../../components/OptionCards'
 import type { GoalRow, ReviewRow } from '../../db/types'
 import { addDays, toEpochDay, type DateOnly } from '../../lib/date'
-import { goalColor, goalHorizon, horizonFields, isActive } from '../../lib/domain'
+import { goalColor, goalHorizon, isActive } from '../../lib/domain'
 import { horizonLabel, monthDay, percent, weekday } from '../../lib/format'
 import {
   averageRetentionOn,
@@ -38,6 +38,7 @@ export function FinishedGoal({
 }) {
   const { items, goals, reviews, settings, today } = usePlanner()
   const updateGoal = usePlanner((s) => s.updateGoal)
+  const reopenGoal = usePlanner((s) => s.reopenGoal)
   const deleteGoal = usePlanner((s) => s.deleteGoal)
   const acknowledgeEnded = usePlanner((s) => s.acknowledgeEnded)
   const [panel, setPanel] = useState<'continue' | 'redate' | 'delete' | null>(
@@ -271,9 +272,7 @@ export function FinishedGoal({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() =>
-                  void updateGoal(goal.id, horizonFields({ kind: 'open' }))
-                }
+                onClick={() => void reopenGoal(goal.id, { kind: 'open' })}
                 className="rounded-ctl bg-accent px-[14px] py-[7px] text-[13px] font-semibold text-white"
               >
                 다시 올리기
@@ -305,7 +304,7 @@ export function FinishedGoal({
               <button
                 type="button"
                 disabled={!draftOpen}
-                onClick={() => void updateGoal(goal.id, horizonFields(draft))}
+                onClick={() => void reopenGoal(goal.id, draft)}
                 className="rounded-ctl bg-accent px-[14px] py-[7px] text-[13px] font-semibold text-white disabled:opacity-35"
               >
                 이 시점으로 다시 시작하기

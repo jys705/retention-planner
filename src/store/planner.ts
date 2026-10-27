@@ -154,6 +154,7 @@ interface PlannerState {
   /** 저장소에 쓸 때마다 하나씩 오른다. 사진이 아직 쓸모 있는지 가리는 데 쓴다. */
   writeSeq: number
   lastRating: LastRating | null
+  lastReopen: LastReopen | null
   draft: QuickAddDraft
 
   load(): Promise<void>
@@ -172,12 +173,45 @@ interface PlannerState {
   deleteGoal(id: string, options?: { withItems?: boolean }): Promise<void>
   /** 끝난 목표를 알리는 줄을 확인했다고 적어 둔다. 같은 끝은 다시 안 알린다. */
   acknowledgeEnded(keys: string[]): Promise<void>
+  /** 마친 목표에 새 목표 시점을 주어 다시 연다. 되돌릴 사진을 같이 남긴다. */
+  reopenGoal(id: string, horizon: Horizon): Promise<void>
+  undoReopen(): Promise<void>
   attachItemsToGoal(goalId: string, itemIds: string[]): Promise<void>
   saveSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void>
   importAll(backup: Backup): Promise<void>
-  recomputeAll(): Promise<void>
+  /**
+   * 오늘 기준으로 다시 셈한다. 이미 저장해 둔 고침을 같이 넘기면 그것까지 얹어
+   * 한 번에 내보낸다. 두 번에 나눠 내보내면 그 사이를 본 알림이 다른 수를 센다.
+   */
+  recomputeAll(pending?: ReadonlyMap<string, Partial<ItemRow>>): Promise<void>
   undoLastRating(): Promise<void>
   setDraft(patch: Partial<QuickAddDraft>): void
+}
+
+/**
+ * 마친 목표를 다시 연 일.
+ *
+ * 계속 기억하기나 날짜 다시 정하기는 끝난 날짜를 덮는다. 지난 날짜는 다시 고를 수
+ * 없으므로 잘못 눌렀으면 돌아갈 길이 없다. 그래서 평가처럼 사진을 들고 있다가
+ * 그 사이 다른 쓰기가 없을 때만 그대로 되돌린다.
+ */
+export interface LastReopen {
+  seq: number
+  goalId: string
+  name: string
+  /** 다시 올라온 항목 수. */
+  count: number
+  goalBefore: GoalRow
+  itemsBefore: ItemRow[]
+  plannedBefore: PlannedReviewRow[]
+}
+
+/** 다시 연 일을 아직 되돌릴 수 있는가. */
+export function canUndoReopen(state: {
+  lastReopen: LastReopen | null
+  writeSeq: number
+}): boolean {
+  return state.lastReopen !== null && state.lastReopen.seq === state.writeSeq
 }
 
 /** 손잡이가 아직 방금 것을 가리키는가. 그 사이 다른 쓰기가 있었으면 아니다. */
@@ -212,6 +246,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   writeSeq: 0,
   lastRating: null,
+  lastReopen: null,
   draft: EMPTY_DRAFT,
 
   async load() {
@@ -222,18 +257,25 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       db.listReviews(),
       db.listSettings(),
     ])
+    const settings = parseSettings(rawSettings)
+    const today = clockToday()
+    // 화면과 알림에 내보내기 전에 오늘 기준으로 먼저 셈한다. 셈하기 전 목록을 한
+    // 번이라도 내보내면, 그 사이에 알림이 끝난 목표의 항목까지 세어 울린다.
+    const { patches, planned } = await settle(db, items, goals, settings, today)
     set({
       goals,
-      items,
+      items: withPatches(items, patches),
       reviews,
-      settings: parseSettings(rawSettings),
-      today: clockToday(),
+      settings,
+      today,
+      planned,
       ready: true,
+      writeSeq: get().writeSeq + 1,
       // 쓰다 만 것은 이번 실행에만 산다. 껐다 켜면 빈 줄에서 시작한다.
       draft: EMPTY_DRAFT,
       lastRating: null,
+      lastReopen: null,
     })
-    await get().recomputeAll()
   },
 
   setToday(date) {
@@ -512,8 +554,8 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     })
     // 시험이 미뤄지는 일은 흔하다. 목표 날짜를 뒤로 옮기거나 계속 기억하기로 정하면
     // 끝난 것으로 쳤던 이 목표의 항목이 되살아나야 한다.
-    await restore(get, set, db, (i) => i.goal_id === id)
-    await get().recomputeAll()
+    const restored = await restore(get, db, (i) => i.goal_id === id)
+    await get().recomputeAll(restored)
   },
 
   async updateItem(id, patch) {
@@ -529,8 +571,10 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       'ready_at' in patch ||
       'hold_until' in patch ||
       'goal_id' in patch
-    if (moved) await restore(get, set, db, (i) => i.id === id)
-    await get().recomputeAll()
+    const restored = moved
+      ? await restore(get, db, (i) => i.id === id)
+      : undefined
+    await get().recomputeAll(restored)
   },
 
   async deleteItem(id) {
@@ -600,6 +644,52 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     await get().saveSetting('seenEnded', next)
   },
 
+  async reopenGoal(id, horizon) {
+    const goal = get().goals.find((g) => g.id === id)
+    if (!goal) return
+    const itemsBefore = get().items
+    const plannedBefore = get().planned
+    const seqBefore = get().writeSeq
+    const alive = (list: ItemRow[]) =>
+      list.filter((i) => i.goal_id === id && isActive(i)).length
+    await get().updateGoal(id, horizonFields(horizon))
+    // 다시 연 것이 올린 표는 제 recomputeAll 하나뿐이어야 한다. 더 올라가 있으면
+    // 그 사이 남이 썼다는 뜻이라 사진이 낡았다.
+    if (get().writeSeq !== seqBefore + 1) return
+    set({
+      lastReopen: {
+        seq: get().writeSeq,
+        goalId: id,
+        name: goal.name,
+        count: alive(get().items) - alive(itemsBefore),
+        goalBefore: goal,
+        itemsBefore,
+        plannedBefore,
+      },
+    })
+  },
+
+  async undoReopen() {
+    const last = get().lastReopen
+    if (last === null || !canUndoReopen(get())) return
+    const db = await repo()
+    await db.updateGoal(last.goalId, last.goalBefore)
+    const nowItems = get().items
+    for (const before of last.itemsBefore) {
+      const now = nowItems.find((i) => i.id === before.id)
+      if (now !== before) await db.updateItem(before.id, before)
+    }
+    await db.replacePlannedReviews(last.plannedBefore)
+    set({
+      goals: get().goals.map((g) => (g.id === last.goalId ? last.goalBefore : g)),
+      items: last.itemsBefore,
+      planned: last.plannedBefore,
+      lastReopen: null,
+      // 사진을 그대로 되돌렸으니 다시 계산하지 않는다. 평가 되돌리기와 같은 까닭이다.
+      writeSeq: get().writeSeq + 1,
+    })
+  },
+
   async attachItemsToGoal(goalId, itemIds) {
     const db = await repo()
     for (const id of itemIds) {
@@ -633,48 +723,70 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     await get().load()
   },
 
-  async recomputeAll() {
+  async recomputeAll(pending) {
     // 쓸 때마다 표를 올린다. 평가가 도는 동안 남이 끼어들면 그 평가의 사진이
     // 낡았다는 것을 이 표 하나로 알 수 있다.
     set({ writeSeq: get().writeSeq + 1 })
     const db = await repo()
-    const { items, goals, settings, today } = get()
-
-    // 목표 시점이 지난 것부터 넘긴다. 앱을 켤 때와 날이 바뀔 때 여기를 지나므로,
-    // 목표를 마치고 평가를 안 했어도 다음에 켜는 순간 보관된다. 분산은 넘긴 뒤의
-    // 목록을 봐야 한다. 안 그러면 끝난 항목이 남의 날짜를 밀어낸다.
-    const ended = endedPatches(items, goals, settings, today, nowIso())
-    const afterEnd =
-      ended.size === 0
-        ? items
-        : items.map((i) => {
-            const patch = ended.get(i.id)
-            return patch ? { ...i, ...patch } : i
-          })
-    const spread = computeSpread(afterEnd, goals, settings, today)
-
-    const patches = new Map(ended)
-    for (const [id, patch] of spread.patches) {
-      patches.set(id, { ...(patches.get(id) ?? {}), ...patch })
-    }
-    for (const [id, patch] of patches) {
-      await db.updateItem(id, patch)
-    }
-    await db.replacePlannedReviews(spread.planned)
+    const { goals, settings, today } = get()
+    const items = pending ? withPatches(get().items, pending) : get().items
+    const { patches, planned } = await settle(db, items, goals, settings, today)
+    const all = mergePatches(pending ?? new Map(), patches)
 
     set({
-      planned: spread.planned,
-      ...(patches.size > 0
-        ? {
-            items: get().items.map((i) => {
-              const patch = patches.get(i.id)
-              return patch ? { ...i, ...patch } : i
-            }),
-          }
-        : {}),
+      planned,
+      ...(all.size > 0 ? { items: withPatches(get().items, all) } : {}),
     })
   },
 }))
+
+/**
+ * 오늘 기준으로 다시 셈해 저장하고, 바꾼 칸을 돌려준다.
+ *
+ * 목표 시점이 지난 것부터 넘긴다. 앱을 켤 때와 날이 바뀔 때 여기를 지나므로,
+ * 목표를 마치고 평가를 안 했어도 다음에 켜는 순간 보관된다. 분산은 넘긴 뒤의
+ * 목록을 봐야 한다. 안 그러면 끝난 항목이 남의 날짜를 밀어낸다.
+ */
+async function settle(
+  db: Repository,
+  items: ItemRow[],
+  goals: GoalRow[],
+  settings: Settings,
+  today: DateOnly
+): Promise<{ patches: Map<string, Partial<ItemRow>>; planned: PlannedReviewRow[] }> {
+  const ended = endedPatches(items, goals, settings, today, nowIso())
+  const spread = computeSpread(withPatches(items, ended), goals, settings, today)
+  const patches = mergePatches(ended, spread.patches)
+  for (const [id, patch] of patches) {
+    await db.updateItem(id, patch)
+  }
+  await db.replacePlannedReviews(spread.planned)
+  return { patches, planned: spread.planned }
+}
+
+/** 항목마다 고친 칸을 덮어쓴다. 고칠 것이 없으면 같은 배열을 돌려준다. */
+function withPatches(
+  items: ItemRow[],
+  patches: ReadonlyMap<string, Partial<ItemRow>>
+): ItemRow[] {
+  if (patches.size === 0) return items
+  return items.map((i) => {
+    const patch = patches.get(i.id)
+    return patch ? { ...i, ...patch } : i
+  })
+}
+
+/** 고친 칸 둘을 합친다. 같은 항목이면 뒤의 것이 이긴다. */
+function mergePatches(
+  first: ReadonlyMap<string, Partial<ItemRow>>,
+  second: ReadonlyMap<string, Partial<ItemRow>>
+): Map<string, Partial<ItemRow>> {
+  const merged = new Map(first)
+  for (const [id, patch] of second) {
+    merged.set(id, { ...(merged.get(id) ?? {}), ...patch })
+  }
+  return merged
+}
 
 /**
  * 고른 범위에서 다시 살아날 항목을 되살려 저장한다.
@@ -685,13 +797,11 @@ export const usePlanner = create<PlannerState>((set, get) => ({
  */
 async function restore(
   get: () => PlannerState,
-  set: (partial: Partial<PlannerState>) => void,
   db: Repository,
   inScope: (item: ItemRow) => boolean
-): Promise<void> {
+): Promise<Map<string, Partial<ItemRow>>> {
   const { items, goals, settings, today } = get()
   const restored = restoredPatches(items, goals, settings, today, inScope)
-  if (restored.size === 0) return
   for (const [id, patch] of restored) {
     const item = items.find((i) => i.id === id)
     const state = item ? memoryStateOf(item) : null
@@ -709,14 +819,11 @@ async function restore(
       patch.due_kind = next.dueKind
       patch.due_source = 'fsrs'
     }
+    // 예전 판이 평가로 보관한 것에는 그때의 '부족' 이 굳어 있을 수 있다.
+    patch.goal_risk = null
     await db.updateItem(id, patch)
   }
-  set({
-    items: get().items.map((i) => {
-      const patch = restored.get(i.id)
-      return patch ? { ...i, ...patch } : i
-    }),
-  })
+  return restored
 }
 
 function horizonReadyAt(horizon: Horizon | null): DateOnly | null {

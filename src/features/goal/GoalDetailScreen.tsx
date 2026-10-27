@@ -5,6 +5,7 @@ import { Badge } from '../../components/Badge'
 import { Hint } from '../../components/Chip'
 import { InlineText } from '../../components/InlineText'
 import { MoreMenu } from '../../components/MoreMenu'
+import { Note, NoteButton } from '../../components/Note'
 import { OptionCards } from '../../components/OptionCards'
 import { Expand } from '../../components/Expand'
 import type { GoalRow } from '../../db/types'
@@ -15,6 +16,7 @@ import { effectiveConfig, goalColor, isActive, memoryStateOf } from '../../lib/d
 import {
   dueLabel,
   horizonLabel,
+  josa,
   monthDay,
   percent,
   weekday,
@@ -26,7 +28,7 @@ import {
   goalTimeLabel,
 } from '../../lib/lifecycle'
 import { INTENSITY_META } from '../../lib/intensity'
-import { usePlanner } from '../../store/planner'
+import { canUndoReopen, usePlanner } from '../../store/planner'
 import { LoadBars, type LoadBar } from '../charts/LoadBars'
 import { rollout } from '../forecast/rollout'
 import { HorizonPicker } from '../newitem/HorizonPicker'
@@ -45,6 +47,8 @@ export function GoalDetailScreen({
   const { items, goals, settings, today } = usePlanner()
   const updateGoal = usePlanner((s) => s.updateGoal)
   const deleteGoal = usePlanner((s) => s.deleteGoal)
+  const undoReopen = usePlanner((s) => s.undoReopen)
+  const reopened = usePlanner((s) => (canUndoReopen(s) ? s.lastReopen : null))
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
@@ -192,6 +196,25 @@ export function GoalDetailScreen({
           </span>
         </div>
       </header>
+
+      {/* 마친 목표를 방금 다시 열었으면 그 자리에서 물릴 수 있게 한다. */}
+      {reopened && reopened.goalId === goal.id ? (
+        <Note
+          label="방금 한 일"
+          flush
+          actions={
+            <NoteButton onClick={() => void undoReopen()}>되돌리기</NoteButton>
+          }
+        >
+          <span className="text-[12.5px] leading-relaxed text-text-2">
+            <span className="text-text">{reopened.name}</span>
+            {josa(reopened.name, '을', '를')} 다시 열었어요.
+            {reopened.count > 0
+              ? ` 항목 ${reopened.count}개가 오늘부터 다시 잡혔어요.`
+              : ''}
+          </span>
+        </Note>
+      ) : null}
 
       {confirmingDelete ? (
         <section className="flex flex-col gap-3 rounded-card border border-imp-fg bg-surface px-[16px] py-[14px]">

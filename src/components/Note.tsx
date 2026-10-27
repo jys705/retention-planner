@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { cn } from '../lib/cn'
 
 /**
  * 오늘 목록 위에 잠깐 서는 판.
@@ -11,6 +12,7 @@ export function Note({
   ariaLabel,
   children,
   actions,
+  flush = false,
 }: {
   /** 판 위에 작게 서는 이름. 없으면 본문만 선다. */
   label?: string
@@ -18,11 +20,16 @@ export function Note({
   children: ReactNode
   /** 오른쪽 끝에 서는 단추들. */
   actions?: ReactNode
+  /** 둘레가 이미 간격을 주는 자리. 아래 여백을 빼서 간격이 겹치지 않게 한다. */
+  flush?: boolean
 }) {
   return (
     <section
       aria-label={ariaLabel ?? label}
-      className="mb-[10px] flex items-center gap-3 rounded-card border border-line bg-surface px-[16px] py-[11px]"
+      className={cn(
+        'flex items-center gap-3 rounded-card border border-line bg-surface px-[16px] py-[11px]',
+        flush ? '' : 'mb-[10px]'
+      )}
     >
       <div className="flex min-w-0 flex-col gap-[3px]">
         {label ? (
