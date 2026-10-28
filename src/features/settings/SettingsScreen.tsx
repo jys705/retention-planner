@@ -123,7 +123,7 @@ export function SettingsScreen() {
 
         <Row
           label="기본 복습 강도"
-          note="새 항목에 처음 적용되는 값이에요. 항목마다 따로 바꿀 수 있어요."
+          note="새 목표와, 목표 없이 적는 항목에 처음 들어가는 값이에요. 목표에 넣은 항목은 그 목표의 강도를 따라요."
         >
           <div className="flex flex-wrap gap-[6px]">
             {INTENSITY_META.map((meta) => (
@@ -264,7 +264,7 @@ export function SettingsScreen() {
 
           <Row
             label="최소 복습 횟수 기본값"
-            note="목표한 날 전에 최소 이만큼은 보게 잡아요. 계산상 필요하지 않아도 마음이 놓이는 쪽으로 맞추는 값입니다."
+            note="목표한 날 전에 최소 이만큼은 보게 잡아요. 처음 공부한 것도 한 번으로 셉니다. 계산상 필요하지 않아도 마음이 놓이는 쪽으로 맞추는 값입니다."
           >
             <Stepper
               value={settings.minReviews}

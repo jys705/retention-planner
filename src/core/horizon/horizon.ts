@@ -8,7 +8,8 @@ import { addDays, toEpochDay, type DateOnly } from '../../lib/date'
  */
 export type Horizon =
   | { kind: 'open' }
-  | { kind: 'date'; at: DateOnly }
+  /** rest 면 목표한 날 당일을 비워 둔다. 그날에는 아무 복습도 잡지 않는다. */
+  | { kind: 'date'; at: DateOnly; rest?: true }
   | { kind: 'window'; readyAt: DateOnly; holdUntil: DateOnly }
 
 /** 무기한을 나타내는 값. 날짜 비교와 뺄셈이 그대로 통한다. */
@@ -43,6 +44,28 @@ export function resolveHorizon(horizon: Horizon): ResolvedHorizon {
 
 export function isOpen(horizon: ResolvedHorizon): boolean {
   return !Number.isFinite(horizon.readyAt)
+}
+
+/**
+ * 목표한 날 당일을 비워 두는가. 정확한 날짜에만 있는 선택이다.
+ *
+ * 목표한 날은 시험을 보거나 발표를 하는 날이라 복습할 틈이 없을 수 있다. 비워 두면
+ * 그날에는 아무것도 잡지 않고, 앞에 자리가 없을 때 당일까지 쓰던 예외도 끈다.
+ * 대략 목표는 그날부터 기억을 붙잡는 기간이 시작되므로 이 선택이 없다.
+ */
+export function restsOnDay(horizon: Horizon): boolean {
+  return horizon.kind === 'date' && horizon.rest === true
+}
+
+/**
+ * 복습을 잡을 수 있는 마지막 날. 1970-01-01 기준 일수다.
+ *
+ * 보통은 목표 시점의 늦은 쪽 끝이다. 목표한 날을 비워 두면 그 전날이다.
+ * 정해두지 않았으면 끝이 없다.
+ */
+export function lastReviewDay(horizon: Horizon): number {
+  const { holdUntil } = resolveHorizon(horizon)
+  return restsOnDay(horizon) ? holdUntil - 1 : holdUntil
 }
 
 /** 기본 여유 폭. 중심까지 거리의 25% 만큼 앞뒤로 벌린다. */

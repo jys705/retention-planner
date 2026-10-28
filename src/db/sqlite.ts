@@ -11,7 +11,7 @@ import type {
 const GOAL_COLUMNS = [
   'id', 'name', 'horizon_kind', 'ready_at', 'hold_until', 'target_retention',
   'intensity', 'min_reviews', 'max_interval_days', 'post_goal_mode', 'color',
-  'created_at', 'archived_at',
+  'created_at', 'archived_at', 'goal_day',
 ] as const
 
 const ITEM_COLUMNS = [
@@ -72,8 +72,21 @@ export class SqliteRepository implements Repository {
       for (const statement of migration.statements) {
         await this.handle.execute(statement)
       }
+      for (const { table, column, type } of migration.columns ?? []) {
+        if (await this.hasColumn(table, column)) continue
+        await this.handle.execute(
+          `ALTER TABLE ${table} ADD COLUMN ${column} ${type}`
+        )
+      }
       await this.setSetting(SCHEMA_VERSION_KEY, String(migration.version))
     }
+  }
+
+  private async hasColumn(table: string, column: string): Promise<boolean> {
+    const rows = await this.handle.select<{ name: string }[]>(
+      `SELECT name FROM pragma_table_info('${table}')`
+    )
+    return rows.some((row) => row.name === column)
   }
 
   private async getSettingRaw(key: string): Promise<string | null> {
@@ -225,11 +238,16 @@ export class SqliteRepository implements Repository {
     await this.handle.execute('DELETE FROM reviews')
     await this.handle.execute('DELETE FROM items')
     await this.handle.execute('DELETE FROM goals')
-    await this.handle.execute('DELETE FROM settings')
+    // 스키마가 어디까지 왔는지는 데이터가 아니라 이 파일의 사실이다. 가져온 설정에는
+    // 이 값이 없으므로 같이 지우면 다음 실행에 마이그레이션이 처음부터 다시 돈다.
+    await this.handle.execute('DELETE FROM settings WHERE key <> $1', [
+      SCHEMA_VERSION_KEY,
+    ])
     for (const g of data.goals) await this.insertGoal(g)
     for (const i of data.items) await this.insertItem(i)
     for (const r of data.reviews) await this.insertReview(r)
     for (const [k, v] of Object.entries(data.settings)) {
+      if (k === SCHEMA_VERSION_KEY) continue
       await this.setSetting(k, v)
     }
   }

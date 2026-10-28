@@ -3,8 +3,8 @@ import { cn } from '../../lib/cn'
 import { addDays } from '../../lib/date'
 import { horizonLabel, shortDate } from '../../lib/format'
 import { selectTodayItems, usePlanner } from '../../store/planner'
-import { goalColor, isActive } from '../../lib/domain'
-import { goalEnded } from '../../lib/lifecycle'
+import { goalColor } from '../../lib/domain'
+import { goalEnded, isScheduled } from '../../lib/lifecycle'
 
 export type ScreenKey = 'today' | 'forecast' | 'goals' | 'library' | 'settings'
 
@@ -45,9 +45,9 @@ export function AppShell({
   onOpenItem: (itemId: string) => void
   children: ReactNode
 }) {
-  const { items, goals, today } = usePlanner()
+  const { items, goals, settings, today } = usePlanner()
   // 오늘 화면 머리의 큰 숫자와 같은 수여야 한다. 따로 세면 둘이 갈라진다.
-  const dueCount = selectTodayItems({ items, today }).length
+  const dueCount = selectTodayItems({ items, goals, settings, today }).length
   // 가까운 것부터 올린다. 만들어 둔 차례대로 자르면 '다가오는' 이 아니게 된다.
   const goalCutoff = addDays(today, GOAL_HORIZON_DAYS)
   const dated = goals
@@ -67,10 +67,11 @@ export function AppShell({
   // 곧 볼 것만 여기 올려 두면 그 덩어리를 안 뒤져도 된다.
   // 오늘 것은 오늘 화면이 맡는다. 여기까지 올리면 같은 줄이 두 군데 서게 된다.
   const itemCutoff = addDays(today, ITEM_HORIZON_DAYS)
+  // 제 날짜가 지나면 끝나는 낱개의 다음 날짜는 오지 않을 수 있다. 앞으로 볼 것만 센다.
   const looseSoon = items
     .filter(
       (i) =>
-        isActive(i) &&
+        isScheduled(i, null, settings) &&
         i.goal_id === null &&
         i.due !== null &&
         i.due > today &&

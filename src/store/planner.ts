@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { defaultFsrs } from '../core/fsrs/fsrs6'
 import type { Grade, MemoryState } from '../core/fsrs/types'
-import { resolveHorizon, type Horizon } from '../core/horizon/horizon'
+import { resolveHorizon, restsOnDay, type Horizon } from '../core/horizon/horizon'
 import {
   applyReview,
   DEFAULT_INITIAL_GRADE,
@@ -44,6 +44,7 @@ import {
 import {
   effectiveConfig,
   goalHorizon,
+  goalHorizonFields,
   horizonFields,
   isActive,
   memoryStateOf,
@@ -61,9 +62,12 @@ import type { Backup } from '../lib/transfer'
 import { newId } from './ids'
 import { nowIso, today as clockToday } from '../lib/clock'
 import {
+  dueBeyondEnd,
   endedPatches,
   goalEnded,
   itemEndedKey,
+  itemLastReviewDay,
+  restingToday,
   restoredPatches,
   scheduledItems,
 } from '../lib/lifecycle'
@@ -251,12 +255,16 @@ export const usePlanner = create<PlannerState>((set, get) => ({
 
   async load() {
     const db = await repo()
-    const [goals, items, reviews, rawSettings] = await Promise.all([
+    const [rawGoals, items, reviews, rawSettings] = await Promise.all([
       db.listGoals(),
       db.listItems(),
       db.listReviews(),
       db.listSettings(),
     ])
+    // 목표한 날 칸이 생기기 전에 저장한 행에는 그 키가 없다. 비어 있는 값으로 채운다.
+    // 안 채우면 행을 통째로 되돌릴 때(다시 연 것 되돌리기) 그 키가 빠져서, 저장소에
+    // 써 둔 '비워 두기' 가 지워지지 않고 다음에 켤 때 되살아난다.
+    const goals = rawGoals.map((g) => ({ ...g, goal_day: g.goal_day ?? null }))
     const settings = parseSettings(rawSettings)
     const today = clockToday()
     // 화면과 알림에 내보내기 전에 오늘 기준으로 먼저 셈한다. 셈하기 전 목록을 한
@@ -410,7 +418,9 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       intensity: config.intensity,
       targetRetention: config.targetRetention,
       minReviews: config.minReviews,
-      repsSinceGoal: item.reps_since_goal,
+      // 지금 적는 이 평가도 한 번 본 것이다. 빼고 세면 최소 횟수가 하나 더 잡혀,
+      // 세 번이면 될 것을 네 번 보게 된다. 다시 셈할 때와 내다볼 때는 이미 센다.
+      repsSinceGoal: item.reps_since_goal + 1,
       maxIntervalDays: config.maxIntervalDays,
       bufferDays: settings.bufferDays,
     })
@@ -529,9 +539,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const row: GoalRow = {
       id: newId('goal'),
       name: draft.name.trim(),
-      horizon_kind: draft.horizon.kind,
-      ready_at: horizonReadyAt(draft.horizon),
-      hold_until: horizonHoldUntil(draft.horizon),
+      ...goalHorizonFields(draft.horizon),
       target_retention: settings.targetRetention,
       intensity: draft.intensity ?? settings.defaultIntensity,
       min_reviews: draft.minReviews ?? settings.minReviews,
@@ -652,7 +660,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const seqBefore = get().writeSeq
     const alive = (list: ItemRow[]) =>
       list.filter((i) => i.goal_id === id && isActive(i)).length
-    await get().updateGoal(id, horizonFields(horizon))
+    await get().updateGoal(id, goalHorizonFields(horizon))
     // 다시 연 것이 올린 표는 제 recomputeAll 하나뿐이어야 한다. 더 올라가 있으면
     // 그 사이 남이 썼다는 뜻이라 사진이 낡았다.
     if (get().writeSeq !== seqBefore + 1) return
@@ -745,7 +753,8 @@ export const usePlanner = create<PlannerState>((set, get) => ({
  *
  * 목표 시점이 지난 것부터 넘긴다. 앱을 켤 때와 날이 바뀔 때 여기를 지나므로,
  * 목표를 마치고 평가를 안 했어도 다음에 켜는 순간 보관된다. 분산은 넘긴 뒤의
- * 목록을 봐야 한다. 안 그러면 끝난 항목이 남의 날짜를 밀어낸다.
+ * 목록을 봐야 한다. 안 그러면 끝난 항목이 남의 날짜를 밀어낸다. 목표 밖에 걸린
+ * 묵은 날짜도 분산 전에 풀어야 그 항목이 분산과 하루 상한에 들어간다.
  */
 async function settle(
   db: Repository,
@@ -755,13 +764,61 @@ async function settle(
   today: DateOnly
 ): Promise<{ patches: Map<string, Partial<ItemRow>>; planned: PlannedReviewRow[] }> {
   const ended = endedPatches(items, goals, settings, today, nowIso())
-  const spread = computeSpread(withPatches(items, ended), goals, settings, today)
-  const patches = mergePatches(ended, spread.patches)
+  const afterEnded = withPatches(items, ended)
+  const stranded = strandedPatches(afterEnded, goals, settings, today)
+  const spread = computeSpread(
+    withPatches(afterEnded, stranded),
+    goals,
+    settings,
+    today
+  )
+  const patches = mergePatches(mergePatches(ended, stranded), spread.patches)
   for (const [id, patch] of patches) {
     await db.updateItem(id, patch)
   }
   await db.replacePlannedReviews(spread.planned)
   return { patches, planned: spread.planned }
+}
+
+/**
+ * 다음 날짜가 목표 밖에 걸려 있지만 지금 설정으로는 그 안에 봐야 하는 항목.
+ *
+ * 다음 날짜가 목표 뒤면 그 날은 오지 않는 것으로 친다. 평가할 때 목표까지 이대로
+ * 충분하다고 셈해서 그렇게 잡혔다면 맞다. 그런데 날짜를 잡은 뒤에 설정이 바뀌면
+ * 틀린다. 목표 없이 적은 것을 목표에 넣거나, 목표한 날을 앞당기거나, 그날을 비워
+ * 두면 묵은 날짜가 목표 밖에 걸려서 분산도 하루 상한도 그 항목을 보지 않는다.
+ * 목표한 날까지 한 번도 안 올라오고 목표 아래로 끝난다.
+ *
+ * 마지막으로 본 날부터 지금 설정으로 다시 셈해서, 목표 안에 잡혀야 하면 날짜를
+ * 그리로 옮긴다. 이미 지난 날이면 오늘로 둔다. 되살릴 때와 같은 까닭이다. 다시
+ * 셈해도 목표 밖이면 평가할 때 셈한 그대로이므로 손대지 않는다.
+ */
+function strandedPatches(
+  items: readonly ItemRow[],
+  goals: readonly GoalRow[],
+  settings: Settings,
+  today: DateOnly
+): Map<string, Partial<ItemRow>> {
+  const goalById = new Map(goals.map((g) => [g.id, g]))
+  const patches = new Map<string, Partial<ItemRow>>()
+  for (const item of items) {
+    if (!isActive(item)) continue
+    const goal = item.goal_id ? (goalById.get(item.goal_id) ?? null) : null
+    if (!dueBeyondEnd(item, goal, settings)) continue
+    const state = memoryStateOf(item)
+    const last = itemLastReviewDay(item, goal, settings)
+    if (state === null || last === null) continue
+    const next = naturalScheduleOf(
+      item,
+      effectiveConfig(item, goal, settings),
+      state,
+      settings
+    )
+    const due = maxDate(today, next.due)
+    if (due > last) continue
+    patches.set(item.id, { due, due_kind: next.dueKind, due_source: 'fsrs' })
+  }
+  return patches
 }
 
 /** 항목마다 고친 칸을 덮어쓴다. 고칠 것이 없으면 같은 배열을 돌려준다. */
@@ -886,8 +943,12 @@ function naturalScheduleOf(
    */
   standingOn: DateOnly | null = null
 ) {
+  const anchor = item.last_review ?? item.first_studied_at
   return schedule({
-    from: standingOn ?? item.last_review ?? item.first_studied_at,
+    from: standingOn ?? anchor,
+    // 건너뛰어도 되는지는 오늘이 아니라 마지막으로 본 날부터 잰다. 밀린 동안 내려간
+    // 기억을 빼먹으면, 건너뛰면 목표에 못 미치는 것에 '여유' 가 붙는다.
+    anchor,
     state,
     horizon: config.horizon,
     intensity: config.intensity,
@@ -942,8 +1003,17 @@ export function computeSpread(
 ): SpreadOutcome {
   const goalById = new Map(goals.map((g) => [g.id, g]))
   // 다음 날짜가 목표 뒤로 나간 것은 그 날이 오기 전에 내려간다. 자리를 차지하게
-  // 두면 다른 목표의 복습이 오지도 않을 것에 밀린다.
-  const active = scheduledItems(items, goals, settings)
+  // 두면 다른 목표의 복습이 오지도 않을 것에 밀린다. 비워 둔 목표한 날의 항목도
+  // 그날은 아무 자리도 차지하지 않는다.
+  const active = scheduledItems(items, goals, settings).filter(
+    (item) =>
+      !restingToday(
+        item,
+        item.goal_id ? (goalById.get(item.goal_id) ?? null) : null,
+        settings,
+        today
+      )
+  )
   const itemsById = new Map(active.map((i) => [i.id, i]))
   const patches = new Map<string, Partial<ItemRow>>()
   // 항목별로 잡아둔 날짜들. 대부분 하나지만 부족한 항목에는 둘이 들어간다.
@@ -975,6 +1045,7 @@ export function computeSpread(
       readyAt: key,
       bufferDays: settings.bufferDays,
       targetRetention: config.targetRetention,
+      rest: restsOnDay(config.horizon),
     })
 
     // 마감선 안에 잡을 수 있는 날이 없으면 옮겨서 나아질 게 없다. FSRS 에 맡긴다.
@@ -1105,7 +1176,8 @@ export function computeSpread(
               lastSchedulableDay(
                 resolved.readyAt,
                 settings.bufferDays,
-                toEpochDay(today)
+                toEpochDay(today),
+                restsOnDay(config.horizon)
               )
             )
           : null,
@@ -1147,10 +1219,12 @@ export function computeSpread(
 function lastSchedulableDay(
   readyAt: number,
   bufferDays: number,
-  todayDay: number
+  todayDay: number,
+  rest: boolean
 ): number {
   const preferred = readyAt - Math.max(MIN_BUFFER_DAYS, bufferDays)
-  return preferred >= todayDay ? preferred : readyAt - bufferDays
+  // 목표한 날을 비워 두기로 했으면 앞에 자리가 없어도 그날로는 안 민다.
+  return preferred >= todayDay || rest ? preferred : readyAt - bufferDays
 }
 
 /** 배정 결과를 항목별 날짜 목록으로 모은다. */
@@ -1267,6 +1341,7 @@ export function spreadPreview(
       readyAt,
       bufferDays: settings.bufferDays,
       targetRetention: config.targetRetention,
+      rest: restsOnDay(config.horizon),
     })
     if (!interval.hasRoomBeforeGoal) continue
     const standing = item.due !== null && item.due <= today
@@ -1285,10 +1360,15 @@ export function spreadPreview(
 }
 
 /** 오늘 볼 항목. 연체된 것도 함께 올린다. */
-export function selectTodayItems(state: {
+/** 오늘 목록을 고르는 데 필요한 것. 목표를 봐야 그날을 비워 둔 목표를 거른다. */
+export interface TodayInput {
   items: ItemRow[]
+  goals: GoalRow[]
+  settings: Settings
   today: DateOnly
-}): ItemRow[] {
+}
+
+export function selectTodayItems(state: TodayInput): ItemRow[] {
   const { overdue, dueToday } = splitTodayItems(state)
   return [...overdue, ...dueToday]
 }
@@ -1301,12 +1381,25 @@ export function selectTodayItems(state: {
  * `selectTodayItems` 를 센다. 한쪽만 따로 세면 밀린 줄이 넷 보이는데 머리는
  * '0 개' 라고 적는 일이 생긴다.
  */
-export function splitTodayItems(state: {
-  items: ItemRow[]
-  today: DateOnly
-}): { overdue: ItemRow[]; dueToday: ItemRow[] } {
+export function splitTodayItems(state: TodayInput): {
+  overdue: ItemRow[]
+  dueToday: ItemRow[]
+} {
+  const goalById = new Map(state.goals.map((g) => [g.id, g]))
   const due = state.items
     .filter(isActive)
+    // 목표한 날을 비워 두기로 했으면 그날은 그 목표 것을 하나도 올리지 않는다.
+    // 준비하다 못 본 것까지 그렇다. 화면이 아니라 여기서 걸러야 머리의 큰 숫자,
+    // 옆줄 배지, 알림이 모두 같은 수를 센다.
+    .filter(
+      (i) =>
+        !restingToday(
+          i,
+          i.goal_id ? (goalById.get(i.goal_id) ?? null) : null,
+          state.settings,
+          state.today
+        )
+    )
     // 복습은 앱 밖에서 한다. '다시' 는 "다시 보여줘" 가 아니라 "거의 기억 안 났다"
     // 는 평가고, 앱이 할 일은 간격을 가장 짧게 잡는 것뿐이다. 그날 다시 띄우는
     // 것은 암기 카드 앱의 방식이지 이 앱의 것이 아니다.

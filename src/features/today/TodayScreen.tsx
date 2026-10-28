@@ -4,11 +4,12 @@ import { Hint } from '../../components/Chip'
 import { RailPanel } from '../../components/Rail'
 import type { DateOnly } from '../../lib/date'
 import { fullDate, monthDay, percent, shortDate } from '../../lib/format'
-import { isActive } from '../../lib/domain'
+import { goalRestsOnDay, isActive } from '../../lib/domain'
 import {
   dueBeyondEnd,
   endedNotice,
-  itemEndDay,
+  itemLastReviewDay,
+  retentionOn,
   scheduledItems,
 } from '../../lib/lifecycle'
 import { GRADE_HELP_THRESHOLD } from '../../lib/settings'
@@ -48,9 +49,23 @@ export function TodayScreen({
     : null
   const ending: Ending =
     lastItem && dueBeyondEnd(lastItem, lastGoal, settings)
-      ? itemEndDay(lastItem, lastGoal, settings) === today
-        ? 'lastDay'
+      ? itemLastReviewDay(lastItem, lastGoal, settings) === today
+        ? lastGoal !== null && goalRestsOnDay(lastGoal)
+          ? 'restEve'
+          : 'lastDay'
         : 'early'
+      : null
+  // 목표한 날을 비워 뒀으니 이것이 마지막이다. '다시' 처럼 막 무너진 것은 그날 아침
+  // 목표 아래로 내려와 있을 수 있다. 그날은 올리지 않으므로 지금 말해야 알 수 있다.
+  const goalDayRetention =
+    ending === 'restEve' && lastItem && lastGoal?.ready_at
+      ? retentionOn(lastItem, reviews, lastGoal.ready_at)
+      : null
+  const shortOnGoalDay =
+    goalDayRetention !== null &&
+    lastGoal !== null &&
+    goalDayRetention < lastGoal.target_retention
+      ? goalDayRetention
       : null
   // 오늘이 목표한 날인 목표들. 준비는 어제까지 끝나 있다. 대략 목표는 그날부터
   // 기억을 붙잡는 기간이 시작되므로 '안 봐도 괜찮다' 고 할 날이 아니다.
@@ -70,8 +85,8 @@ export function TodayScreen({
     usePlanner.getState().setDraft({ detailOpen: open })
   const listRef = useRef<HTMLDivElement>(null)
 
-  const { overdue, dueToday } = splitTodayItems({ items, today })
-  const todayItems = selectTodayItems({ items, today })
+  const { overdue, dueToday } = splitTodayItems({ items, goals, settings, today })
+  const todayItems = selectTodayItems({ items, goals, settings, today })
   // 목표 뒤로 잡힌 날짜는 그 날이 오기 전에 목표가 끝나 내려간다. 다음 날짜로 세지 않는다.
   const upcoming = selectUpcoming(scheduledItems(items, goals, settings), today)
   const overall = selectOverallRetention(items, today)
@@ -160,13 +175,19 @@ export function TodayScreen({
           />
         ) : null}
         {goalsToday.length > 0 ? (
-          <GoalDayNote goals={goalsToday} items={items} today={today} />
+          <GoalDayNote
+            goals={goalsToday}
+            items={items}
+            listed={todayItems.length}
+            today={today}
+          />
         ) : null}
         {undoable ? (
           <JustDone
             last={undoable}
             today={today}
             ending={ending}
+            shortOnGoalDay={shortOnGoalDay}
             onUndo={() => void handleUndo()}
           />
         ) : null}
@@ -222,6 +243,9 @@ export function TodayScreen({
                 <EmptyLibrary />
               ) : activeCount === 0 ? (
                 <AllEnded />
+              ) : goalsToday.some(goalRestsOnDay) ? (
+                // 다 봐서 빈 것이 아니다. 오늘을 비워 두기로 해서 올리지 않은 것이다.
+                <RestDay upcoming={upcoming} />
               ) : (
                 <EmptyToday
                   upcoming={upcoming}
@@ -313,6 +337,24 @@ function EmptyToday({
           ))}
         </div>
       ) : null}
+    </EmptyFrame>
+  )
+}
+
+/** 목표한 날을 비워 두기로 해서 오늘 목록이 빈 날. */
+function RestDay({
+  upcoming,
+}: {
+  upcoming: { date: DateOnly; count: number }[]
+}) {
+  const next = upcoming[0]
+  return (
+    <EmptyFrame title="오늘은 비워 둔 날이에요.">
+      <p className="text-pretty break-keep text-[13.5px] text-text-2">
+        {next
+          ? `다음은 ${monthDay(next.date)}에 ${next.count}개예요. 그때 알려드릴게요.`
+          : '앞으로 잡힌 복습이 없어요.'}
+      </p>
     </EmptyFrame>
   )
 }

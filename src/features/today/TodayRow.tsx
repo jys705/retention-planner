@@ -66,7 +66,8 @@ export function TodayRow({
     intensity: config.intensity,
     targetRetention: config.targetRetention,
     minReviews: config.minReviews,
-    repsSinceGoal: item.reps_since_goal,
+    // 저장할 때와 같이 지금 볼 이 한 번도 센다.
+    repsSinceGoal: item.reps_since_goal + 1,
     bufferDays: settings.bufferDays,
     maxIntervalDays: config.maxIntervalDays,
     postGoalMode: config.postGoalMode,

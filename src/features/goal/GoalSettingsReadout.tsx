@@ -1,4 +1,5 @@
 import type { GoalRow } from '../../db/types'
+import { goalRestsOnDay } from '../../lib/domain'
 import { horizonLabel } from '../../lib/format'
 import { intensityName } from '../../lib/intensity'
 
@@ -17,9 +18,13 @@ export function GoalSettingsReadout({ goal }: { goal: GoalRow }) {
         label="목표 시점"
         value={horizonLabel(goal.horizon_kind, goal.ready_at, goal.hold_until)}
       />
+      {/* 기본은 말하지 않는다. 비워 둘 때만 적는다. */}
+      {goalRestsOnDay(goal) ? (
+        <Line label="목표한 날" value="비워 둠" plain />
+      ) : null}
       <Line label="복습 강도" value={intensityName(goal.intensity)} />
       <Line label="최소 복습 횟수" value={`${goal.min_reviews}번`} />
-      <p className="pt-[2px] text-[11.5px] leading-relaxed text-text-3">
+      <p className="break-keep pt-[2px] text-[11.5px] leading-relaxed text-text-3">
         이 목표가 정한 값이에요. 바꾸려면 목표 화면에서 고치세요. 거기서 바꾸면 이
         목표에 묶인 항목 전부에 함께 적용됩니다.
       </p>

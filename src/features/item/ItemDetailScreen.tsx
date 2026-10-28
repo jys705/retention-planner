@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Horizon } from '../../core/horizon/horizon'
+import { restsOnDay, type Horizon } from '../../core/horizon/horizon'
 import { AdjustedBadge, Badge, FinishedBadge } from '../../components/Badge'
 import { Chip } from '../../components/Chip'
 import { InlineText } from '../../components/InlineText'
@@ -23,6 +23,7 @@ import {
   dueBeyondEnd,
   goalEnded,
   itemEndDay,
+  restingToday,
   retentionOn,
 } from '../../lib/lifecycle'
 import { gradeColor, gradeName } from '../../lib/grade'
@@ -112,8 +113,10 @@ export function ItemDetailScreen({
   const finished = !isActive(item)
   const end = itemEndDay(item, goal, settings)
   const atEnd = finished && end ? retentionOn(item, reviews, end) : null
+  // 오늘이 비워 두기로 한 목표한 날이면 오늘은 올리지 않는다. 내일이면 목표가 끝난다.
+  const resting = !finished && restingToday(item, goal, settings, today)
   // 다음 날짜가 목표 뒤로 잡혀 있으면 그 날은 오지 않는다. 그 전에 목표가 끝난다.
-  const beyond = !finished && dueBeyondEnd(item, goal, settings)
+  const beyond = !finished && (resting || dueBeyondEnd(item, goal, settings))
   // 목표 뒤로 넘어간 까닭은 둘이다. 안 봐도 충분하거나, 그 전에 더 볼 날이 없거나.
   // 충분하다고 말하려면 끝나는 날 기억률을 실제로 재 봐야 한다.
   const enoughAtEnd =
@@ -216,6 +219,7 @@ export function ItemDetailScreen({
                   view.readyAt,
                   view.holdUntil
                 )}
+                {restsOnDay(view.config.horizon) ? ', 그날은 비워 둠' : ''}
               </span>
               <span className="text-[12px] text-text-3">
                 복습 강도 {intensityName(view.config.intensity)}
@@ -403,9 +407,11 @@ export function ItemDetailScreen({
                 ? finishedSentence(goal, end, atEnd)
                 : beyond
                   ? `지금 기억률은 ${percent(view.retention)}예요. ${
-                      enoughAtEnd
-                        ? '목표한 날까지 이대로 충분해서 더 잡지 않았어요.'
-                        : '목표한 날 전에 더 볼 날이 없어서 더 잡지 않았어요.'
+                      resting
+                        ? '오늘은 목표한 날이라 비워 두었어요.'
+                        : enoughAtEnd
+                          ? '목표한 날까지 이대로 충분해서 더 잡지 않았어요.'
+                          : '목표한 날 전에 더 볼 날이 없어서 더 잡지 않았어요.'
                     }`
                   : curveSentence(
                       item,
@@ -427,7 +433,9 @@ export function ItemDetailScreen({
             <div className="h-px bg-line" />
             <div className="flex flex-col gap-[6px]">
               <span className="text-[11.5px] text-text-3">
-                {finished || beyond
+                {resting
+                  ? '오늘 올리지 않은 이유'
+                  : finished || beyond
                   ? '더 잡지 않는 이유'
                   : item.due && item.due <= today
                     ? '이 항목이 오늘 올라온 이유'
@@ -438,7 +446,9 @@ export function ItemDetailScreen({
                   ? goal
                     ? '목표 시점이 지나서 더 잡지 않아요. 다시 보려면 목표 화면에서 계속 기억하기를 고르세요. 이 항목만이라면 설정 편집에서 소속을 없음으로 바꾸면 됩니다.'
                     : '정해 둔 날짜가 지나서 더 잡지 않아요. 다시 보려면 설정 편집에서 목표 시점을 바꾸세요.'
-                  : beyond && end
+                  : resting
+                    ? '목표한 날은 비워 두기로 했어요. 내일부터는 마친 것으로 넘어갑니다.'
+                    : beyond && end
                     ? `${
                         enoughAtEnd
                           ? `안 봐도 목표한 날 기억률이 목표 기억률 ${percent(

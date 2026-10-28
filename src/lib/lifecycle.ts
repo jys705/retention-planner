@@ -1,5 +1,9 @@
 import { defaultFsrs } from '../core/fsrs/fsrs6'
-import { resolveHorizon } from '../core/horizon/horizon'
+import {
+  lastReviewDay,
+  resolveHorizon,
+  restsOnDay,
+} from '../core/horizon/horizon'
 import type { GoalRow, ItemRow, ReviewRow } from '../db/types'
 import { diffDays, fromEpochDay, type DateOnly } from './date'
 import { effectiveConfig, goalHorizon, isActive } from './domain'
@@ -54,6 +58,36 @@ export function itemEndDay(
   return Number.isFinite(holdUntil) ? fromEpochDay(holdUntil) : null
 }
 
+/**
+ * 이 항목에 복습을 잡을 수 있는 마지막 날.
+ *
+ * 보통은 끝나는 날과 같다. 목표한 날을 비워 두기로 했으면 그 전날이다.
+ */
+export function itemLastReviewDay(
+  item: ItemRow,
+  goal: GoalRow | null,
+  settings: Settings
+): DateOnly | null {
+  const day = lastReviewDay(effectiveConfig(item, goal, settings).horizon)
+  return Number.isFinite(day) ? fromEpochDay(day) : null
+}
+
+/**
+ * 오늘이 이 항목이 따르는 목표한 날이고, 그날을 비워 두기로 했는가.
+ *
+ * 그렇다면 오늘은 이 항목을 어디에도 올리지 않는다. 준비하다 못 본 것도 같다.
+ * 사람이 그날은 복습할 틈이 없다고 정한 것이다.
+ */
+export function restingToday(
+  item: ItemRow,
+  goal: GoalRow | null,
+  settings: Settings,
+  today: DateOnly
+): boolean {
+  const { horizon } = effectiveConfig(item, goal, settings)
+  return restsOnDay(horizon) && horizon.kind === 'date' && horizon.at === today
+}
+
 /** 이 항목이 따르는 목표 시점이 끝났는가. */
 export function itemHorizonEnded(
   item: ItemRow,
@@ -79,8 +113,9 @@ export function dueBeyondEnd(
 ): boolean {
   if (item.due === null) return false
   if (effectiveConfig(item, goal, settings).postGoalMode !== 'archive') return false
-  const end = itemEndDay(item, goal, settings)
-  return end !== null && item.due > end
+  // 목표한 날을 비워 두면 그날 잡힌 것도 오지 않는다. 그날에는 아무것도 올리지 않는다.
+  const last = itemLastReviewDay(item, goal, settings)
+  return last !== null && item.due > last
 }
 
 /**

@@ -12,7 +12,15 @@ import type { GoalRow } from '../../db/types'
 import { statusBadgeOf } from '../../lib/badge'
 import { cn } from '../../lib/cn'
 import { diffDays } from '../../lib/date'
-import { effectiveConfig, goalColor, isActive, memoryStateOf } from '../../lib/domain'
+import {
+  effectiveConfig,
+  goalColor,
+  goalHorizon,
+  goalHorizonFields,
+  goalRestsOnDay,
+  isActive,
+  memoryStateOf,
+} from '../../lib/domain'
 import {
   dueLabel,
   horizonLabel,
@@ -26,6 +34,7 @@ import {
   goalEndDay,
   goalEnded,
   goalTimeLabel,
+  restingToday,
 } from '../../lib/lifecycle'
 import { INTENSITY_META } from '../../lib/intensity'
 import { canUndoReopen, usePlanner } from '../../store/planner'
@@ -120,8 +129,10 @@ export function GoalDetailScreen({
       : rows.reduce((sum, r) => sum + r.retention, 0) / rows.length
   // 마감이 가까워지면 마지막 점검이 한 날에 모인다. 그 봉우리를 평소 분량인 척
   // 말하면 "하루에 많아야 24개" 같은 거짓말이 되므로, 어느 날인지 같이 밝힌다.
+  // 잡힌 복습이 하나도 없으면 짚을 날도 없다. 첫날을 0개로 짚지 않는다.
   const busiest = bars.reduce<LoadBar | null>(
-    (best, b) => (best === null || b.count > best.count ? b : best),
+    (best, b) =>
+      b.count > 0 && (best === null || b.count > best.count) ? b : best,
     null
   )
   const peak = busiest?.count ?? 0
@@ -131,6 +142,11 @@ export function GoalDetailScreen({
     busyDays === 0 ? 0 : Math.round((totalReviews / busyDays) * 10) / 10
   const overdue = rows.filter(
     (r) => r.item.due !== null && r.item.due < today
+  ).length
+  // 오늘로 잡힌 것 가운데 지금 기억이 목표 아래인 것. 목표한 날에 이것이 있으면
+  // 준비가 끝났다고 하지 않는다. 오늘 화면의 안내와 같은 기준이다.
+  const shortToday = rows.filter(
+    (r) => r.item.due === today && r.retention < target
   ).length
 
   return (
@@ -164,6 +180,9 @@ export function GoalDetailScreen({
                 <span className="font-sans"> ({weekday(goal.ready_at)})</span>
               ) : null}
             </span>
+            {goalRestsOnDay(goal) ? (
+              <span className="text-text-3">, 그날은 비워 둠</span>
+            ) : null}
           </p>
         </div>
 
@@ -246,7 +265,7 @@ export function GoalDetailScreen({
       ) : null}
 
       <p className="text-[16px] font-medium leading-relaxed">
-        {didSentence(rows.length, totalReviews, atRisk, overdue, goal, today, target)}
+        {didSentence(rows.length, totalReviews, atRisk, overdue, shortToday, goal, today, target)}
       </p>
 
       <section
@@ -271,28 +290,19 @@ export function GoalDetailScreen({
               <HorizonPicker
                 today={today}
                 uncertainty={settings.uncertainty}
-                value={goalHorizonOf(goal)}
+                value={goalHorizon(goal)}
+                // 목표 뒤로도 계속 보는 목표에는 하루를 비울 끝이 없다.
+                restChoice={goal.post_goal_mode === 'archive'}
                 onChange={(horizon: Horizon) => {
-                  void updateGoal(goal.id, {
-                    horizon_kind: horizon.kind,
-                    ready_at:
-                      horizon.kind === 'date'
-                        ? horizon.at
-                        : horizon.kind === 'window'
-                          ? horizon.readyAt
-                          : null,
-                    hold_until:
-                      horizon.kind === 'date'
-                        ? horizon.at
-                        : horizon.kind === 'window'
-                          ? horizon.holdUntil
-                          : null,
-                  })
+                  void updateGoal(goal.id, goalHorizonFields(horizon))
                 }}
               />
             </Field>
 
-            <Field label="복습 강도">
+            <Field
+              label="복습 강도"
+              hint="어느 강도를 골라도 목표한 날 목표 기억률은 지키도록 잡아요. 높을수록 그 전까지 더 자주 볼 뿐이에요. 바꾸면 각 항목을 다음에 볼 때부터 들어가요."
+            >
               <OptionCards
                 label="복습 강도"
                 value={goal.intensity}
@@ -323,7 +333,8 @@ export function GoalDetailScreen({
                         }
                       />
                       <span className="text-[12px] text-text-3">
-                        목표한 날 전에 최소 이만큼은 보게 잡아요.
+                        목표한 날 전에 최소 이만큼은 보게 잡아요. 처음
+                        공부한 것도 한 번으로 셉니다.
                       </span>
                     </div>
                   </Field>
@@ -360,8 +371,7 @@ export function GoalDetailScreen({
                       : ''
                   )}
                 >
-                  {busiest ? `${monthDay(busiest.date)} ` : ''}
-                  {peak}개
+                  {busiest ? `${monthDay(busiest.date)} ${peak}개` : '없음'}
                 </span>
               </span>
               <span>
@@ -414,8 +424,13 @@ export function GoalDetailScreen({
                         {percent(retentionAtGoal)}
                       </td>
                       <td className="num py-2 text-right text-text-3">
-                        {/* 목표 뒤로 잡힌 날은 오지 않는다. 그 전에 목표가 끝나 내려간다. */}
-                        {item.due && !dueBeyondEnd(item, goal, settings)
+                        {/*
+                          목표 뒤로 잡힌 날은 오지 않는다. 그 전에 목표가 끝나 내려간다.
+                          비워 둔 목표한 날에 숨긴 것도 같다. 항목 화면도 '없음' 이라 한다.
+                        */}
+                        {item.due &&
+                        !dueBeyondEnd(item, goal, settings) &&
+                        !restingToday(item, goal, settings, today)
                           ? dueLabel(today, item.due)
                           : '없음'}
                       </td>
@@ -429,17 +444,6 @@ export function GoalDetailScreen({
     </div>
   )
 }
-
-function goalHorizonOf(goal: GoalRow): Horizon {
-  if (goal.horizon_kind === 'date' && goal.ready_at) {
-    return { kind: 'date', at: goal.ready_at }
-  }
-  if (goal.horizon_kind === 'window' && goal.ready_at && goal.hold_until) {
-    return { kind: 'window', readyAt: goal.ready_at, holdUntil: goal.hold_until }
-  }
-  return { kind: 'open' }
-}
-
 
 function Field({
   label,
@@ -500,6 +504,7 @@ function didSentence(
   totalReviews: number,
   atRisk: number,
   overdue: number,
+  shortToday: number,
   goal: GoalRow,
   today: string,
   target: number
@@ -512,8 +517,20 @@ function didSentence(
   }
   // 목표한 날 당일에는 더 잡아둘 것이 없다. 준비가 어디까지 됐는지만 말한다.
   if (goal.horizon_kind === 'date' && goal.ready_at === today) {
-    return overdue > 0
-      ? `오늘이 목표한 날이에요. 준비하면서 못 본 ${overdue}개는 오늘 목록에 올려뒀어요.`
+    // 밀린 것과 기억이 모자란 것이 있으면 준비가 끝난 것이 아니다.
+    const behind = [
+      overdue > 0 ? `준비하면서 못 본 ${overdue}개` : '',
+      shortToday > 0 ? `아직 기억이 모자란 ${shortToday}개` : '',
+    ]
+      .filter(Boolean)
+      .join('와 ')
+    if (goalRestsOnDay(goal)) {
+      return behind
+        ? `오늘이 목표한 날이에요. 비워 두기로 해서 ${behind}도 오늘 목록에 올리지 않았어요.`
+        : '오늘이 목표한 날이에요. 준비는 어제까지 마쳤고, 오늘은 비워 두었어요.'
+    }
+    return behind
+      ? `오늘이 목표한 날이에요. ${behind}는 오늘 목록에 올려뒀어요.`
       : '오늘이 목표한 날이에요. 준비는 어제까지 마쳤어요.'
   }
 

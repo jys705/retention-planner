@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
+import { defaultFsrs } from '../../src/core/fsrs/fsrs6'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { usePlanner } from '../../src/store/planner'
 import { addDays as shift } from '../../src/lib/date'
@@ -312,10 +313,11 @@ describe('목표한 날 당일', () => {
 })
 
 describe('밀린 항목의 배지', () => {
-  it('S-209 밀린 것도 오늘 기준으로 다시 셈해 배지를 붙인다', async () => {
-    // 마지막으로 본 날에서 재면 목표까지 남은 날이 실제보다 길게 잡혀 제약이
-    // 느슨해진다. 그래서 스무 날 밀린 것이 '평범한 복습' 으로 분류되고,
-    // 건너뛰어도 목표를 지킨다는 사실을 화면이 말해 주지 못한다.
+  it('S-209 밀린 것은 건너뛰어도 되는지를 마지막으로 본 날부터 잰다', async () => {
+    // 밀린 것은 오늘 기준으로 다시 셈한다. 마지막으로 본 날에서 재면 목표까지 남은
+    // 날이 실제보다 길게 잡혀 제약이 느슨해진다. 다만 건너뛰어도 되는지는 기억이
+    // 실제로 내려온 만큼을 봐야 한다. 예전에는 이것까지 오늘부터 재서, 건너뛰면
+    // 목표한 날 기억률이 목표 아래로 내려가는 항목에 '여유' 를 붙였다(2026-10-28 바로잡음).
     const READY = shift(TODAY, 14)
     await setupApp(TODAY, {
       goals: [
@@ -333,10 +335,14 @@ describe('밀린 항목의 배지', () => {
     await screen.findByText('오늘 볼 항목')
 
     const late = usePlanner.getState().items[0]
-    // 목표까지 남은 날을 오늘부터 세면 건너뛰어도 지킨다는 판정이 나온다.
-    expect(late.due_kind).toBe('final_check')
+    // 스무 날 전에 본 기억 지속력 15일짜리는 목표한 날까지 두면 목표 기억률 아래다.
+    const ifSkipped = defaultFsrs.retrievability(34, 15)
+    expect(ifSkipped).toBeLessThan(0.9)
+    expect(late.due_kind).not.toBe('final_check')
+    expect(screen.queryByText('여유')).toBeNull()
+    // 한 번 보면 목표한 날을 지킬 수 있으니 부족은 아니다.
     expect(late.goal_risk).toBe('safe')
-    // 그러고도 날짜는 안 움직인다. 밀린 것은 앱이 옮기지 않는다.
+    // 날짜는 안 움직인다. 밀린 것은 앱이 옮기지 않는다.
     expect(late.due).toBe(shift(TODAY, -6))
   })
 })

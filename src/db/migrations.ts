@@ -6,6 +6,15 @@ export interface Migration {
   version: number
   name: string
   statements: string[]
+  /**
+   * 더할 열.
+   *
+   * ALTER TABLE ... ADD COLUMN 은 두 번 돌면 'duplicate column' 으로 깨진다. 그런데
+   * 마이그레이션은 처음부터 다시 돌 수 있다. 가져오기가 설정을 통째로 갈아 끼우던
+   * 때 schema_version 이 사라졌기 때문이다. 그래서 열은 문장으로 적지 않고 여기에
+   * 적어서, 없을 때만 더한다.
+   */
+  columns?: { table: string; column: string; type: string }[]
 }
 
 export const MIGRATIONS: Migration[] = [
@@ -97,6 +106,14 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_planned_reviews_date ON planned_reviews(date)`,
       `CREATE INDEX IF NOT EXISTS idx_planned_reviews_item ON planned_reviews(item_id)`,
     ],
+  },
+  {
+    version: 3,
+    name: 'goal day rest',
+    statements: [],
+    // 비워 두면 NULL 이다. 기본값을 둔 NOT NULL 로 하면, 이 칸이 없는 옛 백업을
+    // 가져올 때 빈 칸에 NULL 이 들어가 깨진다.
+    columns: [{ table: 'goals', column: 'goal_day', type: 'TEXT' }],
   },
 ]
 

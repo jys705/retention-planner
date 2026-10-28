@@ -5,6 +5,7 @@ import {
   isOpen,
   NEVER,
   resolveHorizon,
+  restsOnDay,
   type Horizon,
   type ResolvedHorizon,
 } from '../horizon/horizon'
@@ -59,6 +60,14 @@ export interface ScheduleInput {
   from: DateOnly
   /** 복습 직후의 기억 상태. */
   state: MemoryState
+  /**
+   * 그 기억 상태가 세워진 날. 보통 from 과 같다.
+   *
+   * 밀린 항목을 오늘 기준으로 다시 셀 때만 다르다. 그때 from 은 오늘이고, 상태는
+   * 마지막으로 본 날 세워진 것이다. 건너뛰어도 되는지는 그 날부터 재야 한다.
+   * 오늘부터 재면 밀린 동안 내려간 기억을 빼먹고 '건너뛰어도 된다' 고 잘못 말한다.
+   */
+  anchor?: DateOnly
   horizon: Horizon
   intensity: Intensity | number
   /** 목표한 날 지켜야 할 기억률 하한. 전역 설정 하나로 쓴다. */
@@ -109,13 +118,16 @@ function readyConstraint(
   horizon: ResolvedHorizon,
   fromDay: number,
   bufferDays: number,
-  skipSafe: boolean
+  skipSafe: boolean,
+  rest: boolean
 ): number {
   if (skipSafe) return NEVER
   // 하루라도 앞에 자리가 있으면 목표한 날 당일은 비워 둔다. 자리가 없으면
   // 당일이라도 잡는 편이 낫다. 여기서 손을 놓으면 FSRS 가 목표를 넘어간다.
   const preferred = horizon.readyAt - Math.max(MIN_BUFFER_DAYS, bufferDays) - fromDay
   if (preferred >= 1) return preferred
+  // 목표한 날을 비워 두기로 했으면 당일로 물러서지 않는다. 사람이 그날은 못 본다고 했다.
+  if (rest) return NEVER
   const atGoal = horizon.readyAt - bufferDays - fromDay
   if (atGoal >= 1) return atGoal
   // 준비 마감선까지 남은 날이 없으면 유지 마감선을 기준으로 다시 본다.
@@ -135,14 +147,16 @@ function sessionsConstraint(
   fromDay: number,
   minReviews: number,
   repsSinceGoal: number,
-  bufferDays: number
+  bufferDays: number,
+  rest: boolean
 ): number {
   const remaining = Math.max(0, minReviews - repsSinceGoal)
   if (remaining === 0 || !Number.isFinite(horizon.readyAt)) return NEVER
   // 목표한 날 당일에 잡으면 그날은 이미 준비돼 있어야 하는 날인데 늦는다.
-  // 앞에 자리가 없을 때만 당일까지 쓴다.
+  // 앞에 자리가 없을 때만 당일까지 쓴다. 그날을 비워 두기로 했으면 그것도 안 한다.
   const preferred = horizon.readyAt - Math.max(MIN_BUFFER_DAYS, bufferDays)
-  const last = fromDay < preferred ? preferred : horizon.readyAt - bufferDays
+  const last =
+    fromDay < preferred || rest ? preferred : horizon.readyAt - bufferDays
   if (fromDay >= last) return NEVER
   return Math.floor((last - fromDay) / remaining)
 }
@@ -161,7 +175,9 @@ export function schedule(input: ScheduleInput): ScheduleResult {
   const repsSinceGoal = input.repsSinceGoal ?? 0
 
   const horizon = resolveHorizon(input.horizon)
+  const rest = restsOnDay(input.horizon)
   const fromDay = toEpochDay(input.from)
+  const anchorDay = input.anchor ? toEpochDay(input.anchor) : fromDay
 
   const inPlateau =
     fromDay >= horizon.readyAt && fromDay <= horizon.holdUntil
@@ -175,22 +191,24 @@ export function schedule(input: ScheduleInput): ScheduleResult {
     : resolveIntensity(input.intensity)
 
   // 이번 복습을 건너뛰어도 목표한 날 목표 기억률을 지키는가.
-  // classify 가 final_check 를 가르는 바로 그 셈이다.
+  // classify 가 final_check 를 가르는 바로 그 셈이다. 기억은 상태가 세워진 날부터
+  // 내려가므로 그 날부터 잰다.
   const skipSafe =
     Number.isFinite(horizon.readyAt) &&
     horizon.readyAt > fromDay &&
-    engine.retrievability(horizon.readyAt - fromDay, input.state.stability) >=
+    engine.retrievability(horizon.readyAt - anchorDay, input.state.stability) >=
       targetRetention
 
   const constraints: ConstraintSet = {
     base: engine.nextInterval(desiredRetention, input.state.stability),
-    ready: readyConstraint(horizon, fromDay, buffer, skipSafe),
+    ready: readyConstraint(horizon, fromDay, buffer, skipSafe, rest),
     sessions: sessionsConstraint(
       horizon,
       fromDay,
       minReviews,
       repsSinceGoal,
-      buffer
+      buffer,
+      rest
     ),
     maxcap: input.maxIntervalDays ?? NEVER,
   }
@@ -211,7 +229,7 @@ export function schedule(input: ScheduleInput): ScheduleResult {
       chosen: smallest,
       inPlateau,
       horizon,
-      fromDay,
+      anchorDay,
       state: input.state,
       targetRetention,
       engine,
@@ -234,12 +252,13 @@ function classify(args: {
   chosen: number
   inPlateau: boolean
   horizon: ResolvedHorizon
-  fromDay: number
+  /** 기억 상태가 세워진 날. 건너뛸 때의 기억률은 여기서부터 잰다. */
+  anchorDay: number
   state: MemoryState
   targetRetention: number
   engine: Fsrs6
 }): DueKind {
-  const { constraints, chosen, inPlateau, horizon, fromDay, state } = args
+  const { constraints, chosen, inPlateau, horizon, anchorDay, state } = args
   if (inPlateau) return 'hold'
   // FSRS 가 원한 간격이 그대로 살아남았으면 평범한 복습이다.
   if (chosen >= constraints.base) return 'normal'
@@ -248,7 +267,7 @@ function classify(args: {
   }
 
   if (!isOpen(horizon)) {
-    const daysToGoal = horizon.readyAt - fromDay
+    const daysToGoal = horizon.readyAt - anchorDay
     const retentionIfSkipped = args.engine.retrievability(
       daysToGoal,
       state.stability

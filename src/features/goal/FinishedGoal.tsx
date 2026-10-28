@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
-import { resolveHorizon, type Horizon } from '../../core/horizon/horizon'
+import {
+  lastReviewDay,
+  resolveHorizon,
+  type Horizon,
+} from '../../core/horizon/horizon'
 import { InlineText } from '../../components/InlineText'
 import { MoreMenu } from '../../components/MoreMenu'
 import { NumText } from '../../components/NumText'
@@ -89,9 +93,12 @@ export function FinishedGoal({
   const studyDays = history.filter((b) => b.count > 0).length
   const perDay =
     studyDays === 0 ? 0 : Math.round((ownReviews.length / studyDays) * 10) / 10
-  // 고른 날짜가 이미 지난 날이면 다시 시작해 봐야 그대로 끝난 목표다.
+  // 고른 날짜가 이미 지난 날이면 다시 시작해 봐야 그대로 끝난 목표다. 오늘을
+  // 목표한 날로 고르고 그날을 비워 두면 볼 날이 하루도 남지 않는 것도 같다.
   const { holdUntil: draftEnd } = resolveHorizon(draft)
-  const draftOpen = !Number.isFinite(draftEnd) || draftEnd >= toEpochDay(today)
+  const draftLast = lastReviewDay(draft)
+  const draftOpen = !Number.isFinite(draftLast) || draftLast >= toEpochDay(today)
+  const draftPast = Number.isFinite(draftEnd) && draftEnd < toEpochDay(today)
 
   return (
     <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 pb-7 pt-10">
@@ -298,6 +305,7 @@ export function FinishedGoal({
               today={today}
               uncertainty={settings.uncertainty}
               value={draft}
+              restChoice={goal.post_goal_mode === 'archive'}
               onChange={setDraft}
             />
             <div className="flex items-center gap-2">
@@ -318,7 +326,9 @@ export function FinishedGoal({
               </button>
               {!draftOpen ? (
                 <span className="text-[12px] text-text-3">
-                  이미 지난 날이에요. 오늘이나 그 뒤를 고르세요.
+                  {draftPast
+                    ? '이미 지난 날이에요. 오늘이나 그 뒤를 고르세요.'
+                    : '오늘을 비워 두면 볼 날이 없어요. 내일이나 그 뒤를 고르세요.'}
                 </span>
               ) : null}
             </div>

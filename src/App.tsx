@@ -44,6 +44,7 @@ export function App() {
   const theme = usePlanner((s) => s.settings.theme)
   const settings = usePlanner((s) => s.settings)
   const items = usePlanner((s) => s.items)
+  const goals = usePlanner((s) => s.goals)
   const today = usePlanner((s) => s.today)
   const saveSetting = usePlanner((s) => s.saveSetting)
   const [route, setRoute] = useState<Route>({ screen: 'today' })
@@ -87,11 +88,11 @@ export function App() {
       return
     }
     // 알림이 말하는 수와 화면 머리의 큰 숫자가 같은 데서 나와야 한다.
-    const due = selectTodayItems({ items, today }).length
+    const due = selectTodayItems({ items, goals, settings, today }).length
     void notifyDueCount(due, today).then((sent) => {
       if (sent) void saveSetting('lastNotifiedDate', today)
     })
-  }, [ready, settings, items, today, saveSetting])
+  }, [ready, settings, items, goals, today, saveSetting])
 
   if (!ready) {
     return (

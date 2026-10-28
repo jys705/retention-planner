@@ -424,6 +424,24 @@ describe('경계값', () => {
     expect(result.intervalDays).toBeGreaterThanOrEqual(1)
   })
 
+  it('목표한 날을 비워 두면 앞에 자리가 없어도 당일로 물러서지 않는다', () => {
+    // 버퍼 0 에서 전날 본 것은 자리가 없어 당일로 잡혔다. 비워 두기로 했으면 그날은
+    // 사람이 못 본다고 한 날이다. 제약은 손을 놓고, 남는 날짜는 목표 뒤가 된다.
+    const at = addDays(TODAY, 1)
+    const input = {
+      from: TODAY,
+      state: stateAfter([3, 3]),
+      intensity: 'standard' as const,
+      bufferDays: 0,
+      minReviews: 5,
+    }
+    const showing = schedule({ ...input, horizon: { kind: 'date', at } })
+    expect(showing.due).toBe(at)
+    const resting = schedule({ ...input, horizon: { kind: 'date', at, rest: true } })
+    expect(resting.constraints.ready).toBe(Number.POSITIVE_INFINITY)
+    expect(resting.constraints.sessions).toBe(Number.POSITIVE_INFINITY)
+  })
+
   it('목표의 마지막 날은 아직 목표 안이다', () => {
     // 끝은 날짜가 정한다. 마지막 날에 본 것을 그 자리에서 넘기면 한 목표 안에
     // 마친 것과 진행 중인 것이 하루 동안 섞인다. 다음 날부터가 목표 뒤다.

@@ -4,7 +4,7 @@ import type { Grade } from '../../core/fsrs/types'
 import type { DueKind, GoalRow, ItemRow } from '../../db/types'
 import { addDays, diffDays, type DateOnly } from '../../lib/date'
 import { effectiveConfig, isActive, memoryStateOf } from '../../lib/domain'
-import { endedPatches } from '../../lib/lifecycle'
+import { endedPatches, restingToday } from '../../lib/lifecycle'
 import type { Settings } from '../../lib/settings'
 import { computeSpread } from '../../store/planner'
 import { resolveHorizon } from '../../core/horizon/horizon'
@@ -88,7 +88,14 @@ export function rollout({
         item.due <= date &&
         // 목표 시점을 정해 둔 항목은 그 날이 지나면 예보에서 뺀다. 목표를
         // 지나서까지 이어 보는 것은 물어본 적이 없는 구간이다.
-        !pastGoal(item, goalById, settings, date)
+        !pastGoal(item, goalById, settings, date) &&
+        // 목표한 날을 비워 두기로 했으면 그날은 아무것도 보지 않는다.
+        !restingToday(
+          item,
+          item.goal_id ? (goalById.get(item.goal_id) ?? null) : null,
+          settings,
+          date
+        )
     )
 
     out.push({
@@ -165,7 +172,8 @@ function review(
     intensity: config.intensity,
     targetRetention: config.targetRetention,
     minReviews: config.minReviews,
-    repsSinceGoal: item.reps_since_goal,
+    // 그날 본 이 한 번도 센다. 앱이 평가를 적을 때와 같은 셈이다.
+    repsSinceGoal: item.reps_since_goal + 1,
     bufferDays: settings.bufferDays,
     maxIntervalDays: config.maxIntervalDays,
   })

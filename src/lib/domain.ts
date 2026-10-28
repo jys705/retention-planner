@@ -3,6 +3,7 @@ import type { Horizon } from '../core/horizon/horizon'
 import type { Intensity } from '../core/policy/constraints'
 import { addDays, type DateOnly } from './date'
 import type {
+  GoalDay,
   GoalRow,
   HorizonKind,
   ItemRow,
@@ -30,10 +31,15 @@ export interface EffectiveConfig {
 function horizonFrom(
   kind: string | null,
   readyAt: string | null,
-  holdUntil: string | null
+  holdUntil: string | null,
+  goalDay: GoalDay | null = null
 ): Horizon | null {
   if (kind === 'open') return { kind: 'open' }
-  if (kind === 'date' && readyAt) return { kind: 'date', at: readyAt }
+  if (kind === 'date' && readyAt) {
+    return goalDay === 'rest'
+      ? { kind: 'date', at: readyAt, rest: true }
+      : { kind: 'date', at: readyAt }
+  }
   if (kind === 'window' && readyAt && holdUntil) {
     return { kind: 'window', readyAt, holdUntil }
   }
@@ -64,9 +70,47 @@ export function horizonFields(horizon: Horizon): {
   return { horizon_kind: 'open', ready_at: null, hold_until: null }
 }
 
+/**
+ * 목표에 저장할 칸. 항목 것에 더해 목표한 날 당일을 비워 둘지를 함께 편다.
+ *
+ * 비워 두기는 목표에만 있다. 목표한 날 안내가 목표에만 뜨기 때문이다.
+ */
+export function goalHorizonFields(horizon: Horizon): {
+  horizon_kind: HorizonKind
+  ready_at: DateOnly | null
+  hold_until: DateOnly | null
+  goal_day: GoalDay | null
+} {
+  return {
+    ...horizonFields(horizon),
+    goal_day: horizon.kind === 'date' && horizon.rest ? 'rest' : null,
+  }
+}
+
+/**
+ * 이 목표가 목표한 날 당일을 비워 두는가.
+ *
+ * 정확한 날짜 목표이고, 목표를 마치면 보관하는 쪽일 때만이다. 계속 보는 목표는
+ * 목표한 날 뒤로도 이어지므로, 그날을 비우면 그날 잡힌 것이 다음 날 밀린 것으로
+ * 선다. '마지막 복습은 전날' 이라는 약속이 그쪽에서는 성립하지 않는다.
+ * 화면마다 따로 따지면 한쪽은 비워 둔 날로, 한쪽은 훑어볼 날로 말하게 된다.
+ */
+export function goalRestsOnDay(goal: GoalRow): boolean {
+  return (
+    goal.horizon_kind === 'date' &&
+    goal.goal_day === 'rest' &&
+    goal.post_goal_mode === 'archive'
+  )
+}
+
 export function goalHorizon(goal: GoalRow): Horizon {
   return (
-    horizonFrom(goal.horizon_kind, goal.ready_at, goal.hold_until) ?? {
+    horizonFrom(
+      goal.horizon_kind,
+      goal.ready_at,
+      goal.hold_until,
+      goalRestsOnDay(goal) ? 'rest' : null
+    ) ?? {
       kind: 'open',
     }
   )

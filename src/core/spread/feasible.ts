@@ -15,6 +15,8 @@ export interface FeasibleInput {
   notBefore: DateOnly
   bufferDays: number
   targetRetention: number
+  /** 목표한 날 당일을 비워 두는가. 그러면 앞에 자리가 없어도 당일로 물러서지 않는다. */
+  rest?: boolean
   engine?: Fsrs6
 }
 
@@ -78,7 +80,9 @@ export function feasibleInterval(input: FeasibleInput): FeasibleInterval {
   const readyDay = toEpochDay(input.readyAt)
   const preferred = readyDay - Math.max(MIN_BUFFER_DAYS, input.bufferDays)
   const latest =
-    preferred >= notBeforeDay ? preferred : readyDay - input.bufferDays
+    preferred >= notBeforeDay || input.rest
+      ? preferred
+      : readyDay - input.bufferDays
 
   // 마감선 안에 잡을 수 있는 날이 아예 없는 경우.
   // 배치는 해야 하므로 창을 오늘 하루로 좁히고 부족으로 표시한다.

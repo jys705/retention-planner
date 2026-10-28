@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import type { Horizon } from '../../core/horizon/horizon'
+import { lastReviewDay, type Horizon } from '../../core/horizon/horizon'
 import { INTENSITY_RETENTION } from '../../core/policy/constraints'
 import { Chip, ChipLabel } from '../../components/Chip'
 import { NumText } from '../../components/NumText'
 import type { GoalRow, Intensity } from '../../db/types'
+import { toEpochDay } from '../../lib/date'
 import { isActive } from '../../lib/domain'
 import { horizonLabel, percent } from '../../lib/format'
 import {
@@ -37,9 +38,12 @@ export function GoalListScreen({
       (goalEndDay(a) ?? '') > (goalEndDay(b) ?? '') ? -1 : 1
     )
 
+  // 오늘을 목표한 날로 잡고 그날을 비워 두면 이 목표로는 볼 날이 하루도 없다.
+  const noDayLeft = lastReviewDay(horizon) < toEpochDay(today)
+
   async function submit() {
     const trimmed = name.trim()
-    if (!trimmed) return
+    if (!trimmed || noDayLeft) return
     const goal = await createGoal({ name: trimmed, horizon, intensity })
     setName('')
     setHorizon({ kind: 'open' })
@@ -90,6 +94,7 @@ export function GoalListScreen({
               today={today}
               uncertainty={settings.uncertainty}
               value={horizon}
+              restChoice={settings.postGoalMode === 'archive'}
               onChange={setHorizon}
             />
           </div>
@@ -109,21 +114,31 @@ export function GoalListScreen({
                 </Chip>
               ))}
             </div>
-            <p className="text-[11.5px] text-text-3">
-              이 목표에 넣은 항목을 얼마나 자주 볼지예요. 나중에 목표 화면에서
-              바꿀 수 있습니다.
+            {/*
+              강도가 목표한 날의 기억을 정한다고 여기면 높은 쪽을 고르게 된다. 그날의
+              기억률은 어느 강도든 지키고, 강도는 그 전까지의 횟수만 바꾼다.
+            */}
+            <p className="text-pretty break-keep text-[11.5px] leading-relaxed text-text-3">
+              이 목표에 넣은 항목을 얼마나 자주 볼지예요. 어느 강도를 골라도 목표한
+              날 목표 기억률은 지키도록 잡고, 높을수록 그 전까지 더 자주 볼 뿐이에요.
+              나중에 목표 화면에서 바꿀 수 있습니다.
             </p>
           </div>
 
-          <div>
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => void submit()}
-              disabled={name.trim() === ''}
+              disabled={name.trim() === '' || noDayLeft}
               className="rounded-ctl bg-accent px-[14px] py-[7px] text-[13px] font-semibold text-white disabled:opacity-35"
             >
               만들기
             </button>
+            {noDayLeft ? (
+              <span className="text-[12px] text-text-3">
+                오늘을 비워 두면 볼 날이 없어요. 내일이나 그 뒤를 고르세요.
+              </span>
+            ) : null}
           </div>
         </div>
       ) : null}

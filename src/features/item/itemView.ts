@@ -1,6 +1,11 @@
 import { defaultFsrs } from '../../core/fsrs/fsrs6'
 import type { MemoryState } from '../../core/fsrs/types'
-import { resolveHorizon } from '../../core/horizon/horizon'
+import {
+  lastReviewDay,
+  NEVER,
+  resolveHorizon,
+  restsOnDay,
+} from '../../core/horizon/horizon'
 import {
   memoryCurve,
   projectItem,
@@ -82,6 +87,8 @@ export function buildItemView(
 
   // 마친 항목은 앞으로 볼 날이 없다. 내다보면 오지 않을 복습을 그리게 된다.
   const finished = !isActive(item)
+  // 목표한 날을 비워 두면 그날 잡힐 복습도 오지 않는다.
+  const lastDay = restsOnDay(config.horizon) ? lastReviewDay(config.horizon) : NEVER
   const future = state && !finished
     ? projectItem({
         itemId: item.id,
@@ -97,7 +104,9 @@ export function buildItemView(
         repsSinceGoal: item.reps_since_goal,
         bufferDays: settings.bufferDays,
         maxIntervalDays: config.maxIntervalDays,
-      }).map((r) => ({ date: r.date, state: r.state }))
+      })
+        .filter((r) => toEpochDay(r.date) <= lastDay)
+        .map((r) => ({ date: r.date, state: r.state }))
     : []
 
   const resolved = resolveHorizon(config.horizon)
@@ -142,6 +151,7 @@ export function buildItemView(
           notBefore: today,
           bufferDays: settings.bufferDays,
           targetRetention: config.targetRetention,
+          rest: restsOnDay(config.horizon),
         })
       : null
 

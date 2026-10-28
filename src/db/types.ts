@@ -3,6 +3,7 @@ import type { DateOnly } from '../lib/date'
 export type HorizonKind = 'open' | 'date' | 'window'
 export type Intensity = 'easy' | 'standard' | 'focus' | 'max'
 export type PostGoalMode = 'archive' | 'maintain'
+export type GoalDay = 'rest'
 export type ItemState =
   | 'new'
   | 'review'
@@ -30,6 +31,11 @@ export interface GoalRow {
   min_reviews: number
   max_interval_days: number | null
   post_goal_mode: PostGoalMode
+  /**
+   * 목표한 날 당일을 비워 둘지. 'rest' 면 그날에는 아무 복습도 올리지 않는다.
+   * 비어 있으면 그날 훑어볼 것을 올린다. 이 칸이 생기기 전의 행과 백업에는 없다.
+   */
+  goal_day?: GoalDay | null
   color: string | null
   created_at: string
   archived_at: string | null

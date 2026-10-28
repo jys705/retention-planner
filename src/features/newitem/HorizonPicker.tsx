@@ -20,6 +20,13 @@ export interface HorizonPickerProps {
   uncertainty: number
   value: Horizon
   onChange: (horizon: Horizon) => void
+  /**
+   * 목표한 날 당일을 비워 둘지 고르는 칸을 보일지.
+   *
+   * 목표의 시점을 고를 때만 켠다. 목표한 날 안내가 목표에만 뜨고, 비워 둔다는 값도
+   * 목표에만 저장된다. 낱개 항목의 날짜에는 이 칸이 없다.
+   */
+  restChoice?: boolean
 }
 
 /**
@@ -32,6 +39,7 @@ export function HorizonPicker({
   uncertainty,
   value,
   onChange,
+  restChoice = false,
 }: HorizonPickerProps) {
   const [customOpen, setCustomOpen] = useState(false)
   const [amount, setAmount] = useState(4)
@@ -87,7 +95,8 @@ export function HorizonPicker({
             value={value.at}
             today={today}
             min={today}
-            onChange={(at) => onChange({ kind: 'date', at })}
+            // 날짜만 바꿨는데 비워 두기가 풀리면 안 된다. 고른 것을 그대로 들고 간다.
+            onChange={(at) => onChange(dateHorizon(at, value.rest === true))}
             label="목표한 날 고르기"
             text={fullDate(value.at)}
             active
@@ -95,6 +104,36 @@ export function HorizonPicker({
           <p className="text-[12px] text-text-3">
             그날까지 기억이 가장 높게 올라오도록 잡아요.
           </p>
+          {restChoice ? (
+            <>
+              <div
+                role="group"
+                aria-label="목표한 날에는"
+                className="flex flex-wrap items-center gap-[6px] pt-[2px]"
+              >
+                <span className="text-[12px] text-text-2">목표한 날에는</span>
+                <Chip
+                  compact
+                  active={value.rest !== true}
+                  onClick={() => onChange(dateHorizon(value.at, false))}
+                >
+                  훑어볼 것 올리기
+                </Chip>
+                <Chip
+                  compact
+                  active={value.rest === true}
+                  onClick={() => onChange(dateHorizon(value.at, true))}
+                >
+                  비워 두기
+                </Chip>
+              </div>
+              <p className="text-[12px] leading-relaxed text-text-3">
+                {value.rest === true
+                  ? '그날에는 아무것도 올리지 않아요. 준비하다 못 본 것도 올리지 않아요.'
+                  : '그날에는 시간이 되면 훑어볼 것만 올려 둬요. 안 봐도 괜찮아요.'}
+              </p>
+            </>
+          ) : null}
         </div>
       ) : null}
 
@@ -186,4 +225,9 @@ export function HorizonPicker({
       ) : null}
     </div>
   )
+}
+
+/** 정확한 날짜 목표 시점. 비워 두기는 고른 때만 싣는다. */
+function dateHorizon(at: DateOnly, rest: boolean): Horizon {
+  return rest ? { kind: 'date', at, rest: true } : { kind: 'date', at }
 }

@@ -1,11 +1,12 @@
 import type { Grade } from '../../core/fsrs/types'
-import type { Horizon } from '../../core/horizon/horizon'
+import { lastReviewDay, type Horizon } from '../../core/horizon/horizon'
 import { initialSchedule, type Intensity } from '../../core/policy/constraints'
 import { projectItem } from '../../core/simulate/project'
 import type { GoalRow, ItemRow } from '../../db/types'
-import { diffDays, type DateOnly } from '../../lib/date'
+import { diffDays, toEpochDay, type DateOnly } from '../../lib/date'
 import { effectiveConfig, horizonFields } from '../../lib/domain'
 import { monthDay, weekday } from '../../lib/format'
+import { restingToday } from '../../lib/lifecycle'
 import type { Settings } from '../../lib/settings'
 
 export interface PlanPreviewProps {
@@ -89,10 +90,16 @@ export function PlanPreview({
     maxIntervalDays: config.maxIntervalDays,
   })
 
-  const dates = future.map((f) => f.date)
+  // 목표한 날을 비워 두면 그날 잡힐 것은 오지 않는다. 세지 않는다.
+  const last = lastReviewDay(config.horizon)
+  const dates = future
+    .map((f) => f.date)
+    .filter((date) => !Number.isFinite(last) || toEpochDay(date) <= last)
   // 지난 날짜로 적으면 이미 볼 때가 지난 것이라 적자마자 오늘 목록에 오른다.
   // 적기 전에 알려야 "왜 바로 뜨지" 하고 놀라지 않는다.
-  const dueNow = initial.due <= today
+  // 오늘이 비워 둔 목표한 날이면 볼 때가 됐어도 오늘 목록에 올리지 않는다.
+  const resting = restingToday(draftRow, goal, settings, today)
+  const dueNow = initial.due <= today && !resting
   // 막대 길이는 앞 복습과의 간격이다. 간격이 점점 길어지는 흐름을 그린다.
   // 오른쪽 글자는 오늘로부터 며칠 뒤인지다. 둘을 한 수로 합치면 안 된다.
   // 간격을 '1일 뒤' 라고 적으면 8월 31일과 9월 1일이 나란히 '1일 뒤' 가 되어
@@ -119,12 +126,20 @@ export function PlanPreview({
       <div className="flex flex-col gap-[5px]">
         <span className="text-[12px] font-medium text-text-2">
           {until ? '목표한 날까지' : '앞으로 넉 달 동안'}{' '}
-          <span className="num">{dates.length}번</span> 보게 돼요
+          {/*
+            처음 공부한 한 번은 최소 횟수에 이미 들어 있다. 이 수는 그 뒤로 볼
+            횟수라 '더' 를 붙인다. 안 붙이면 최소 횟수보다 하나 모자라 보인다.
+          */}
+          <span className="num">{dates.length}번</span> 더 보게 돼요
         </span>
         {dueNow ? (
           <span className="text-[11.5px] leading-relaxed text-imp-fg">
             공부한 날이 지나서 볼 때가 이미 됐어요. 적으면 바로 오늘 목록에
             올라옵니다.
+          </span>
+        ) : resting ? (
+          <span className="text-[11.5px] leading-relaxed text-text-3">
+            오늘은 비워 두기로 한 목표한 날이라 오늘 목록에 올리지 않아요.
           </span>
         ) : null}
 
