@@ -1289,13 +1289,14 @@ export function computeSpread(
 
     // 앞 층이 잡아준 구간이 있으면 그 밖으로는 못 나간다.
     // 구간의 이른 쪽 끝은 "이보다 일찍 보면 목표한 날 기억률이 목표치에 못 미친다" 는 선이다.
+    // 구간이 없어도 마지막으로 본 날로는 못 당긴다. 오늘 본 것을 오늘로 당기면
+    // 방금 공부한 것이 오늘 목록에 또 서고, 평가해도 그 자리로 되돌아온다.
+    const open = nextOpenDay(item, today)
     const placed = placedIntervals.get(item.id)
     capCandidates.push({
       itemId: item.id,
       date: due,
-      notBefore: placed
-        ? maxDate(today, fromEpochDay(placed.earliest))
-        : today,
+      notBefore: placed ? maxDate(open, fromEpochDay(placed.earliest)) : open,
       // 목표한 날 당일로는 못 밀어낸다. 전날에 자리가 없을 때만 당일까지 쓴다.
       notAfter: placed
         ? fromEpochDay(placed.latest)
