@@ -123,18 +123,15 @@ function restingLine(
   const byId = new Map(resting.map((g) => [g.id, g]))
   const mine = items.filter(
     (i) =>
-      i.goal_id !== null &&
-      byId.has(i.goal_id) &&
-      isActive(i) &&
-      i.due !== null &&
-      i.due <= today
+      i.goal_id !== null && byId.has(i.goal_id) && isActive(i) && i.due !== null
   )
   const missed = mine.filter((i) => i.due! < today).length
-  // 오늘로 잡혀 있던 것 가운데 지금 기억이 목표 아래인 것. 전날 '다시' 를 눌러 다음
-  // 날짜가 목표한 날로 떨어진 것이 그렇다. 이것이 있으면 준비가 끝났다고 하지 않는다.
+  // 밀린 것 말고 지금 기억이 목표 아래인 것. 전날 '다시' 를 눌러 다음 날짜가 목표한
+  // 날이나 그 뒤로 떨어진 것이 그렇다. 날짜가 어디에 잡혔든 오늘 아침 기억이 모자라면
+  // 준비가 끝났다고 하지 않는다.
   const short = mine.filter(
     (i) =>
-      i.due === today &&
+      i.due! >= today &&
       retentionToday(i, today) < byId.get(i.goal_id!)!.target_retention
   ).length
   const names = resting.map((g) => g.name).join(', ')

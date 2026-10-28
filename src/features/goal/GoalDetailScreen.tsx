@@ -143,10 +143,11 @@ export function GoalDetailScreen({
   const overdue = rows.filter(
     (r) => r.item.due !== null && r.item.due < today
   ).length
-  // 오늘로 잡힌 것 가운데 지금 기억이 목표 아래인 것. 목표한 날에 이것이 있으면
-  // 준비가 끝났다고 하지 않는다. 오늘 화면의 안내와 같은 기준이다.
+  // 밀린 것 말고 지금 기억이 목표 아래인 것. 목표한 날에 이것이 있으면 준비가 끝났다고
+  // 하지 않는다. 오늘 화면의 안내와 같은 기준이다. 비워 두지 않은 목표에서는 다시 셈할
+  // 때 이것들을 오늘로 올린다.
   const shortToday = rows.filter(
-    (r) => r.item.due === today && r.retention < target
+    (r) => r.item.due !== null && r.item.due >= today && r.retention < target
   ).length
 
   return (

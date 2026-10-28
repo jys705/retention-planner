@@ -17,7 +17,14 @@ export type DueKind =
   | 'deadline_pull'
   | 'final_check'
   | 'hold'
-export type DueSource = 'fsrs' | 'spread'
+/**
+ * 다음 날짜를 누가 정했나.
+ *
+ * 'replan' 은 설정이 바뀌어 목표 밖에 걸린 날짜를 다시 셈해 옮긴 것이다. 사람이 보기
+ * 전까지는 설정을 따라 다시 셈한다. 목표 날짜를 잠깐 당겼다 되돌린 것만으로 항목이
+ * 오늘에 묶여 남으면 안 된다.
+ */
+export type DueSource = 'fsrs' | 'spread' | 'replan'
 export type GoalRisk = 'safe' | 'tight' | 'at_risk'
 
 export interface GoalRow {

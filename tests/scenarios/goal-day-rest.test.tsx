@@ -9,7 +9,9 @@ import { PlanPreview } from '../../src/features/newitem/PlanPreview'
 import { AppShell } from '../../src/features/shell/AppShell'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { rollout } from '../../src/features/forecast/rollout'
+import type { Horizon } from '../../src/core/horizon/horizon'
 import { freezeToday } from '../../src/lib/clock'
+import { goalHorizonFields } from '../../src/lib/domain'
 import { percent } from '../../src/lib/format'
 import { retentionOn } from '../../src/lib/lifecycle'
 import { DEFAULT_SETTINGS } from '../../src/lib/settings'
@@ -630,5 +632,232 @@ describe('마친 목표를 다시 열 때', () => {
       shift(NOW, 1)
     )
     expect(start).toBeEnabled()
+  })
+})
+
+describe('목표 시점을 고르는 동안', () => {
+  const NOW = '2026-11-20'
+
+  /** 대략 목표에 묶인 항목 여섯. 목표 화면에서 정확한 날짜로 바꿔 본다. */
+  function windowWorld() {
+    return {
+      goals: [
+        aGoal({
+          id: 'g1',
+          name: '자격증 시험',
+          horizon_kind: 'window',
+          ready_at: '2026-12-10',
+          hold_until: '2026-12-20',
+        }),
+      ],
+      items: [8, 9, 10, 11, 12, 13].map((s, k) =>
+        anItem({
+          id: `i${k}`,
+          title: `${k + 1}장`,
+          goal_id: 'g1',
+          first_studied_at: '2026-11-10',
+          last_review: '2026-11-18',
+          stability: s,
+          difficulty: 5,
+          reps: 2,
+          reps_since_goal: 1,
+          due: shift('2026-11-18', s),
+        })
+      ),
+    }
+  }
+
+  /** 목표 화면이 고를 때마다 저장하는 것과 같이 차례로 저장하고, 남은 날짜를 본다. */
+  async function duesAfter(steps: Horizon[]) {
+    await setupApp(NOW, windowWorld())
+    for (const horizon of steps) {
+      await usePlanner.getState().updateGoal('g1', goalHorizonFields(horizon))
+    }
+    return usePlanner
+      .getState()
+      .items.map((i) => i.due)
+      .sort()
+  }
+
+  it('S-275 날짜를 고르는 중에 거친 오늘이 항목을 오늘에 묶어 두지 않는다', async () => {
+    // '정확한 날짜' 를 누르면 날짜가 먼저 오늘이 되고 그대로 저장된다. 그 순간 당긴 것이
+    // 남으면 날짜를 다 고른 뒤에도 항목이 전부 오늘 목록에 선다.
+    const final: Horizon = { kind: 'date', at: '2026-12-04', rest: true }
+    const direct = await duesAfter([final])
+    const viaToday = await duesAfter([
+      { kind: 'date', at: NOW },
+      { kind: 'date', at: NOW, rest: true },
+      final,
+    ])
+    expect(viaToday).toEqual(direct)
+    expect(selectTodayItems(usePlanner.getState())).toHaveLength(0)
+  })
+
+  it('S-275b 날짜가 막 오늘이 된 순간에도 기억이 넉넉한 것은 오늘로 당기지 않는다', async () => {
+    // 목표가 끝나는 날 당일에는 다 당기지 않고, 기억이 목표 아래인 것만 오늘 올린다.
+    await setupApp(NOW, windowWorld())
+    await usePlanner.getState().updateGoal('g1', goalHorizonFields({ kind: 'date', at: NOW }))
+    expect(selectTodayItems(usePlanner.getState())).toHaveLength(0)
+  })
+
+  it('S-276 날짜를 잠깐 당겼다 되돌리면 처음 잡힌 날짜로 돌아간다', async () => {
+    const start: Horizon = { kind: 'date', at: '2026-12-04' }
+    const direct = await duesAfter([start])
+    const roundTrip = await duesAfter([start, { kind: 'date', at: '2026-11-21' }, start])
+    expect(roundTrip).toEqual(direct)
+  })
+})
+
+describe('전날 무너진 것의 다음 날짜가 목표를 넘어갈 때', () => {
+  const EVE = shift(TODAY, -1)
+
+  /** 여유 강도라 '다시' 뒤 간격이 이틀로 잡혀 목표한 날을 넘어간다. */
+  function easyEve(rest: boolean) {
+    return {
+      goals: [
+        aGoal({
+          id: 'g1',
+          name: '자격증 시험',
+          horizon_kind: 'date',
+          ready_at: TODAY,
+          hold_until: TODAY,
+          intensity: 'easy',
+          goal_day: rest ? 'rest' : null,
+        }),
+      ],
+      items: [
+        anItem({
+          id: 'a',
+          title: '약한 것',
+          goal_id: 'g1',
+          due: EVE,
+          last_review: shift(EVE, -4),
+          stability: 4,
+          difficulty: 5,
+          reps: 3,
+          reps_since_goal: 3,
+        }),
+      ],
+    }
+  }
+
+  async function failOnEve(rest: boolean) {
+    await setupApp(EVE, easyEve(rest))
+    await usePlanner.getState().rateItem('a', 1, { reviewedAt: EVE })
+    // 전제: 다음 날짜가 목표한 날을 넘어갔다.
+    expect(usePlanner.getState().items[0].due! > TODAY).toBe(true)
+  }
+
+  async function moveTo(date: string) {
+    freezeToday(date)
+    usePlanner.getState().setToday(date)
+    await usePlanner.getState().recomputeAll()
+  }
+
+  it('S-277 비워 둔 날 안내는 그 항목도 모자란 것으로 센다', async () => {
+    await failOnEve(true)
+    await moveTo(TODAY)
+    render(<TodayScreen onOpenItem={noop} />)
+    const note = await screen.findByLabelText('목표한 날')
+    expect(note).toHaveTextContent('아직 기억이 모자란 1개도 올리지 않았어요.')
+    expect(note).not.toHaveTextContent('준비는 어제까지 끝냈어요')
+    cleanup()
+    render(<GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />)
+    expect(
+      await screen.findByText(
+        '오늘이 목표한 날이에요. 비워 두기로 해서 아직 기억이 모자란 1개도 오늘 목록에 올리지 않았어요.'
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('S-278 안내대로 훑어볼 것 올리기로 바꾸면 그날 목록에 선다', async () => {
+    await failOnEve(true)
+    await usePlanner.getState().updateGoal('g1', { goal_day: null })
+    await moveTo(TODAY)
+    expect(selectTodayItems(usePlanner.getState()).map((i) => i.id)).toEqual(['a'])
+  })
+
+  it('S-279 비워 두지 않은 목표도 목표한 날에 한 번 더 올리고 모자라다고 말한다', async () => {
+    // 버퍼가 하루면 전날 본 것에는 마감선이 걸리지 않는다. 간격이 이틀이면 목표를 넘는다.
+    await failOnEve(false)
+    await moveTo(TODAY)
+    expect(selectTodayItems(usePlanner.getState()).map((i) => i.id)).toEqual(['a'])
+    render(<TodayScreen onOpenItem={noop} />)
+    expect(await screen.findByLabelText('목표한 날')).toHaveTextContent(
+      '아직 기억이 모자란 1개가 있어요.'
+    )
+  })
+})
+
+describe('비워 둔 날 다른 것을 다 본 뒤', () => {
+  it('S-280 다른 것을 다 보고 나도 아무것도 안 올렸다고 하지 않는다', async () => {
+    const world = goalDay(true)
+    world.items = world.items.filter((i) => i.id !== 'b')
+    await setupApp(TODAY, world)
+    render(<TodayScreen onOpenItem={noop} />)
+    await screen.findByLabelText('목표한 날')
+    await usePlanner.getState().rateItem('c', 3, { reviewedAt: TODAY })
+    const note = await screen.findByLabelText('목표한 날')
+    expect(note).toHaveTextContent(
+      '준비는 어제까지 끝냈어요. 비워 두기로 해서 자격증 시험 것은 오늘 목록에 올리지 않았어요.'
+    )
+    expect(note).not.toHaveTextContent('아무것도')
+    // 다 본 날이지 비워 둔 날이 아니다.
+    expect(screen.getByText('오늘 볼 건 다 봤어요.')).toBeInTheDocument()
+    expect(screen.queryByText('오늘은 비워 둔 날이에요.')).toBeNull()
+  })
+})
+
+describe('예보와 폼', () => {
+  it('S-281 설정만 바꾸고 아직 다시 셈하지 않아도 예보는 목표 안으로 들어올 날짜를 센다', async () => {
+    const START = '2026-11-10'
+    const GOAL = '2026-12-20'
+    await setupApp(START, {
+      goals: [
+        aGoal({ id: 'g1', name: '자격증 시험', horizon_kind: 'date', ready_at: GOAL, hold_until: GOAL }),
+      ],
+      items: [
+        anItem({
+          id: 'x',
+          title: '오래가는 것',
+          goal_id: 'g1',
+          first_studied_at: '2026-10-01',
+          last_review: '2026-11-05',
+          stability: 100,
+          difficulty: 5,
+          reps: 5,
+          reps_since_goal: 4,
+          due: '2027-02-13',
+        }),
+      ],
+    })
+    // 전제: 지금은 목표 밖에 걸려 끝난 것으로 친다.
+    expect(usePlanner.getState().items[0].due! > GOAL).toBe(true)
+    // 최대 간격을 줄이면 목표 전에 한 번은 봐야 한다. 설정을 바꿔도 바로 다시 셈하지 않는다.
+    await usePlanner.getState().saveSetting('maxIntervalDays', 30)
+    const { items, goals, settings } = usePlanner.getState()
+    const plan = rollout({ items, goals, settings, from: START, days: 40 })
+    const seen = plan
+      .filter((day) => day.items.some((p) => p.itemId === 'x'))
+      .map((day) => day.date)
+    expect(seen.length).toBeGreaterThan(0)
+    expect(seen[0] < GOAL).toBe(true)
+  })
+
+  it('S-282 목표 만들기 폼을 연 채 날이 바뀌면 지난 날이라고 말한다', async () => {
+    await setupApp(TODAY)
+    const { user } = render(<GoalListScreen onOpenGoal={noop} />)
+    await user.click(screen.getByRole('button', { name: '목표 만들기' }))
+    await user.type(screen.getByLabelText('목표 이름'), '발표')
+    await user.click(screen.getByRole('radio', { name: /^정확한 날짜/ }))
+    expect(screen.getByRole('button', { name: '만들기' })).toBeEnabled()
+    freezeToday(shift(TODAY, 1))
+    usePlanner.getState().setToday(shift(TODAY, 1))
+    expect(
+      await screen.findByText('이미 지난 날이에요. 오늘이나 그 뒤를 고르세요.')
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('오늘을 비워 두면 볼 날이 없어요. 내일이나 그 뒤를 고르세요.')
+    ).toBeNull()
   })
 })

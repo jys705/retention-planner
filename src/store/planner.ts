@@ -62,9 +62,9 @@ import type { Backup } from '../lib/transfer'
 import { newId } from './ids'
 import { nowIso, today as clockToday } from '../lib/clock'
 import {
-  dueBeyondEnd,
   endedPatches,
   goalEnded,
+  itemEndDay,
   itemEndedKey,
   itemLastReviewDay,
   restingToday,
@@ -781,19 +781,27 @@ async function settle(
 }
 
 /**
- * 다음 날짜가 목표 밖에 걸려 있지만 지금 설정으로는 그 안에 봐야 하는 항목.
+ * 목표 밖에 걸린 날짜를 지금 설정에 맞춘다.
  *
  * 다음 날짜가 목표 뒤면 그 날은 오지 않는 것으로 친다. 평가할 때 목표까지 이대로
  * 충분하다고 셈해서 그렇게 잡혔다면 맞다. 그런데 날짜를 잡은 뒤에 설정이 바뀌면
- * 틀린다. 목표 없이 적은 것을 목표에 넣거나, 목표한 날을 앞당기거나, 그날을 비워
- * 두면 묵은 날짜가 목표 밖에 걸려서 분산도 하루 상한도 그 항목을 보지 않는다.
- * 목표한 날까지 한 번도 안 올라오고 목표 아래로 끝난다.
+ * 틀린다. 목표 없이 적은 것을 목표에 넣거나 목표한 날을 앞당기면 묵은 날짜가 목표
+ * 밖에 걸려서 분산도 하루 상한도 그 항목을 보지 않는다. 목표한 날까지 한 번도 안
+ * 올라오고 목표 아래로 끝난다. 세 가지를 차례로 본다.
  *
- * 마지막으로 본 날부터 지금 설정으로 다시 셈해서, 목표 안에 잡혀야 하면 날짜를
- * 그리로 옮긴다. 이미 지난 날이면 오늘로 둔다. 되살릴 때와 같은 까닭이다. 다시
- * 셈해도 목표 밖이면 평가할 때 셈한 그대로이므로 손대지 않는다.
+ * 1. 여기서 옮긴 날짜는 사람이 보기 전까지 설정을 따라간다. 목표 화면은 고르는 대로
+ *    바로 저장하고, '정확한 날짜' 를 누르면 날짜가 먼저 오늘이 된다. 그 순간 당겨 둔
+ *    것을 그대로 두면 날짜를 다시 미뤄도 항목이 오늘에 묶여 남는다. 지금 설정으로
+ *    다시 셈해서 더 뒤이거나 목표 밖이면 그리로 돌린다.
+ * 2. 목표 밖에 걸린 것은 마지막으로 본 날부터 지금 설정으로 셈해서, 목표 안에
+ *    잡혀야 하면 그리로 당긴다. 이미 지난 날이면 오늘로, 오늘 본 것이면 내일로 둔다.
+ *    목표가 끝나는 날 당일에는 하지 않는다. 그날 다 당기면 목표 날짜를 잠깐 오늘로
+ *    둔 것만으로 목록이 넘친다. 그날 볼 것은 3이 고른다.
+ * 3. 마지막으로 볼 수 있는 날인데 기억이 목표 아래이고 다음 날짜가 목표 뒤면 오늘
+ *    한 번 더 올린다. 전날 '다시' 를 눌렀는데 간격이 이틀로 잡혀 목표를 넘어간 것이
+ *    그렇다. 비워 둔 목표는 그날 올리지 않는다.
  */
-function strandedPatches(
+export function strandedPatches(
   items: readonly ItemRow[],
   goals: readonly GoalRow[],
   settings: Settings,
@@ -802,21 +810,51 @@ function strandedPatches(
   const goalById = new Map(goals.map((g) => [g.id, g]))
   const patches = new Map<string, Partial<ItemRow>>()
   for (const item of items) {
-    if (!isActive(item)) continue
+    if (!isActive(item) || item.due === null) continue
     const goal = item.goal_id ? (goalById.get(item.goal_id) ?? null) : null
-    if (!dueBeyondEnd(item, goal, settings)) continue
+    const config = effectiveConfig(item, goal, settings)
+    // 계속 보기로 한 것은 목표 뒤 날짜도 그대로 온다. 걸릴 것이 없다.
+    if (config.postGoalMode !== 'archive') continue
     const state = memoryStateOf(item)
     const last = itemLastReviewDay(item, goal, settings)
-    if (state === null || last === null) continue
-    const next = naturalScheduleOf(
-      item,
-      effectiveConfig(item, goal, settings),
-      state,
-      settings
-    )
-    const due = maxDate(today, next.due)
-    if (due > last) continue
-    patches.set(item.id, { due, due_kind: next.dueKind, due_source: 'fsrs' })
+    const end = itemEndDay(item, goal, settings)
+    if (state === null || last === null || end === null) continue
+
+    const next = naturalScheduleOf(item, config, state, settings)
+    let due: DateOnly = item.due
+    let kind = item.due_kind
+    let source = item.due_source
+
+    if (source === 'replan' && (next.due > last || (next.due > due && next.due > today))) {
+      due = next.due
+      kind = next.dueKind
+      source = 'fsrs'
+    }
+    if (due > last && today < end) {
+      const want = maxDate(nextOpenDay(item, today), next.due)
+      if (want <= last) {
+        due = want
+        kind = next.dueKind
+        source = 'replan'
+      }
+    }
+    if (
+      due > last &&
+      today === last &&
+      !restsOnDay(config.horizon) &&
+      item.last_review !== null &&
+      item.last_review < today &&
+      defaultFsrs.retrievability(diffDays(item.last_review, today), state.stability) <
+        config.targetRetention
+    ) {
+      due = today
+      kind = 'normal'
+      source = 'replan'
+    }
+
+    if (due !== item.due || kind !== item.due_kind || source !== item.due_source) {
+      patches.set(item.id, { due, due_kind: kind, due_source: source })
+    }
   }
   return patches
 }

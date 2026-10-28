@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import { lastReviewDay, type Horizon } from '../../core/horizon/horizon'
+import {
+  lastReviewDay,
+  resolveHorizon,
+  type Horizon,
+} from '../../core/horizon/horizon'
 import { INTENSITY_RETENTION } from '../../core/policy/constraints'
 import { Chip, ChipLabel } from '../../components/Chip'
 import { NumText } from '../../components/NumText'
@@ -39,7 +43,9 @@ export function GoalListScreen({
     )
 
   // 오늘을 목표한 날로 잡고 그날을 비워 두면 이 목표로는 볼 날이 하루도 없다.
+  // 폼을 열어 둔 채 날이 바뀌면 고른 날짜가 어제가 된다. 그건 지난 날이라고 말한다.
   const noDayLeft = lastReviewDay(horizon) < toEpochDay(today)
+  const pastDate = resolveHorizon(horizon).holdUntil < toEpochDay(today)
 
   async function submit() {
     const trimmed = name.trim()
@@ -136,7 +142,9 @@ export function GoalListScreen({
             </button>
             {noDayLeft ? (
               <span className="text-[12px] text-text-3">
-                오늘을 비워 두면 볼 날이 없어요. 내일이나 그 뒤를 고르세요.
+                {pastDate
+                  ? '이미 지난 날이에요. 오늘이나 그 뒤를 고르세요.'
+                  : '오늘을 비워 두면 볼 날이 없어요. 내일이나 그 뒤를 고르세요.'}
               </span>
             ) : null}
           </div>

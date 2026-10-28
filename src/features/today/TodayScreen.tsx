@@ -87,6 +87,10 @@ export function TodayScreen({
 
   const { overdue, dueToday } = splitTodayItems({ items, goals, settings, today })
   const todayItems = selectTodayItems({ items, goals, settings, today })
+  // 오늘 목록에 섰던 수. 다 보고 나면 목록은 비지만 올린 적이 없는 것은 아니다.
+  // 이걸 안 세면 다른 것을 다 본 뒤에 '오늘은 아무것도 올리지 않았어요' 가 된다.
+  const listedToday =
+    todayItems.length + reviews.filter((r) => r.reviewed_at === today).length
   // 목표 뒤로 잡힌 날짜는 그 날이 오기 전에 목표가 끝나 내려간다. 다음 날짜로 세지 않는다.
   const upcoming = selectUpcoming(scheduledItems(items, goals, settings), today)
   const overall = selectOverallRetention(items, today)
@@ -178,7 +182,7 @@ export function TodayScreen({
           <GoalDayNote
             goals={goalsToday}
             items={items}
-            listed={todayItems.length}
+            listed={listedToday}
             today={today}
           />
         ) : null}
@@ -243,8 +247,9 @@ export function TodayScreen({
                 <EmptyLibrary />
               ) : activeCount === 0 ? (
                 <AllEnded />
-              ) : goalsToday.some(goalRestsOnDay) ? (
+              ) : goalsToday.some(goalRestsOnDay) && listedToday === 0 ? (
                 // 다 봐서 빈 것이 아니다. 오늘을 비워 두기로 해서 올리지 않은 것이다.
+                // 다른 것을 올려서 다 봤다면 그건 다 본 날이다.
                 <RestDay upcoming={upcoming} />
               ) : (
                 <EmptyToday
