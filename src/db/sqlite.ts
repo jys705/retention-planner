@@ -47,6 +47,32 @@ function valuesOf<T extends object>(
   return columns.map((c) => (row as Record<string, unknown>)[c] ?? null)
 }
 
+const UPSERT_SETTING = `INSERT INTO settings (key, value) VALUES ($1, $2)
+  ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+
+/**
+ * 여러 문장을 execute 한 번에 보내려고 하나로 잇는다.
+ *
+ * 플러그인은 $n 을 문장마다 새로 세지 않고, 어느 문장에 있든 값 배열 전체의 n 번째로
+ * 읽는다. 그래서 뒤에 붙는 문장의 자리표시는 앞에 쌓인 값 수만큼 밀어 둔다.
+ */
+class Batch {
+  private readonly statements: string[] = []
+  readonly values: unknown[] = []
+
+  add(sql: string, values: unknown[] = []): void {
+    const offset = this.values.length
+    this.statements.push(
+      sql.replace(/\$(\d+)/g, (_, n: string) => `$${offset + Number(n)}`)
+    )
+    this.values.push(...values)
+  }
+
+  get sql(): string {
+    return this.statements.join(';\n')
+  }
+}
+
 /**
  * Tauri SQL 플러그인 구현. 브라우저에서는 플러그인이 없으므로 이 구현을 고르지 않는다.
  * 고르는 건 index.ts 가 한다.
@@ -62,8 +88,7 @@ export class SqliteRepository implements Repository {
   }
 
   async init(): Promise<void> {
-    this.db = await Database.load(this.url)
-    await this.handle.execute('PRAGMA foreign_keys = ON')
+    await this.open()
     const applied = Number(
       (await this.getSettingRaw(SCHEMA_VERSION_KEY)) ?? '0'
     )
@@ -80,6 +105,11 @@ export class SqliteRepository implements Repository {
       }
       await this.setSetting(SCHEMA_VERSION_KEY, String(migration.version))
     }
+  }
+
+  private async open(): Promise<void> {
+    this.db = await Database.load(this.url)
+    await this.handle.execute('PRAGMA foreign_keys = ON')
   }
 
   private async hasColumn(table: string, column: string): Promise<boolean> {
@@ -214,11 +244,7 @@ export class SqliteRepository implements Repository {
   }
 
   async setSetting(key: string, value: string): Promise<void> {
-    await this.handle.execute(
-      `INSERT INTO settings (key, value) VALUES ($1, $2)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-      [key, value]
-    )
+    await this.handle.execute(UPSERT_SETTING, [key, value])
   }
 
   async listSettings(): Promise<Record<string, string>> {
@@ -234,21 +260,44 @@ export class SqliteRepository implements Repository {
     reviews: ReviewRow[]
     settings: Record<string, string>
   }): Promise<void> {
-    await this.handle.execute('DELETE FROM planned_reviews')
-    await this.handle.execute('DELETE FROM reviews')
-    await this.handle.execute('DELETE FROM items')
-    await this.handle.execute('DELETE FROM goals')
+    // 지우고 넣는 일을 트랜잭션 하나로 묶어, 중간에 깨지면 아무것도 바뀌지 않게 한다.
+    // 플러그인은 연결 하나가 아니라 sqlx 풀을 쓰고, execute 마다 쉬는 연결을 빌려 간다.
+    // BEGIN 과 COMMIT 을 따로 부르면 다른 연결로 갈 수 있어서 전부 한 번에 보낸다.
+    const batch = new Batch()
+    batch.add('BEGIN')
+    batch.add('DELETE FROM planned_reviews')
+    batch.add('DELETE FROM reviews')
+    batch.add('DELETE FROM items')
+    batch.add('DELETE FROM goals')
     // 스키마가 어디까지 왔는지는 데이터가 아니라 이 파일의 사실이다. 가져온 설정에는
     // 이 값이 없으므로 같이 지우면 다음 실행에 마이그레이션이 처음부터 다시 돈다.
-    await this.handle.execute('DELETE FROM settings WHERE key <> $1', [
-      SCHEMA_VERSION_KEY,
-    ])
-    for (const g of data.goals) await this.insertGoal(g)
-    for (const i of data.items) await this.insertItem(i)
-    for (const r of data.reviews) await this.insertReview(r)
+    batch.add('DELETE FROM settings WHERE key <> $1', [SCHEMA_VERSION_KEY])
+    for (const g of data.goals) {
+      batch.add(insertSql('goals', GOAL_COLUMNS), valuesOf(g, GOAL_COLUMNS))
+    }
+    for (const i of data.items) {
+      batch.add(insertSql('items', ITEM_COLUMNS), valuesOf(i, ITEM_COLUMNS))
+    }
+    for (const r of data.reviews) {
+      batch.add(
+        insertSql('reviews', REVIEW_COLUMNS),
+        valuesOf(r, REVIEW_COLUMNS)
+      )
+    }
     for (const [k, v] of Object.entries(data.settings)) {
       if (k === SCHEMA_VERSION_KEY) continue
-      await this.setSetting(k, v)
+      batch.add(UPSERT_SETTING, [k, v])
+    }
+    batch.add('COMMIT')
+    try {
+      await this.handle.execute(batch.sql, batch.values)
+    } catch (error) {
+      // 한 문장이 깨지면 COMMIT 까지 가지 못하고, 그 연결은 트랜잭션을 연 채 풀로
+      // 돌아간다. ROLLBACK 을 따로 보내도 그 연결로 간다는 보장이 없다. 연결이 닫히면
+      // SQLite 가 열린 트랜잭션을 되돌리므로 풀을 닫았다가 다시 연다.
+      await this.close()
+      await this.open()
+      throw error
     }
   }
 
