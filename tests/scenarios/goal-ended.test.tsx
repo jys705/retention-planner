@@ -664,7 +664,7 @@ describe('서재와 항목 상세의 마친 것', () => {
     await user.click(within(done).getByRole('button', { name: '마친 것 자격증 시험 펼치기' }))
     expect(within(done).getByRole('button', { name: '1~10번 문제' })).toBeInTheDocument()
     // 마친 것에는 할 일을 말하는 배지가 없다.
-    expect(within(done).queryByText(/부족|여유|중요/)).toBeNull()
+    expect(within(done).queryByText(/부족|충분|중요/)).toBeNull()
   })
 
   it('S-238 마친 것도 찾기에는 걸린다', async () => {

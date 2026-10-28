@@ -8,7 +8,7 @@ import type { DueKind, GoalRisk } from '../db/types'
  */
 export type StatusBadge = 'short' | 'important' | 'easy' | null
 
-/** 우선순위: 부족 > 중요 > 여유 > 없음. 상태 배지는 하나만 붙는다. */
+/** 우선순위: 부족 > 중요 > 충분 > 없음. 상태 배지는 하나만 붙는다. */
 export function statusBadgeOf(
   dueKind: DueKind | null,
   goalRisk: GoalRisk | null
@@ -19,10 +19,14 @@ export function statusBadgeOf(
   return null
 }
 
+/**
+ * 건너뛰어도 되는 것은 '충분' 이라 적는다. 시안은 '여유' 였는데 복습 강도 이름과 같아서,
+ * 둘이 함께 뜨는 목표 화면에서 배지를 '이 항목은 여유 강도' 로 읽게 됐다.
+ */
 export const BADGE_LABEL: Record<Exclude<StatusBadge, null>, string> = {
   short: '부족',
   important: '중요',
-  easy: '여유',
+  easy: '충분',
 }
 
 export const BADGE_TONE: Record<Exclude<StatusBadge, null>, string> = {

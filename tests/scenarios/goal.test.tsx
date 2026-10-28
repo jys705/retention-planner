@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, screen } from '@testing-library/react'
+import { cleanup, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { GoalDetailScreen } from '../../src/features/goal/GoalDetailScreen'
 import { GoalListScreen } from '../../src/features/goal/GoalListScreen'
@@ -284,6 +284,47 @@ describe('목표 상세', () => {
     await user.keyboard('새 이름{Enter}')
 
     expect(usePlanner.getState().goals[0].name).toBe('새 이름')
+  })
+
+  it('S-287 건너뛰어도 되는 항목의 배지는 강도 이름과 겹치지 않는다', async () => {
+    // 강도 고르는 칸과 항목 표가 한 화면에 뜬다. 배지도 '여유' 였을 때는 이것이
+    // '이 항목은 여유 강도' 로 읽혔다.
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({
+          id: 'g1',
+          horizon_kind: 'date',
+          ready_at: '2026-11-14',
+          hold_until: '2026-11-14',
+          intensity: 'easy',
+        }),
+      ],
+      // 9월 29일에 평가했을 때 앱이 잡은 값 그대로다. 최소 복습 횟수를 채우려고
+      // 당겼지만 건너뛰어도 목표한 날 목표 기억률을 지킨다.
+      items: [
+        anItem({
+          id: 'i1',
+          goal_id: 'g1',
+          title: '잘 아는 것',
+          first_studied_at: '2026-09-01',
+          last_review: '2026-09-29',
+          stability: 60,
+          reps: 2,
+          reps_since_goal: 1,
+          due: '2026-10-21',
+          due_kind: 'final_check',
+        }),
+      ],
+    })
+    render(<GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />)
+    const row = (await screen.findByText('잘 아는 것')).closest('tr')!
+
+    // 앱을 켤 때 다시 셈해도 갈래는 그대로다.
+    expect(usePlanner.getState().items[0].due_kind).toBe('final_check')
+    expect(within(row).getByText('충분')).toBeInTheDocument()
+    expect(row).not.toHaveTextContent('여유')
+    const intensity = screen.getByRole('radiogroup', { name: '복습 강도' })
+    expect(within(intensity).getByRole('radio', { name: '여유' })).toBeChecked()
   })
 })
 
