@@ -2,7 +2,8 @@
 import { screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
-import { usePlanner } from '../../src/store/planner'
+import { settlePatches, usePlanner } from '../../src/store/planner'
+import { freezeToday, nowIso } from '../../src/lib/clock'
 import { addDays } from '../../src/lib/date'
 import { effectiveConfig, stateForRating } from '../../src/lib/domain'
 import { gradeOptions } from '../../src/features/today/gradeOptions'
@@ -203,5 +204,67 @@ describe('버튼이 약속한 날짜', () => {
     const again = preview.find((o) => o.grade === 1)!
     if (again.next.includes('내일')) expect(days).toBe(1)
     else expect(again.next).toContain(`${days}일 뒤`)
+  })
+})
+
+describe('다시 를 누른 다음 날', () => {
+  it('S-283 다시 셈해도 오늘 보는 까닭이 그대로다', async () => {
+    // 목표한 날이 나흘 뒤이고 사흘 전까지 준비를 마치는 목표다. 다시 를 누른 것은
+    // 다음 날 한 번 봐서는 목표한 날 기억이 모자란다. 그날 목록에 선 채로 다시 셈할
+    // 때마다 갈래가 deadline_pull 과 normal 을 오가서, 펼친 줄의 안내 문장이
+    // 바뀌었다 돌아오기를 되풀이했다.
+    const goalDay = addDays(TODAY, 4)
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({
+          id: 'g1',
+          name: '쪽지 시험',
+          horizon_kind: 'date',
+          ready_at: goalDay,
+          hold_until: goalDay,
+        }),
+      ],
+      items: [
+        anItem({
+          id: 'i1',
+          title: '못 외운 것',
+          goal_id: 'g1',
+          last_review: addDays(TODAY, -3),
+          due: TODAY,
+          stability: 3,
+          reps: 2,
+        }),
+      ],
+      settings: { bufferDays: '3', dailyCap: '3' },
+    })
+    const { user } = render(<TodayScreen onOpenItem={noop} />)
+    await screen.findByText('오늘 볼 항목')
+    await user.click(screen.getByRole('checkbox', { name: '못 외운 것 평가하기' }))
+    await user.click(screen.getByRole('button', { name: /다시/ }))
+
+    // 다음 날 앱을 켠다.
+    const next = addDays(TODAY, 1)
+    freezeToday(next)
+    usePlanner.getState().setToday(next)
+    await usePlanner.getState().recomputeAll()
+    await user.click(
+      await screen.findByRole('checkbox', { name: '못 외운 것 평가하기' })
+    )
+    const reason = '목표한 날에 기억을 지키려면 오늘 보는 게 좋아요.'
+    expect(screen.getByText(reason)).toBeInTheDocument()
+
+    // 평가 하나 없이 다시 셈하는 일은 하루에도 여러 번 있다. 그때마다 그대로여야 한다.
+    for (let n = 0; n < 3; n += 1) {
+      await usePlanner.getState().recomputeAll()
+      expect(screen.getByText(reason)).toBeInTheDocument()
+      expect(usePlanner.getState().items[0].due_kind).toBe('deadline_pull')
+    }
+
+    // 셈을 되풀이해서 흔들림을 덮은 것이 아니다. 한 번만 셈해도 이미 제자리다.
+    const { items, goals, settings } = usePlanner.getState()
+    const once = settlePatches(items, goals, settings, next, nowIso(), {
+      maxRounds: 1,
+    })
+    expect(once.patches.size).toBe(0)
   })
 })

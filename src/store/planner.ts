@@ -748,14 +748,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   },
 }))
 
-/**
- * 오늘 기준으로 다시 셈해 저장하고, 바꾼 칸을 돌려준다.
- *
- * 목표 시점이 지난 것부터 넘긴다. 앱을 켤 때와 날이 바뀔 때 여기를 지나므로,
- * 목표를 마치고 평가를 안 했어도 다음에 켜는 순간 보관된다. 분산은 넘긴 뒤의
- * 목록을 봐야 한다. 안 그러면 끝난 항목이 남의 날짜를 밀어낸다. 목표 밖에 걸린
- * 묵은 날짜도 분산 전에 풀어야 그 항목이 분산과 하루 상한에 들어간다.
- */
+/** 오늘 기준으로 다시 셈해 저장하고, 바꾼 칸을 돌려준다. */
 async function settle(
   db: Repository,
   items: ItemRow[],
@@ -763,7 +756,99 @@ async function settle(
   settings: Settings,
   today: DateOnly
 ): Promise<{ patches: Map<string, Partial<ItemRow>>; planned: PlannedReviewRow[] }> {
-  const ended = endedPatches(items, goals, settings, today, nowIso())
+  const { patches, planned } = settlePatches(items, goals, settings, today, nowIso())
+  for (const [id, patch] of patches) {
+    await db.updateItem(id, patch)
+  }
+  await db.replacePlannedReviews(planned)
+  return { patches, planned }
+}
+
+/**
+ * 다시 셈하기를 되풀이할 수 있는 가장 많은 횟수. 보통 두세 번이면 더 고칠 것이
+ * 없다. 끝없이 돌지 않게 막아 둘 뿐이다.
+ */
+const MAX_SETTLE_ROUNDS = 8
+
+/**
+ * 오늘 기준으로 다시 셈한 고침과 잡아둔 복습. 저장은 하지 않는다.
+ *
+ * 셈한 결과에 다시 셈해도 아무것도 안 바뀔 때까지 되풀이한다. 셈은 지금 적힌
+ * 날짜를 보고 할 일을 정하는데, 같은 셈이 그 날짜를 바꾼다. 분산이 앞날 것을
+ * 오늘에 놓으면 다음 셈에서는 그것이 목록에 선 것이 되어 갈래를 오늘 기준으로
+ * 다시 쓴다. 하루 상한이 오늘 것을 뒤로 밀면 다음 셈에서는 서 있지 않은 것이
+ * 되어 분산이 제 자리로 다시 옮긴다. 한 번만 셈하고 내보내면 평가 하나 없이
+ * 다시 셈할 때마다 날짜와 배지가 바뀐다. 앱을 켤 때, 평가한 뒤, 예보가 하루씩
+ * 굴릴 때가 모두 같은 자리에 닿아야 한다.
+ *
+ * 되풀이를 한 번으로 줄이면 한 번만 셈한다. 이미 제자리인 목록에서는 그 한 번도
+ * 아무것도 고치지 않아야 한다. 되풀이가 흔들림을 덮고 있는지 볼 때 쓴다.
+ */
+export function settlePatches(
+  items: ItemRow[],
+  goals: GoalRow[],
+  settings: Settings,
+  today: DateOnly,
+  now: string,
+  options: { maxRounds?: number } = {}
+): SpreadOutcome {
+  let current = items
+  let touched = new Map<string, Partial<ItemRow>>()
+  let planned: PlannedReviewRow[] = []
+  const rounds = options.maxRounds ?? MAX_SETTLE_ROUNDS
+  for (let round = 0; round < rounds; round += 1) {
+    const step = settleOnce(current, goals, settings, today, now)
+    planned = step.planned
+    const changed = changedOnly(current, step.patches)
+    if (changed.size === 0) break
+    touched = mergePatches(touched, changed)
+    current = withPatches(current, changed)
+  }
+  // 되풀이하는 동안 옮겼다가 제자리로 돌아온 칸은 고친 것이 아니다.
+  return { patches: changedOnly(items, touched), planned }
+}
+
+/**
+ * 고친 칸 가운데 지금 값과 다른 것만 남긴다.
+ *
+ * 한 번 셈하는 동안 분산이 옮긴 것을 하루 상한이 제자리로 돌려놓으면 고친 칸이
+ * 지금 값과 같다. 그런 칸까지 바뀐 것으로 치면 더 바뀔 것이 없는데도 되풀이를
+ * 멈추지 못한다.
+ */
+function changedOnly(
+  items: readonly ItemRow[],
+  patches: ReadonlyMap<string, Partial<ItemRow>>
+): Map<string, Partial<ItemRow>> {
+  const byId = new Map(items.map((i) => [i.id, i]))
+  const changed = new Map<string, Partial<ItemRow>>()
+  for (const [id, patch] of patches) {
+    const item = byId.get(id)
+    const diff = Object.fromEntries(
+      Object.entries(patch).filter(
+        ([key, value]) => item?.[key as keyof ItemRow] !== value
+      )
+    ) as Partial<ItemRow>
+    if (Object.keys(diff).length > 0) changed.set(id, diff)
+  }
+  return changed
+}
+
+/**
+ * 한 번 셈한다.
+ *
+ * 목표 시점이 지난 것부터 넘긴다. 앱을 켤 때와 날이 바뀔 때 여기를 지나므로,
+ * 목표를 마치고 평가를 안 했어도 다음에 켜는 순간 보관된다. 분산은 넘긴 뒤의
+ * 목록을 봐야 한다. 안 그러면 끝난 항목이 남의 날짜를 밀어낸다. 목표 밖에 걸린
+ * 묵은 날짜도 분산 전에 풀어야 그 항목이 분산과 하루 상한에 들어간다.
+ */
+function settleOnce(
+  items: ItemRow[],
+  goals: GoalRow[],
+  settings: Settings,
+  today: DateOnly,
+  now: string
+): SpreadOutcome {
+  const ended = endedPatches(items, goals, settings, today, now)
   const afterEnded = withPatches(items, ended)
   const stranded = strandedPatches(afterEnded, goals, settings, today)
   const spread = computeSpread(
@@ -772,12 +857,10 @@ async function settle(
     settings,
     today
   )
-  const patches = mergePatches(mergePatches(ended, stranded), spread.patches)
-  for (const [id, patch] of patches) {
-    await db.updateItem(id, patch)
+  return {
+    patches: mergePatches(mergePatches(ended, stranded), spread.patches),
+    planned: spread.planned,
   }
-  await db.replacePlannedReviews(spread.planned)
-  return { patches, planned: spread.planned }
 }
 
 /**
@@ -1133,14 +1216,17 @@ export function computeSpread(
       }
       const risk = candidate.interval.atRisk ? 'at_risk' : 'safe'
       if (item.goal_risk !== risk) patch.goal_risk = risk
-      if (candidate.interval.atRisk && item.due_kind !== 'deadline_pull') {
-        patch.due_kind = 'deadline_pull'
-      } else if (standing && item.due_kind !== naturalKind.get(id)) {
-        // 갈래는 마지막으로 평가할 때 정해진 뒤로 안 고쳐진다. 목록에 서 있는
-        // 동안 목표는 계속 가까워지므로 그때 값은 낡는다. 배지가 그 값을 읽는다.
-        const kind = naturalKind.get(id)
-        if (kind !== undefined) patch.due_kind = kind
-      }
+      // 갈래는 여기서 하나로 정한다. 한 번으로 모자란 것은 늘 deadline_pull 이고,
+      // 목록에 서 있는 것은 오늘 기준으로 다시 셈한 갈래다. 갈래는 마지막으로 평가할
+      // 때 정해진 뒤로 안 고쳐지는데 서 있는 동안 목표는 계속 가까워지므로 그때 값은
+      // 낡는다. 배지가 그 값을 읽는다. 둘을 따로 고치면 이미 deadline_pull 인 모자란
+      // 것을 서 있다는 이유로 되돌리고, 다음 셈이 다시 올려서 셈할 때마다 뒤집힌다.
+      const kind = candidate.interval.atRisk
+        ? 'deadline_pull'
+        : standing
+          ? naturalKind.get(id)
+          : undefined
+      if (kind !== undefined && item.due_kind !== kind) patch.due_kind = kind
       if (Object.keys(patch).length > 0) patches.set(id, patch)
     }
   }
@@ -1156,6 +1242,10 @@ export function computeSpread(
     // 오늘이거나 이미 지난 날짜는 흔들지 않는다. 이미 사람 앞에 놓인 것이고,
     // 여기서 옮기면 앱을 켤 때마다 오늘 할 일이 바뀌고 밀린 사실도 지워진다.
     if (item.due <= today) continue
+    // 한 번 옮긴 것은 다시 흔들지 않는다. 흔드는 폭은 지금 날짜를 가운데 두고 재므로,
+    // 옮긴 날짜를 또 흔들면 그 날이 새 가운데가 되어 덜 붐비는 쪽으로 한 칸씩 걸어
+    // 나간다. 다시 셈할 때마다 FSRS 가 고른 날에서 멀어진다.
+    if (item.due_source === 'spread') continue
     const intervalDays = diffDays(item.last_review, item.due)
     if (intervalDays < 2.5) continue
     // 자기 자신은 빼고 센다. 안 그러면 제 날짜가 늘 한 칸 무거워 보여서

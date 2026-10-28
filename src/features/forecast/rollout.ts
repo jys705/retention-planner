@@ -4,9 +4,9 @@ import type { Grade } from '../../core/fsrs/types'
 import type { DueKind, GoalRow, ItemRow } from '../../db/types'
 import { addDays, diffDays, type DateOnly } from '../../lib/date'
 import { effectiveConfig, isActive, memoryStateOf } from '../../lib/domain'
-import { endedPatches, restingToday } from '../../lib/lifecycle'
+import { restingToday } from '../../lib/lifecycle'
 import type { Settings } from '../../lib/settings'
-import { computeSpread, strandedPatches } from '../../store/planner'
+import { settlePatches } from '../../store/planner'
 import { resolveHorizon } from '../../core/horizon/horizon'
 import { fromEpochDay } from '../../lib/date'
 
@@ -61,30 +61,16 @@ export function rollout({
     const date = addDays(from, offset)
 
     // 앱이 그날 켜졌을 때 도는 것과 같은 계산이다. 목표가 끝난 것은 그날 내려가고,
-    // 내려간 것은 남의 자리를 차지하지 않는다.
-    const ended = endedPatches(
+    // 내려간 것은 남의 자리를 차지하지 않는다. 목표 밖에 걸린 날짜도 앱이 다시
+    // 셈할 때처럼 맞춘다. 빼면 설정만 바꾸고 아직 다시 셈하지 않은 동안 예보가 그
+    // 항목을 통째로 빠뜨린다. 더 바뀔 것이 없을 때까지 셈하는 것도 앱과 같다.
+    const { patches } = settlePatches(
       current,
-      goals,
+      [...goals],
       settings,
       date,
       `${date}T00:00:00.000Z`
     )
-    if (ended.size > 0) {
-      current = current.map((item) => {
-        const patch = ended.get(item.id)
-        return patch ? { ...item, ...patch } : item
-      })
-    }
-    // 목표 밖에 걸린 날짜도 앱이 다시 셈할 때처럼 맞춘다. 빼면 설정만 바꾸고 아직
-    // 다시 셈하지 않은 동안 예보가 그 항목을 통째로 빠뜨린다.
-    const stranded = strandedPatches(current, goals, settings, date)
-    if (stranded.size > 0) {
-      current = current.map((item) => {
-        const patch = stranded.get(item.id)
-        return patch ? { ...item, ...patch } : item
-      })
-    }
-    const { patches } = computeSpread(current, [...goals], settings, date)
     current = current.map((item) => {
       const patch = patches.get(item.id)
       return patch ? { ...item, ...patch } : item
