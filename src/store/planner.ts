@@ -650,12 +650,12 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const carried =
       goal && goalEnded(goal, today) ? horizonFields(goalHorizon(goal)) : null
     const carry = (item: ItemRow) => carried !== null && !isActive(item)
-    // 소속이 풀리는 것도 사람이 한 일이다. 고친 때를 남겨야 다른 컴퓨터의 옛 항목이
-    // 옮겨 담은 목표 시점을 덮지 않는다.
+    // 소속이 풀리는 것은 항목을 고친 것이 아니다. 고친 때를 찍으면 다른 컴퓨터에서 그
+    // 사이 지운 항목이 합칠 때 되살아나고, 그쪽에서 고친 메모가 이 행에 덮인다.
+    // 다른 컴퓨터의 행이 남더라도 합칠 때 목표가 지워진 것을 보고 똑같이 옮겨 담는다.
     for (const item of members) {
       await db.updateItem(item.id, {
         goal_id: null,
-        updated_at: deletedAt,
         ...(carry(item) ? carried : {}),
       })
     }
@@ -665,9 +665,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       goals: get().goals.filter((g) => g.id !== id),
       // 목표를 지워도 항목은 남는다. 소속만 풀린다.
       items: get().items.map((i) =>
-        i.goal_id === id
-          ? { ...i, goal_id: null, updated_at: deletedAt, ...(carry(i) ? carried : {}) }
-          : i
+        i.goal_id === id ? { ...i, goal_id: null, ...(carry(i) ? carried : {}) } : i
       ),
     })
     // 끝난 목표를 지운 사람은 그 끝을 이미 안다. 남긴 항목을 '마친 낱개' 로 또 알리지 않는다.
@@ -715,7 +713,10 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const last = get().lastReopen
     if (last === null || !canUndoReopen(get())) return
     const db = await repo()
-    await db.updateGoal(last.goalId, last.goalBefore)
+    // 되돌린 것도 사람이 고친 것이다. 다시 열기 전의 고친 때를 그대로 쓰면 그 사이
+    // 내보낸 파일의 '다시 연 목표' 가 더 나중 것이 되어 합칠 때 되살아난다.
+    const goalBefore = { ...last.goalBefore, updated_at: nowIso() }
+    await db.updateGoal(last.goalId, goalBefore)
     const nowItems = get().items
     for (const before of last.itemsBefore) {
       const now = nowItems.find((i) => i.id === before.id)
@@ -723,7 +724,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     }
     await db.replacePlannedReviews(last.plannedBefore)
     set({
-      goals: get().goals.map((g) => (g.id === last.goalId ? last.goalBefore : g)),
+      goals: get().goals.map((g) => (g.id === last.goalId ? goalBefore : g)),
       items: last.itemsBefore,
       planned: last.plannedBefore,
       lastReopen: null,
@@ -779,9 +780,17 @@ export const usePlanner = create<PlannerState>((set, get) => ({
         tombstones: backup.tombstones ?? [],
       }
     )
+    const { today } = get()
+    // 끝난 목표만 지운 쪽의 행이 아니라 다른 쪽 행이 남았으면, 지운 쪽과 똑같이 목표
+    // 시점을 옮겨 담는다. 안 담으면 마친 항목이 목표 시점 없는 것이 되어 되살아난다.
+    const carried = merged.items.map((item) => {
+      const goal = merged.detached.get(item.id)
+      if (!goal || !goalEnded(goal, today) || isActive(item)) return item
+      return { ...item, ...horizonFields(goalHorizon(goal)) }
+    })
     // 평가가 늘어난 항목은 다음 날짜를 다시 잡는다. 저장된 날짜는 한쪽 기록만 보고 잡은 것이다.
     const goalById = new Map(merged.goals.map((g) => [g.id, g]))
-    const mergedItems = merged.items.map((item) => {
+    const scheduled = carried.map((item) => {
       if (!merged.refreshed.has(item.id)) return item
       const state = memoryStateOf(item)
       if (!state) return item
@@ -800,6 +809,12 @@ export const usePlanner = create<PlannerState>((set, get) => ({
         goal_risk: null,
       }
     })
+    // 보관은 날짜가 정한다. 한쪽에서 다시 연 목표의 항목이 다른 쪽 행 때문에 보관된 채로
+    // 남으면 되살린다. 끝난 목표의 항목은 켤 때 다시 보관된다.
+    const mergedItems = withPatches(
+      scheduled,
+      revivedPatches(scheduled, merged.goals, settings, today, () => true)
+    )
     await db.replaceAll({
       goals: merged.goals,
       items: mergedItems,
@@ -1080,6 +1095,23 @@ async function restore(
   inScope: (item: ItemRow) => boolean
 ): Promise<Map<string, Partial<ItemRow>>> {
   const { items, goals, settings, today } = get()
+  const restored = revivedPatches(items, goals, settings, today, inScope)
+  for (const [id, patch] of restored) await db.updateItem(id, patch)
+  return restored
+}
+
+/**
+ * 다시 살아날 항목과 그 고침. 저장은 하지 않는다.
+ *
+ * 보관은 날짜가 정한다. 목표가 끝나지 않았는데 보관된 항목은 되살린다.
+ */
+function revivedPatches(
+  items: ItemRow[],
+  goals: GoalRow[],
+  settings: Settings,
+  today: DateOnly,
+  inScope: (item: ItemRow) => boolean
+): Map<string, Partial<ItemRow>> {
   const restored = restoredPatches(items, goals, settings, today, inScope)
   for (const [id, patch] of restored) {
     const item = items.find((i) => i.id === id)
@@ -1100,7 +1132,6 @@ async function restore(
     }
     // 예전 판이 평가로 보관한 것에는 그때의 '부족' 이 굳어 있을 수 있다.
     patch.goal_risk = null
-    await db.updateItem(id, patch)
   }
   return restored
 }

@@ -9,7 +9,7 @@ import { ItemDetailScreen } from '../../src/features/item/ItemDetailScreen'
 import { LibraryScreen } from '../../src/features/library/LibraryScreen'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { toCsv } from '../../src/lib/transfer'
-import { freezeToday } from '../../src/lib/clock'
+import { freezeToday, nowIso } from '../../src/lib/clock'
 import { isActive } from '../../src/lib/domain'
 import { selectTodayItems, usePlanner } from '../../src/store/planner'
 import type { ItemRow, ReviewRow } from '../../src/db/types'
@@ -537,7 +537,12 @@ describe('마친 목표는 목표 화면에 결과로 남는다', () => {
     await user.click(within(note).getByRole('button', { name: '되돌리기' }))
 
     const after = usePlanner.getState()
-    expect(after.goals[0]).toEqual(before.goals[0])
+    // 목표는 다시 열기 전 그대로다. 고친 때만 되돌린 지금으로 새로 찍힌다. 다시 열기 전의
+    // 고친 때로 돌리면 그 사이 내보낸 파일의 '다시 연 목표' 가 합칠 때 되살아난다.
+    const { updated_at: undoneAt, ...goalAfter } = after.goals[0]
+    const { updated_at: _before, ...goalBefore } = before.goals[0]
+    expect(goalAfter).toEqual(goalBefore)
+    expect(undoneAt).toBe(nowIso())
     expect(after.items).toEqual(before.items)
     expect(after.planned).toEqual(before.planned)
     expect(selectTodayItems(after)).toHaveLength(0)

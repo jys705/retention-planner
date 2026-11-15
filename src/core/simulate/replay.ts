@@ -108,3 +108,63 @@ export function replayByDay(
     ? null
     : { state, lastReview: last.reviewedAt, lastRating: last.rating }
 }
+
+export interface DayReplayRow {
+  /** 평가 직전의 기억 상태. 처음 공부한 날이면 null. */
+  before: MemoryState | null
+  after: MemoryState
+  elapsedDays: number
+  retrievabilityAtReview: number
+}
+
+/**
+ * 평가 하나하나가 그때 본 값을 다시 셈한다. 차례는 정렬한 순서다.
+ *
+ * 앱이 평가를 적을 때와 같은 셈이다. 같은 날 다시 누른 것은 그날 첫 평가 직전으로
+ * 되감아 셈하고, 그날의 상태는 마지막에 누른 것이 정한다. 한 컴퓨터의 이력을 돌리면
+ * 저장된 값이 그대로 나온다. 두 컴퓨터의 이력을 합친 뒤 돌리면 한쪽만 보고 적었던
+ * 값이 양쪽을 다 본 값으로 바뀐다.
+ */
+export function replayRowsByDay(
+  entries: readonly DayReplayEntry[],
+  engine: Fsrs6 = defaultFsrs
+): { entry: DayReplayEntry; row: DayReplayRow }[] {
+  const ordered = [...entries].sort((a, b) =>
+    a.reviewedAt !== b.reviewedAt
+      ? a.reviewedAt < b.reviewedAt
+        ? -1
+        : 1
+      : a.recordedAt < b.recordedAt
+        ? -1
+        : a.recordedAt > b.recordedAt
+          ? 1
+          : 0
+  )
+  const rows: { entry: DayReplayEntry; row: DayReplayRow }[] = []
+  // 앞선 날의 마지막 상태. 같은 날의 평가는 모두 이것에서 출발한다.
+  let settled: MemoryState | null = null
+  let settledDay: DateOnly | null = null
+  let day: DateOnly | null = null
+  let dayState: MemoryState | null = null
+  for (const entry of ordered) {
+    if (entry.reviewedAt !== day) {
+      if (day !== null) {
+        settled = dayState
+        settledDay = day
+      }
+      day = entry.reviewedAt
+    }
+    const elapsedDays = settledDay
+      ? Math.max(0, diffDays(settledDay, entry.reviewedAt))
+      : 0
+    const retrievabilityAtReview =
+      settled && settledDay ? engine.retrievability(elapsedDays, settled.stability) : 1
+    const after = engine.nextState(settled, elapsedDays, entry.rating)
+    rows.push({
+      entry,
+      row: { before: settled, after, elapsedDays, retrievabilityAtReview },
+    })
+    dayState = after
+  }
+  return rows
+}

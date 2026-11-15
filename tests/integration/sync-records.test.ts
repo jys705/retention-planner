@@ -54,7 +54,9 @@ describe('합치기에 쓰는 흔적', () => {
     expect((await tombstones()).map((t) => [t.id, t.kind])).toEqual([[reviewId, 'review']])
   })
 
-  it('목표만 지우면 목표의 흔적이 남고 풀린 항목은 고친 때가 바뀐다', async () => {
+  it('목표만 지우면 목표의 흔적이 남고 풀린 항목의 고친 때는 그대로다', async () => {
+    // 소속이 풀린 것은 항목을 고친 것이 아니다. 고친 때를 찍으면 다른 컴퓨터에서 그 사이
+    // 지운 항목이 합칠 때 되살아나고 그쪽에서 고친 내용이 덮인다.
     await setupApp('2026-03-01')
     const goal = await store().createGoal({ name: '시험', horizon: { kind: 'date', at: '2026-04-01' } })
     const item = await store().addItem({ title: '1장', goalId: goal.id })
@@ -63,7 +65,7 @@ describe('합치기에 쓰는 흔적', () => {
     expect((await tombstones()).map((t) => [t.id, t.kind])).toEqual([[goal.id, 'goal']])
     const after = store().items[0]
     expect(after.goal_id).toBeNull()
-    expect(after.updated_at! > item.updated_at!).toBe(true)
+    expect(after.updated_at).toBe(item.updated_at)
   })
 
   it('항목까지 지우면 목표와 항목의 흔적이 다 남는다', async () => {
