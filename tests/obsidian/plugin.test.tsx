@@ -13,6 +13,12 @@ import { aGoal, anItem } from '../scenarios/harness'
 const TODAY = '2026-10-01'
 const MANIFEST = { id: 'retention-planner', name: 'Retention Planner', version: '0.1.0' }
 
+/**
+ * 항목 상세와 설정은 따로 떼어 놓은 화면이다. 처음 열 때 그 조각을 받아오는 시간이 있어서
+ * 기본 대기 시간으로는 컴퓨터가 바쁠 때 시험이 들쭉날쭉해진다.
+ */
+const LAZY = { timeout: 5000 }
+
 /** 옵시디언이 들고 있던 data.json. 앱이 남기는 꼴 그대로다. */
 function savedData(over: Record<string, unknown> = {}) {
   return JSON.stringify({
@@ -215,7 +221,7 @@ describe('옵시디언 플러그인', () => {
     const leaf = app.workspace.getLeavesOfType('retention-planner')[0] as WorkspaceLeaf
     expect(leaf.openedAs).toEqual({ kind: 'tab', direction: undefined })
     const view = leaf.view!.containerEl
-    expect(await within(view).findByRole('button', { name: '제목' })).toHaveTextContent('4장 연습문제')
+    expect(await within(view).findByRole('button', { name: '제목' }, LAZY)).toHaveTextContent('4장 연습문제')
 
     // 이미 떠 있으면 새로 열지 않고 그 화면을 옮긴다.
     await user.click(within(host).getByRole('button', { name: '앱에서 보기' }))
@@ -310,7 +316,7 @@ describe('옵시디언 플러그인', () => {
     await act(() => plugin.openApp({ itemId: 'i1' }, 'tab'))
     const leaf = app.workspace.getLeavesOfType('retention-planner')[0]
     const view = leaf.view!.containerEl
-    await within(view).findByRole('button', { name: '제목' })
+    await within(view).findByRole('button', { name: '제목' }, LAZY)
 
     // 다른 노트를 쓰는 중이다. 그 노트의 e 는 이 화면의 설정 편집이 아니다.
     const note = new WorkspaceLeaf(app.workspace, 'tab', undefined)
@@ -336,7 +342,7 @@ describe('옵시디언 플러그인', () => {
     const view = app.workspace.getLeavesOfType('retention-planner')[0].view!.containerEl
     const user = userEvent.setup()
     await user.click(await within(view).findByRole('button', { name: '설정 화면' }))
-    await user.click(await within(view).findByRole('button', { name: '내보내기' }))
+    await user.click(await within(view).findByRole('button', { name: '내보내기' }, LAZY))
     expect(
       await within(view).findByText(
         '항목 2개와 평가 0건을 내보냈어요. 다운로드 폴더에 저장했어요. 파일 이름은 retention-planner-2026-10-01 (1).json 이에요.'
@@ -356,7 +362,7 @@ describe('옵시디언 플러그인', () => {
     const view = app.workspace.getLeavesOfType('retention-planner')[0].view!.containerEl
     const user = userEvent.setup()
     await user.click(await within(view).findByRole('button', { name: '설정 화면' }))
-    await user.click(await within(view).findByRole('button', { name: '내보내기' }))
+    await user.click(await within(view).findByRole('button', { name: '내보내기' }, LAZY))
     expect(
       await within(view).findByText(/보관함의 retention-planner 폴더에 저장했어요. 파일 이름은 retention-planner-2026-10-01 \(1\).json 이에요./)
     ).toBeInTheDocument()
