@@ -5,6 +5,7 @@ import type {
   PlannedReviewRow,
   Repository,
   ReviewRow,
+  TombstoneRow,
 } from './types'
 
 const STORAGE_KEY = 'retention-planner:v1'
@@ -16,6 +17,8 @@ interface Snapshot {
   settings: Record<string, string>
   /** 잡아둔 복습. 계산으로 다시 만들 수 있지만 켜자마자 보여줄 수 있게 함께 남긴다. */
   planned?: PlannedReviewRow[]
+  /** 지운 흔적. 이 칸이 생기기 전에 남긴 것에는 없다. */
+  tombstones?: TombstoneRow[]
 }
 
 /**
@@ -39,6 +42,7 @@ export class LocalRepository implements Repository {
         items: parsed.items ?? [],
         reviews: parsed.reviews ?? [],
         settings: parsed.settings ?? {},
+        tombstones: parsed.tombstones ?? [],
       })
       await this.inner.replacePlannedReviews(parsed.planned ?? [])
     } catch {
@@ -57,6 +61,7 @@ export class LocalRepository implements Repository {
       reviews: await this.inner.listReviews(),
       settings: await this.inner.listSettings(),
       planned: await this.inner.listPlannedReviews(),
+      tombstones: await this.inner.listTombstones(),
     }
     writeRaw(JSON.stringify(snapshot))
   }
@@ -131,6 +136,15 @@ export class LocalRepository implements Repository {
 
   async deleteReview(id: string): Promise<void> {
     await this.inner.deleteReview(id)
+    await this.save()
+  }
+
+  listTombstones(): Promise<TombstoneRow[]> {
+    return this.inner.listTombstones()
+  }
+
+  async addTombstones(rows: TombstoneRow[]): Promise<void> {
+    await this.inner.addTombstones(rows)
     await this.save()
   }
 

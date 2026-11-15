@@ -4,6 +4,7 @@ import type {
   PlannedReviewRow,
   Repository,
   ReviewRow,
+  TombstoneRow,
 } from './types'
 
 function clone<T>(v: T): T {
@@ -20,6 +21,7 @@ export class MemoryRepository implements Repository {
   private reviews = new Map<string, ReviewRow>()
   private planned = new Map<string, PlannedReviewRow>()
   private settings = new Map<string, string>()
+  private tombstones = new Map<string, TombstoneRow>()
 
   async init(): Promise<void> {}
 
@@ -129,6 +131,28 @@ export class MemoryRepository implements Repository {
   }
 
 
+  async listTombstones(): Promise<TombstoneRow[]> {
+    return [...this.tombstones.values()]
+      .sort((a, b) =>
+        a.deleted_at !== b.deleted_at
+          ? a.deleted_at < b.deleted_at
+            ? -1
+            : 1
+          : a.id < b.id
+            ? -1
+            : 1
+      )
+      .map(clone)
+  }
+
+  async addTombstones(rows: TombstoneRow[]): Promise<void> {
+    for (const row of rows) {
+      const cur = this.tombstones.get(row.id)
+      if (cur && cur.deleted_at >= row.deleted_at) continue
+      this.tombstones.set(row.id, clone(row))
+    }
+  }
+
   async getSetting(key: string): Promise<string | null> {
     return this.settings.get(key) ?? null
   }
@@ -146,11 +170,14 @@ export class MemoryRepository implements Repository {
     items: ItemRow[]
     reviews: ReviewRow[]
     settings: Record<string, string>
+    tombstones?: TombstoneRow[]
   }): Promise<void> {
     this.goals = new Map(data.goals.map((g) => [g.id, clone(g)]))
     this.items = new Map(data.items.map((i) => [i.id, clone(i)]))
     this.reviews = new Map(data.reviews.map((r) => [r.id, clone(r)]))
     this.settings = new Map(Object.entries(data.settings))
+    this.tombstones = new Map()
+    await this.addTombstones(data.tombstones ?? [])
     // 잡아둔 복습은 계산으로 다시 만드는 값이라 통째로 비운다.
     this.planned = new Map()
   }

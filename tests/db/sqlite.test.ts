@@ -280,6 +280,55 @@ describe('SQLite 저장소의 마이그레이션', () => {
     expect(row.goal_day).toBeNull()
   })
 
+  it('새 파일에 합치기에 쓰는 칸과 지운 흔적 표가 생긴다', async () => {
+    const repo = new SqliteRepository(url)
+    await repo.init()
+    expect(columnsOf(url, 'goals')).toContain('updated_at')
+    expect(columnsOf(url, 'items')).toContain('updated_at')
+    await repo.addTombstones([{ id: 'i1', kind: 'item', deleted_at: '2026-10-02T00:00:00.000Z' }])
+    await repo.addTombstones([{ id: 'i1', kind: 'item', deleted_at: '2026-10-01T00:00:00.000Z' }])
+    expect(await repo.listTombstones()).toEqual([
+      { id: 'i1', kind: 'item', deleted_at: '2026-10-02T00:00:00.000Z' },
+    ])
+  })
+
+  it('3번까지 돈 파일에도 칸과 표를 더하고 데이터를 지킨다', async () => {
+    const db = file(url)
+    for (const migration of MIGRATIONS.filter((m) => m.version <= 3)) {
+      for (const statement of migration.statements) db.exec(statement)
+      for (const c of migration.columns ?? []) db.exec(`ALTER TABLE ${c.table} ADD COLUMN ${c.column} ${c.type}`)
+    }
+    db.prepare('INSERT INTO settings (key, value) VALUES ($1, $2)').run(named([SCHEMA_VERSION_KEY, '3']) as never)
+    db.prepare(
+      `INSERT INTO goals (id, name, horizon_kind, ready_at, hold_until, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6)`
+    ).run(named(['g1', '시험', 'date', '2026-11-20', '2026-11-20', '2026-10-01T00:00:00.000Z']) as never)
+
+    const repo = new SqliteRepository(url)
+    await repo.init()
+    const [row] = await repo.listGoals()
+    expect(row.name).toBe('시험')
+    expect(row.updated_at).toBeNull()
+    expect(await repo.listTombstones()).toEqual([])
+    expect((await repo.listSettings())[SCHEMA_VERSION_KEY]).toBe(LATEST)
+  })
+
+  it('가져오기가 지운 흔적까지 갈아끼운다', async () => {
+    const repo = new SqliteRepository(url)
+    await repo.init()
+    await repo.addTombstones([{ id: 'old', kind: 'goal', deleted_at: '2026-10-01T00:00:00.000Z' }])
+    const fresh = { id: 'g9', kind: 'goal' as const, deleted_at: '2026-10-05T00:00:00.000Z' }
+    await repo.replaceAll({
+      goals: [goal('g1', { updated_at: '2026-10-03T00:00:00.000Z' })],
+      items: [],
+      reviews: [],
+      settings: {},
+      tombstones: [fresh],
+    })
+    expect(await repo.listTombstones()).toEqual([fresh])
+    expect((await repo.getGoal('g1'))?.updated_at).toBe('2026-10-03T00:00:00.000Z')
+  })
+
   it('비워 두기를 저장하고 그대로 읽는다', async () => {
     const repo = new SqliteRepository(url)
     await repo.init()

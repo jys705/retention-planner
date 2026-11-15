@@ -46,6 +46,11 @@ export interface GoalRow {
   color: string | null
   created_at: string
   archived_at: string | null
+  /**
+   * 사람이 마지막으로 고친 때. 두 컴퓨터의 기록을 합칠 때 같은 목표를 양쪽에서 고쳤으면
+   * 나중 것을 남긴다. 이 칸이 생기기 전의 행과 백업에는 없고, 그때는 만든 때로 친다.
+   */
+  updated_at?: string | null
 }
 
 export interface ItemRow {
@@ -74,6 +79,20 @@ export interface ItemRow {
   reps_since_goal: number
   goal_risk: GoalRisk | null
   archived_at: string | null
+  /**
+   * 사람이 마지막으로 고친 때. 제목, 메모, 소속, 목표 시점처럼 손으로 바꾸는 칸만 센다.
+   * 평가로 바뀌는 기억 상태와 다음 날짜는 평가 기록에서 다시 셈하므로 세지 않는다.
+   */
+  updated_at?: string | null
+}
+
+/** 지운 것의 흔적. 다른 컴퓨터의 기록을 합칠 때 지운 것이 되살아나지 않게 한다. */
+export type TombstoneKind = 'goal' | 'item' | 'review'
+
+export interface TombstoneRow {
+  id: string
+  kind: TombstoneKind
+  deleted_at: string
 }
 
 /**
@@ -147,11 +166,16 @@ export interface Repository {
   setSetting(key: string, value: string): Promise<void>
   listSettings(): Promise<Record<string, string>>
 
+  listTombstones(): Promise<TombstoneRow[]>
+  /** 지운 흔적을 남긴다. 같은 것이 이미 있으면 더 나중에 지운 때를 남긴다. */
+  addTombstones(rows: TombstoneRow[]): Promise<void>
+
   /** 내보내기와 가져오기에서 통째로 갈아끼울 때 쓴다. */
   replaceAll(data: {
     goals: GoalRow[]
     items: ItemRow[]
     reviews: ReviewRow[]
     settings: Record<string, string>
+    tombstones?: TombstoneRow[]
   }): Promise<void>
 }

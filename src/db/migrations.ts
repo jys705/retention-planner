@@ -115,6 +115,22 @@ export const MIGRATIONS: Migration[] = [
     // 가져올 때 빈 칸에 NULL 이 들어가 깨진다.
     columns: [{ table: 'goals', column: 'goal_day', type: 'TEXT' }],
   },
+  {
+    version: 4,
+    name: 'merge records',
+    // 두 컴퓨터의 기록을 합칠 때 쓴다. 사람이 언제 고쳤는지와 무엇을 지웠는지.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS tombstones (
+        id          TEXT PRIMARY KEY,
+        kind        TEXT NOT NULL,
+        deleted_at  TEXT NOT NULL
+      )`,
+    ],
+    columns: [
+      { table: 'goals', column: 'updated_at', type: 'TEXT' },
+      { table: 'items', column: 'updated_at', type: 'TEXT' },
+    ],
+  },
 ]
 
 export const SCHEMA_VERSION_KEY = 'schema_version'

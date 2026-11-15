@@ -1,11 +1,17 @@
 // @vitest-environment happy-dom
 import { cleanup, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SettingsScreen } from '../../src/features/settings/SettingsScreen'
 import { usePlanner } from '../../src/store/planner'
 import { anItem, render, setupApp, teardownApp } from './harness'
 
 const TODAY = '2026-10-01'
+
+// 데스크톱 앱에서 파일을 쓰는 명령. 브라우저로 도는 시험에서는 불리지 않는다.
+const invoke = vi.hoisted(() =>
+  vi.fn(async (_cmd: string, args: { name: string }) => `/Users/someone/Downloads/${args.name}`)
+)
+vi.mock('@tauri-apps/api/core', () => ({ invoke }))
 
 afterEach(teardownApp)
 
@@ -217,6 +223,52 @@ describe('설정', () => {
     expect(usePlanner.getState().items.map((i) => i.title)).toEqual([
       '가져온 항목',
     ])
+  })
+
+  it('S-290 합쳐서 가져오면 지금 것을 지우지 않고 다른 컴퓨터의 것을 더한다', async () => {
+    await setupApp(TODAY, { items: [anItem({ id: 'i1', title: '이 컴퓨터의 것' })] })
+    const backup = JSON.stringify({
+      version: 2,
+      exportedAt: '',
+      goals: [],
+      items: [anItem({ id: 'i9', title: '다른 컴퓨터의 것' })],
+      reviews: [],
+      settings: {},
+      tombstones: [],
+    })
+    const { user } = render(<SettingsScreen />)
+    expect(screen.getByRole('button', { name: '합쳐서 가져오기' })).toBeInTheDocument()
+    await user.upload(
+      screen.getByLabelText('합칠 파일'),
+      new File([backup], 'other.json', { type: 'application/json' })
+    )
+    expect(
+      await screen.findByText('합쳤어요. 새로 들어온 항목 1개, 평가 0건이에요.')
+    ).toBeInTheDocument()
+    expect(usePlanner.getState().items.map((i) => i.title).sort()).toEqual([
+      '다른 컴퓨터의 것',
+      '이 컴퓨터의 것',
+    ])
+  })
+
+  it('S-291 데스크톱 앱에서는 다운로드 폴더에 쓰고 파일 이름을 알려 준다', async () => {
+    await setupApp(TODAY, { items: [anItem({ id: 'i1' })] })
+    const { user } = render(<SettingsScreen />)
+    // 저장소를 고른 뒤에 데스크톱 앱인 척한다. 먼저 하면 저장소가 SQLite 로 잡힌다.
+    ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+    try {
+      await user.click(screen.getByRole('button', { name: '내보내기' }))
+      expect(
+        await screen.findByText(
+          '항목 1개와 평가 0건을 내보냈어요. 다운로드 폴더에 저장했어요. 파일 이름은 retention-planner-2026-10-01.json 이에요.'
+        )
+      ).toBeInTheDocument()
+      const [cmd, args] = invoke.mock.calls[0] as unknown as [string, { name: string; contents: string }]
+      expect(cmd).toBe('save_to_downloads')
+      expect(JSON.parse(args.contents).tombstones).toEqual([])
+    } finally {
+      delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
+    }
   })
 
   it('S-095 깨진 파일은 막고 지금 자료를 지키지 않는다', async () => {

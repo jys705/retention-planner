@@ -6,12 +6,13 @@ import type {
   PlannedReviewRow,
   Repository,
   ReviewRow,
+  TombstoneRow,
 } from './types'
 
 const GOAL_COLUMNS = [
   'id', 'name', 'horizon_kind', 'ready_at', 'hold_until', 'target_retention',
   'intensity', 'min_reviews', 'max_interval_days', 'post_goal_mode', 'color',
-  'created_at', 'archived_at', 'goal_day',
+  'created_at', 'archived_at', 'goal_day', 'updated_at',
 ] as const
 
 const ITEM_COLUMNS = [
@@ -19,12 +20,18 @@ const ITEM_COLUMNS = [
   'horizon_kind', 'ready_at', 'hold_until', 'target_retention', 'intensity',
   'min_reviews', 'state', 'stability', 'difficulty', 'due', 'due_kind',
   'due_source', 'last_review', 'reps', 'lapses', 'reps_since_goal',
-  'goal_risk', 'archived_at',
+  'goal_risk', 'archived_at', 'updated_at',
 ] as const
 
 const PLANNED_COLUMNS = [
   'id', 'item_id', 'date', 'ordinal', 'kind', 'source',
 ] as const
+
+const TOMBSTONE_COLUMNS = ['id', 'kind', 'deleted_at'] as const
+
+/** 같은 것을 또 지우면 더 나중에 지운 때를 남긴다. */
+const UPSERT_TOMBSTONE = `INSERT INTO tombstones (id, kind, deleted_at) VALUES ($1, $2, $3)
+  ON CONFLICT(id) DO UPDATE SET deleted_at = max(deleted_at, excluded.deleted_at)`
 
 const REVIEW_COLUMNS = [
   'id', 'item_id', 'reviewed_at', 'recorded_at', 'rating', 'state_before',
@@ -235,6 +242,18 @@ export class SqliteRepository implements Repository {
     await this.handle.execute('DELETE FROM reviews WHERE id = $1', [id])
   }
 
+  async listTombstones(): Promise<TombstoneRow[]> {
+    return this.handle.select<TombstoneRow[]>(
+      'SELECT * FROM tombstones ORDER BY deleted_at, id'
+    )
+  }
+
+  async addTombstones(rows: TombstoneRow[]): Promise<void> {
+    for (const row of rows) {
+      await this.handle.execute(UPSERT_TOMBSTONE, valuesOf(row, TOMBSTONE_COLUMNS))
+    }
+  }
+
   async getSetting(key: string): Promise<string | null> {
     const rows = await this.handle.select<{ value: string }[]>(
       'SELECT value FROM settings WHERE key = $1',
@@ -259,6 +278,7 @@ export class SqliteRepository implements Repository {
     items: ItemRow[]
     reviews: ReviewRow[]
     settings: Record<string, string>
+    tombstones?: TombstoneRow[]
   }): Promise<void> {
     // 지우고 넣는 일을 트랜잭션 하나로 묶어, 중간에 깨지면 아무것도 바뀌지 않게 한다.
     // 플러그인은 연결 하나가 아니라 sqlx 풀을 쓰고, execute 마다 쉬는 연결을 빌려 간다.
@@ -269,6 +289,7 @@ export class SqliteRepository implements Repository {
     batch.add('DELETE FROM reviews')
     batch.add('DELETE FROM items')
     batch.add('DELETE FROM goals')
+    batch.add('DELETE FROM tombstones')
     // 스키마가 어디까지 왔는지는 데이터가 아니라 이 파일의 사실이다. 가져온 설정에는
     // 이 값이 없으므로 같이 지우면 다음 실행에 마이그레이션이 처음부터 다시 돈다.
     batch.add('DELETE FROM settings WHERE key <> $1', [SCHEMA_VERSION_KEY])
@@ -283,6 +304,9 @@ export class SqliteRepository implements Repository {
         insertSql('reviews', REVIEW_COLUMNS),
         valuesOf(r, REVIEW_COLUMNS)
       )
+    }
+    for (const t of data.tombstones ?? []) {
+      batch.add(UPSERT_TOMBSTONE, valuesOf(t, TOMBSTONE_COLUMNS))
     }
     for (const [k, v] of Object.entries(data.settings)) {
       if (k === SCHEMA_VERSION_KEY) continue

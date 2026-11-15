@@ -58,3 +58,53 @@ export function replayState(
   const points = replayReviews(entries, engine)
   return points.length === 0 ? null : points[points.length - 1].state
 }
+
+export interface DayReplayEntry {
+  reviewedAt: DateOnly
+  /** 같은 날 여러 번 누른 것의 앞뒤를 가른다. */
+  recordedAt: string
+  rating: Grade
+}
+
+/**
+ * 하루에 마지막 평가 하나만 상태를 바꾼 것으로 보고 이력을 다시 돈다.
+ *
+ * 앱은 같은 날 다시 누르면 그날 첫 평가 전으로 되감고 새 등급만 반영한다. 그래서 한
+ * 컴퓨터에서 쌓인 이력을 이렇게 돌면 저장된 상태와 같은 값이 나온다. 두 컴퓨터의 이력을
+ * 합친 뒤에도 이 방식으로 돌면, 서로 다른 날 본 것은 둘 다 반영되고 같은 날 본 것은
+ * 나중에 누른 것이 남는다.
+ */
+export function replayByDay(
+  entries: readonly DayReplayEntry[],
+  engine: Fsrs6 = defaultFsrs
+): { state: MemoryState; lastReview: DateOnly; lastRating: Grade } | null {
+  const ordered = [...entries].sort((a, b) =>
+    a.reviewedAt !== b.reviewedAt
+      ? a.reviewedAt < b.reviewedAt
+        ? -1
+        : 1
+      : a.recordedAt < b.recordedAt
+        ? -1
+        : a.recordedAt > b.recordedAt
+          ? 1
+          : 0
+  )
+  // 날마다 마지막에 누른 것만 남긴다. 정렬했으니 같은 날의 뒤가 덮어쓴다.
+  const lastOfDay = new Map<DateOnly, DayReplayEntry>()
+  for (const entry of ordered) lastOfDay.set(entry.reviewedAt, entry)
+
+  let state: MemoryState | null = null
+  let previous: DateOnly | null = null
+  let last: DayReplayEntry | null = null
+  for (const entry of lastOfDay.values()) {
+    const elapsedDays = previous
+      ? Math.max(0, diffDays(previous, entry.reviewedAt))
+      : 0
+    state = engine.nextState(state, elapsedDays, entry.rating)
+    previous = entry.reviewedAt
+    last = entry
+  }
+  return state === null || last === null
+    ? null
+    : { state, lastReview: last.reviewedAt, lastRating: last.rating }
+}

@@ -302,6 +302,36 @@ export function runRepositoryContract(
       await repo.insertItem(makeItem('i1'))
       await expect(repo.insertItem(makeItem('i1'))).rejects.toThrow()
     })
+
+    it('지운 흔적을 남기고 같은 것은 더 나중에 지운 때로 남긴다', async () => {
+      await repo.addTombstones([
+        { id: 'i1', kind: 'item', deleted_at: '2026-08-02T00:00:00.000Z' },
+        { id: 'r1', kind: 'review', deleted_at: '2026-08-01T00:00:00.000Z' },
+      ])
+      await repo.addTombstones([
+        { id: 'i1', kind: 'item', deleted_at: '2026-08-01T00:00:00.000Z' },
+        { id: 'r1', kind: 'review', deleted_at: '2026-08-03T00:00:00.000Z' },
+      ])
+      expect(await repo.listTombstones()).toEqual([
+        { id: 'i1', kind: 'item', deleted_at: '2026-08-02T00:00:00.000Z' },
+        { id: 'r1', kind: 'review', deleted_at: '2026-08-03T00:00:00.000Z' },
+      ])
+    })
+
+    it('통째로 갈아끼우면 지운 흔적도 갈아끼운다', async () => {
+      await repo.addTombstones([{ id: 'old', kind: 'goal', deleted_at: '2026-08-01T00:00:00.000Z' }])
+      const fresh = { id: 'new', kind: 'item' as const, deleted_at: '2026-08-05T00:00:00.000Z' }
+      await repo.replaceAll({ goals: [], items: [], reviews: [], settings: {}, tombstones: [fresh] })
+      expect(await repo.listTombstones()).toEqual([fresh])
+    })
+
+    it('사람이 고친 때를 저장하고 그대로 읽는다', async () => {
+      await repo.insertItem(makeItem('i1', { updated_at: '2026-08-01T00:00:00.000Z' }))
+      await repo.updateItem('i1', { title: '고침', updated_at: '2026-08-02T00:00:00.000Z' })
+      expect((await repo.getItem('i1'))?.updated_at).toBe('2026-08-02T00:00:00.000Z')
+      await repo.insertGoal(makeGoal('g1', { updated_at: '2026-08-03T00:00:00.000Z' }))
+      expect((await repo.getGoal('g1'))?.updated_at).toBe('2026-08-03T00:00:00.000Z')
+    })
   })
 }
 
@@ -352,6 +382,16 @@ describe('브라우저 저장소는 새로고침을 견딘다', () => {
     expect((await second.listItems()).map((i) => i.id)).toEqual(['i1'])
     expect((await second.listReviews()).map((r) => r.id)).toEqual(['r1'])
     expect(await second.getSetting('theme')).toBe('dark')
+  })
+
+  it('지운 흔적도 새로고침을 견딘다', async () => {
+    installFakeLocalStorage()
+    const first = new LocalRepository()
+    await first.init()
+    await first.addTombstones([{ id: 'i1', kind: 'item', deleted_at: '2026-08-02T00:00:00.000Z' }])
+    const second = new LocalRepository()
+    await second.init()
+    expect((await second.listTombstones()).map((t) => t.id)).toEqual(['i1'])
   })
 
   it('저장된 내용이 깨져 있으면 빈 상태로 시작한다', async () => {

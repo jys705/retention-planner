@@ -1,6 +1,7 @@
-import type { GoalRow, ItemRow, ReviewRow } from '../db/types'
+import type { GoalRow, ItemRow, ReviewRow, TombstoneRow } from '../db/types'
 
-export const EXPORT_VERSION = 1
+/** 2판부터 지운 흔적이 들어간다. 다른 컴퓨터의 기록과 합칠 때 쓴다. */
+export const EXPORT_VERSION = 2
 
 export interface Backup {
   version: number
@@ -9,13 +10,16 @@ export interface Backup {
   items: ItemRow[]
   reviews: ReviewRow[]
   settings: Record<string, string>
+  /** 지운 흔적. 1판 파일에는 없다. */
+  tombstones?: TombstoneRow[]
 }
 
 export function toBackup(
   data: Omit<Backup, 'version' | 'exportedAt'>,
   exportedAt: string
 ): Backup {
-  return { version: EXPORT_VERSION, exportedAt, ...data }
+  // 지운 흔적이 없어도 칸은 둔다. 읽는 쪽이 빈 목록으로 채우므로, 안 두면 내보낸 것과 읽은 것이 갈린다.
+  return { version: EXPORT_VERSION, exportedAt, ...data, tombstones: data.tombstones ?? [] }
 }
 
 export class BackupFormatError extends Error {}
@@ -57,6 +61,7 @@ export function parseBackup(text: string): Backup {
     items: value.items,
     reviews: value.reviews,
     settings: value.settings ?? {},
+    tombstones: Array.isArray(value.tombstones) ? value.tombstones : [],
   }
 }
 

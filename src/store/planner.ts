@@ -58,7 +58,9 @@ import {
   serializeSetting,
   type Settings,
 } from '../lib/settings'
-import type { Backup } from '../lib/transfer'
+import { SCHEMA_VERSION_KEY } from '../db/migrations'
+import { mergeSnapshots } from '../lib/merge'
+import { toBackup, type Backup } from '../lib/transfer'
 import { newId } from './ids'
 import { nowIso, today as clockToday } from '../lib/clock'
 import {
@@ -184,6 +186,13 @@ interface PlannerState {
   saveSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void>
   importAll(backup: Backup): Promise<void>
   /**
+   * 다른 컴퓨터에서 내보낸 기록을 지금 것과 합친다. 무엇이 새로 들어왔는지 돌려준다.
+   * 가져오기와 달리 지금 있는 것을 지우지 않는다.
+   */
+  mergeAll(backup: Backup): Promise<{ addedItems: number; addedReviews: number }>
+  /** 내보낼 기록을 만든다. 지운 흔적까지 넣어야 다른 컴퓨터에서 합칠 때 되살아나지 않는다. */
+  exportBackup(): Promise<Backup>
+  /**
    * 오늘 기준으로 다시 셈한다. 이미 저장해 둔 고침을 같이 넘기면 그것까지 얹어
    * 한 번에 내보낸다. 두 번에 나눠 내보내면 그 사이를 본 알림이 다른 수를 센다.
    */
@@ -298,6 +307,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     // 아직 안 온 날에 공부했을 수는 없다. 화면의 max 속성은 값이 들어오는 걸 막지 못하므로
     // 평가와 마찬가지로 저장 직전에 한 번 더 자른다.
     const firstStudiedAt = minDate(draft.firstStudiedAt ?? today, today)
+    const createdAt = nowIso()
 
     const row: ItemRow = {
       id: newId('itm'),
@@ -305,7 +315,8 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       title: draft.title.trim(),
       memo: draft.memo ?? '',
       tags: '[]',
-      created_at: nowIso(),
+      created_at: createdAt,
+      updated_at: createdAt,
       first_studied_at: firstStudiedAt,
       horizon_kind: draft.horizon ? draft.horizon.kind : null,
       ready_at: horizonReadyAt(draft.horizon ?? null),
@@ -516,6 +527,10 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       if (now !== before) await db.updateItem(before.id, before)
     }
     await db.replacePlannedReviews(last.plannedBefore)
+    // 물린 평가는 흔적을 남긴다. 그새 다른 컴퓨터로 간 파일에 이 평가가 있으면 합칠 때 되살아난다.
+    await db.addTombstones([
+      { id: last.reviewId, kind: 'review', deleted_at: nowIso() },
+    ])
     await db.deleteReview(last.reviewId)
 
     if (get().settings.ratingCount !== last.ratingCountBefore) {
@@ -536,6 +551,7 @@ export const usePlanner = create<PlannerState>((set, get) => ({
   async createGoal(draft) {
     const db = await repo()
     const { settings } = get()
+    const createdAt = nowIso()
     const row: GoalRow = {
       id: newId('goal'),
       name: draft.name.trim(),
@@ -546,8 +562,9 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       max_interval_days: settings.maxIntervalDays,
       post_goal_mode: settings.postGoalMode,
       color: draft.color ?? null,
-      created_at: nowIso(),
+      created_at: createdAt,
       archived_at: null,
+      updated_at: createdAt,
     }
     await db.insertGoal(row)
     set({ goals: [...get().goals, row] })
@@ -556,9 +573,11 @@ export const usePlanner = create<PlannerState>((set, get) => ({
 
   async updateGoal(id, patch) {
     const db = await repo()
-    await db.updateGoal(id, patch)
+    // 사람이 고친 때를 남긴다. 다른 컴퓨터의 기록과 합칠 때 나중에 고친 쪽을 고른다.
+    const stamped = { ...patch, updated_at: nowIso() }
+    await db.updateGoal(id, stamped)
     set({
-      goals: get().goals.map((g) => (g.id === id ? { ...g, ...patch } : g)),
+      goals: get().goals.map((g) => (g.id === id ? { ...g, ...stamped } : g)),
     })
     // 시험이 미뤄지는 일은 흔하다. 목표 날짜를 뒤로 옮기거나 계속 기억하기로 정하면
     // 끝난 것으로 쳤던 이 목표의 항목이 되살아나야 한다.
@@ -568,9 +587,10 @@ export const usePlanner = create<PlannerState>((set, get) => ({
 
   async updateItem(id, patch) {
     const db = await repo()
-    await db.updateItem(id, patch)
+    const stamped = { ...patch, updated_at: nowIso() }
+    await db.updateItem(id, stamped)
     set({
-      items: get().items.map((i) => (i.id === id ? { ...i, ...patch } : i)),
+      items: get().items.map((i) => (i.id === id ? { ...i, ...stamped } : i)),
     })
     // 항목이 제 목표 시점을 갖고 있으면 그것을 고치는 것도 되살릴 까닭이 된다.
     // 소속을 바꾸는 것도 같다. 마친 목표에서 꺼내면 다시 올라와야 한다.
@@ -587,6 +607,8 @@ export const usePlanner = create<PlannerState>((set, get) => ({
 
   async deleteItem(id) {
     const db = await repo()
+    // 지운 흔적을 남긴다. 안 남기면 다른 컴퓨터의 기록을 합칠 때 되살아난다.
+    await db.addTombstones([{ id, kind: 'item', deleted_at: nowIso() }])
     await db.deleteItem(id)
     set({
       items: get().items.filter((i) => i.id !== id),
@@ -601,7 +623,12 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const goal = goals.find((g) => g.id === id)
     const members = items.filter((i) => i.goal_id === id)
 
+    const deletedAt = nowIso()
     if (options.withItems) {
+      await db.addTombstones([
+        { id, kind: 'goal', deleted_at: deletedAt },
+        ...members.map((i) => ({ id: i.id, kind: 'item' as const, deleted_at: deletedAt })),
+      ])
       // 평가 기록과 잡아둔 복습은 항목을 따라 같이 지워진다.
       for (const item of members) {
         await db.deleteItem(item.id)
@@ -623,16 +650,23 @@ export const usePlanner = create<PlannerState>((set, get) => ({
     const carried =
       goal && goalEnded(goal, today) ? horizonFields(goalHorizon(goal)) : null
     const carry = (item: ItemRow) => carried !== null && !isActive(item)
+    // 소속이 풀리는 것도 사람이 한 일이다. 고친 때를 남겨야 다른 컴퓨터의 옛 항목이
+    // 옮겨 담은 목표 시점을 덮지 않는다.
     for (const item of members) {
-      if (carry(item)) await db.updateItem(item.id, carried ?? {})
+      await db.updateItem(item.id, {
+        goal_id: null,
+        updated_at: deletedAt,
+        ...(carry(item) ? carried : {}),
+      })
     }
+    await db.addTombstones([{ id, kind: 'goal', deleted_at: deletedAt }])
     await db.deleteGoal(id)
     set({
       goals: get().goals.filter((g) => g.id !== id),
       // 목표를 지워도 항목은 남는다. 소속만 풀린다.
       items: get().items.map((i) =>
         i.goal_id === id
-          ? { ...i, goal_id: null, ...(carry(i) ? carried : {}) }
+          ? { ...i, goal_id: null, updated_at: deletedAt, ...(carry(i) ? carried : {}) }
           : i
       ),
     })
@@ -700,12 +734,13 @@ export const usePlanner = create<PlannerState>((set, get) => ({
 
   async attachItemsToGoal(goalId, itemIds) {
     const db = await repo()
+    const updatedAt = nowIso()
     for (const id of itemIds) {
-      await db.updateItem(id, { goal_id: goalId })
+      await db.updateItem(id, { goal_id: goalId, updated_at: updatedAt })
     }
     set({
       items: get().items.map((i) =>
-        itemIds.includes(i.id) ? { ...i, goal_id: goalId } : i
+        itemIds.includes(i.id) ? { ...i, goal_id: goalId, updated_at: updatedAt } : i
       ),
     })
     await get().recomputeAll()
@@ -724,11 +759,77 @@ export const usePlanner = create<PlannerState>((set, get) => ({
       items: backup.items,
       reviews: backup.reviews,
       settings: backup.settings,
+      tombstones: backup.tombstones ?? [],
     })
     // 여기서 ready 를 내리면 앱이 "불러오는 중" 화면으로 갈아타면서 설정 화면이 통째로
     // 사라진다. 그러면 가져오기가 끝났다는 안내도 같이 사라져서 사용자는 아무 일도
     // 안 일어난 것처럼 본다. load() 가 어차피 전부 다시 채우므로 내릴 필요가 없다.
     await get().load()
+  },
+
+  async mergeAll(backup) {
+    const db = await repo()
+    const { goals, items, reviews, settings } = get()
+    const merged = mergeSnapshots(
+      { goals, items, reviews, tombstones: await db.listTombstones() },
+      {
+        goals: backup.goals,
+        items: backup.items,
+        reviews: backup.reviews,
+        tombstones: backup.tombstones ?? [],
+      }
+    )
+    // 평가가 늘어난 항목은 다음 날짜를 다시 잡는다. 저장된 날짜는 한쪽 기록만 보고 잡은 것이다.
+    const goalById = new Map(merged.goals.map((g) => [g.id, g]))
+    const mergedItems = merged.items.map((item) => {
+      if (!merged.refreshed.has(item.id)) return item
+      const state = memoryStateOf(item)
+      if (!state) return item
+      const goal = item.goal_id ? (goalById.get(item.goal_id) ?? null) : null
+      const next = naturalScheduleOf(
+        item,
+        effectiveConfig(item, goal, settings),
+        state,
+        settings
+      )
+      return {
+        ...item,
+        due: next.due,
+        due_kind: next.dueKind,
+        due_source: 'fsrs' as const,
+        goal_risk: null,
+      }
+    })
+    await db.replaceAll({
+      goals: merged.goals,
+      items: mergedItems,
+      reviews: merged.reviews,
+      tombstones: merged.tombstones,
+      // 설정은 이 컴퓨터 것을 그대로 둔다. 알림 시각이나 테마는 컴퓨터마다 다를 수 있다.
+      settings: await db.listSettings(),
+    })
+    await get().load()
+    return { addedItems: merged.addedItems, addedReviews: merged.addedReviews }
+  },
+
+  async exportBackup() {
+    const db = await repo()
+    const { goals, items, reviews } = get()
+    return toBackup(
+      {
+        goals,
+        items,
+        reviews,
+        // 스키마 번호는 기록이 아니라 이 파일의 사실이다. 가져오는 쪽도 이 값은 건너뛴다.
+        settings: Object.fromEntries(
+          Object.entries(await db.listSettings()).filter(
+            ([key]) => key !== SCHEMA_VERSION_KEY
+          )
+        ),
+        tombstones: await db.listTombstones(),
+      },
+      nowIso()
+    )
   },
 
   async recomputeAll(pending) {

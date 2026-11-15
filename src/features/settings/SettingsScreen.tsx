@@ -3,17 +3,17 @@ import { DEFAULT_W } from '../../core/fsrs/params'
 import { INTENSITY_RETENTION } from '../../core/policy/constraints'
 import { Chip } from '../../components/Chip'
 import { Expand } from '../../components/Expand'
-import { nowIso, today as clockToday } from '../../lib/clock'
+import { today as clockToday } from '../../lib/clock'
 import { relativeWindow } from '../../core/horizon/horizon'
 import type { DateOnly } from '../../lib/date'
 import { monthDay, percent } from '../../lib/format'
 import type { ThemePreference } from '../../lib/settings'
+import { fileNameOf, saveTextFile } from '../../lib/saveFile'
 import {
   BackupFormatError,
   backupFilename,
   csvFilename,
   parseBackup,
-  toBackup,
   toCsv,
 } from '../../lib/transfer'
 import { usePlanner } from '../../store/planner'
@@ -53,47 +53,64 @@ export function SettingsScreen() {
   const { settings, goals, items, reviews, today } = usePlanner()
   const saveSetting = usePlanner((s) => s.saveSetting)
   const importAll = usePlanner((s) => s.importAll)
+  const mergeAll = usePlanner((s) => s.mergeAll)
+  const exportBackup = usePlanner((s) => s.exportBackup)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [paramsOpen, setParamsOpen] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const mergeRef = useRef<HTMLInputElement>(null)
 
-  function download(name: string, text: string, type: string) {
-    const url = URL.createObjectURL(new Blob([text], { type }))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = name
-    link.click()
-    URL.revokeObjectURL(url)
+  // 데스크톱 앱이면 다운로드 폴더에 쓴다. 어디에 생겼는지 알아야 다른 컴퓨터로 옮긴다.
+  function savedTo(path: string | null): string {
+    return path ? ` 다운로드 폴더에 저장했어요. 파일 이름은 ${fileNameOf(path)} 이에요.` : ''
   }
 
-  function exportJson() {
-    const today = clockToday()
-    const backup = toBackup(
-      {
-        goals,
-        items,
-        reviews,
-        settings: Object.fromEntries(
-          Object.entries(settings).map(([k, v]) => [
-            k,
-            v === null ? '' : Array.isArray(v) ? JSON.stringify(v) : String(v),
-          ])
-        ),
-      },
-      nowIso()
-    )
-    download(
-      backupFilename(today),
-      JSON.stringify(backup, null, 2),
-      'application/json'
-    )
-    setMessage(`항목 ${items.length}개와 평가 ${reviews.length}건을 내보냈어요.`)
+  async function exportJson() {
+    try {
+      const backup = await exportBackup()
+      const path = await saveTextFile(
+        backupFilename(clockToday()),
+        JSON.stringify(backup, null, 2),
+        'application/json'
+      )
+      setMessage(
+        `항목 ${items.length}개와 평가 ${reviews.length}건을 내보냈어요.${savedTo(path)}`
+      )
+    } catch {
+      setMessage('내보내지 못했어요. 다시 해 보세요.')
+    }
   }
 
-  function exportCsv() {
-    download(csvFilename(clockToday()), toCsv(items, goals), 'text/csv')
-    setMessage(`항목 ${items.length}개를 표로 내보냈어요.`)
+  async function exportCsv() {
+    try {
+      const path = await saveTextFile(
+        csvFilename(clockToday()),
+        toCsv(items, goals),
+        'text/csv'
+      )
+      setMessage(`항목 ${items.length}개를 표로 내보냈어요.${savedTo(path)}`)
+    } catch {
+      setMessage('내보내지 못했어요. 다시 해 보세요.')
+    }
+  }
+
+  async function mergeFile(file: File) {
+    try {
+      const backup = parseBackup(await file.text())
+      const { addedItems, addedReviews } = await mergeAll(backup)
+      setMessage(
+        addedItems + addedReviews === 0
+          ? '합쳤어요. 새로 들어온 것은 없어요.'
+          : `합쳤어요. 새로 들어온 항목 ${addedItems}개, 평가 ${addedReviews}건이에요.`
+      )
+    } catch (error) {
+      setMessage(
+        error instanceof BackupFormatError
+          ? error.message
+          : '합치는 중에 문제가 생겼어요.'
+      )
+    }
   }
 
   async function importFile(file: File) {
@@ -211,12 +228,25 @@ export function SettingsScreen() {
 
         <Row
           label="데이터"
-          note="항목, 목표, 평가 이력을 파일 하나로 옮길 수 있어요. 가져오면 지금 있는 내용을 덮어씁니다. 먼저 내보내 두세요."
+          note="항목, 목표, 평가 이력을 파일 하나로 옮길 수 있어요. 다른 컴퓨터에서 내보낸 파일을 합쳐서 가져오면 양쪽 기록이 다 남아요. 통째로 바꾸기는 지금 있는 내용을 지우고 파일 내용으로 바꿉니다."
         >
           <div className="flex flex-wrap items-center gap-[6px]">
-            <Chip onClick={exportJson}>내보내기</Chip>
-            <Chip onClick={exportCsv}>표로 내보내기</Chip>
-            <Chip onClick={() => fileRef.current?.click()}>가져오기</Chip>
+            <Chip onClick={() => void exportJson()}>내보내기</Chip>
+            <Chip onClick={() => void exportCsv()}>표로 내보내기</Chip>
+            <Chip onClick={() => mergeRef.current?.click()}>합쳐서 가져오기</Chip>
+            <Chip onClick={() => fileRef.current?.click()}>통째로 바꾸기</Chip>
+            <input
+              ref={mergeRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              aria-label="합칠 파일"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) void mergeFile(file)
+                event.target.value = ''
+              }}
+            />
             <input
               ref={fileRef}
               type="file"
