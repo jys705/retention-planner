@@ -205,15 +205,27 @@ export function GoalDetailScreen({
               ]}
             />
           </div>
-          <span className="font-display num text-[34px] font-semibold leading-none tracking-[-0.02em]">
-            {percent(avgNow)}
-          </span>
-          <RetentionBar now={avgNow} target={target} />
-          <span className="text-[11.5px] leading-relaxed text-text-3">
-            {avgNow >= target
-              ? `목표 ${percent(target)}를 지키는 중이에요.`
-              : `목표 ${percent(target)}까지 끌어올리는 중이에요.`}
-          </span>
+          {/*
+            묶인 항목이 없으면 잴 것이 없다. '0%' 와 '끌어올리는 중' 으로 적으면 막 만든
+            목표가 다 잊은 것처럼 읽힌다. 오늘 화면도 이때는 숫자를 안 보인다.
+          */}
+          {rows.length > 0 ? (
+            <>
+              <span className="font-display num text-[34px] font-semibold leading-none tracking-[-0.02em]">
+                {percent(avgNow)}
+              </span>
+              <RetentionBar now={avgNow} target={target} />
+              <span className="text-[11.5px] leading-relaxed text-text-3">
+                {avgNow >= target
+                  ? `목표 ${percent(target)}를 지키는 중이에요.`
+                  : `목표 ${percent(target)}까지 끌어올리는 중이에요.`}
+              </span>
+            </>
+          ) : (
+            <span className="text-[12.5px] leading-relaxed text-text-3">
+              항목을 넣으면 여기에 기억률이 나와요.
+            </span>
+          )}
         </div>
       </header>
 

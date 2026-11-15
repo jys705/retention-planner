@@ -178,6 +178,22 @@ describe('목표 상세', () => {
     })
   }
 
+  it('S-288 막 만든 빈 목표는 기억률을 0% 로 적지 않는다', async () => {
+    // 목표를 먼저 만들고 항목을 넣는 것이 처음 쓰는 사람의 순서다. 잴 것이 없는데
+    // '0%' 와 '끌어올리는 중' 을 적으면 다 잊은 것처럼 읽힌다.
+    await setupApp(TODAY, {
+      goals: [
+        aGoal({ id: 'g1', name: '시험 준비', horizon_kind: 'date', ready_at: '2026-11-14', hold_until: '2026-11-14' }),
+      ],
+    })
+    render(<GoalDetailScreen goalId="g1" onOpenItem={noop} onDeleted={noop} />)
+    expect(await screen.findByText('항목을 넣으면 여기에 기억률이 나와요.')).toBeInTheDocument()
+    expect(screen.queryByText('0%')).toBeNull()
+    expect(screen.queryByText(/끌어올리는 중/)).toBeNull()
+    // 목표를 지우는 메뉴는 그 자리에 그대로 있다.
+    expect(screen.getByRole('button', { name: '이 목표 더보기' })).toBeInTheDocument()
+  })
+
   it('S-053 요약 한 문장이 앱이 해둔 일을 말한다', async () => {
     // '몇 개가 부족하다' 가 아니라 목표를 지키려고 무엇을 잡아뒀는지를 말한다.
     await withGoal()

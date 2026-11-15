@@ -33,6 +33,14 @@ describe('첫 실행 안내', () => {
     expect(usePlanner.getState().items).toHaveLength(0)
   })
 
+  it('S-289 예시 날짜는 오늘에서 셈해 지난 날을 다음이라고 하지 않는다', async () => {
+    await fresh()
+    const { user } = render(<Onboarding />)
+    await user.click(screen.getByRole('button', { name: '다음' }))
+    // 오늘은 10월 1일이다. 이틀 뒤를 다음 날짜로 보여 준다.
+    expect(screen.getByText('다음은 10월 3일에 3개예요')).toBeInTheDocument()
+  })
+
   it('S-096b 이전으로 돌아간다', async () => {
     await fresh()
     const { user } = render(<Onboarding />)

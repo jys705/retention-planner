@@ -20,6 +20,8 @@
 
 ## 시작하기
 
+Node 22.13 이상과 [pnpm](https://pnpm.io)이 필요합니다.
+
 ```bash
 pnpm install
 pnpm dev
@@ -29,23 +31,25 @@ pnpm dev
 
 ## 데스크탑 앱으로 빌드
 
-[Rust](https://rustup.rs)와 Xcode가 필요합니다.
+[Rust](https://rustup.rs)와 Xcode가 필요합니다. 처음 빌드는 Rust 쪽을 모두 컴파일하느라
+몇 분 걸립니다.
 
 ```bash
 pnpm tauri build
 ```
 
-결과물은 두 개가 나옵니다.
+결과물은 두 개가 나옵니다. 파일 이름의 `aarch64` 는 Apple Silicon 에서 빌드했을 때입니다.
 
 ```
 src-tauri/target/release/bundle/macos/retention-planner.app
 src-tauri/target/release/bundle/dmg/retention-planner_0.1.0_aarch64.dmg
 ```
 
-서명하지 않은 앱이라 처음 열 때 한 번 격리 속성을 지워야 합니다.
+직접 빌드한 앱은 그대로 열립니다. 다른 컴퓨터에서 받아 온 앱은 서명이 없어서, 처음 열기 전에
+한 번 격리 속성을 지워야 합니다.
 
 ```bash
-xattr -dr com.apple.quarantine src-tauri/target/release/bundle/macos/retention-planner.app
+xattr -dr com.apple.quarantine /Applications/retention-planner.app
 ```
 
 데스크탑 앱에서는 데이터가 SQLite 파일로 들어갑니다.
