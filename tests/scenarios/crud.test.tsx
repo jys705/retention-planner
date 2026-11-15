@@ -34,15 +34,15 @@ async function withItem(over = {}) {
 }
 
 describe('항목 고치기', () => {
-  it('S-120 제목과 메모를 눌러서 바로 고친다', async () => {
+  it('S-120 제목은 눌러서 고치고 메모 칸은 처음부터 열려 있다', async () => {
     await withItem()
     const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)
 
     // 편집 화면을 따로 열지 않는다. 글자가 곧 입력칸이다.
     await user.click(await screen.findByRole('button', { name: '제목' }))
     expect(screen.getByLabelText('제목')).toHaveValue('원래 제목')
-    await user.click(screen.getByRole('button', { name: '메모' }))
-    expect(screen.getByLabelText('메모')).toHaveValue('원래 메모')
+    // 메모는 노트 본문처럼 늘 열려 있다. 누르지 않아도 바로 적을 칸이다.
+    expect(screen.getByRole('textbox', { name: '메모' })).toHaveValue('원래 메모')
   })
 
   it('S-121 제목과 메모를 고쳐 저장한다', async () => {
@@ -52,9 +52,10 @@ describe('항목 고치기', () => {
     await user.click(await screen.findByRole('button', { name: '제목' }))
     await user.tripleClick(screen.getByLabelText('제목'))
     await user.keyboard('바꾼 제목{Enter}')
-    await user.click(screen.getByRole('button', { name: '메모' }))
-    await user.tripleClick(screen.getByLabelText('메모'))
-    await user.keyboard('바꾼 메모{Enter}')
+    await user.clear(screen.getByRole('textbox', { name: '메모' }))
+    await user.type(screen.getByRole('textbox', { name: '메모' }), '바꾼 메모')
+    // 다른 데를 누르면 저장된다.
+    await user.click(screen.getByRole('button', { name: '← 서재' }).parentElement!)
 
     const item = usePlanner.getState().items[0]
     expect(item.title).toBe('바꾼 제목')
@@ -111,14 +112,13 @@ describe('항목 고치기', () => {
   it('S-126 메모를 비워 둘 수는 있다', async () => {
     await withItem()
     const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)
-    await user.click(await screen.findByRole('button', { name: '메모' }))
-    await user.tripleClick(screen.getByLabelText('메모'))
-    await user.keyboard('{Backspace}{Enter}')
+    const memo = await screen.findByRole('textbox', { name: '메모' })
+    await user.clear(memo)
+    await user.tab()
 
     expect(usePlanner.getState().items[0].memo).toBe('')
-    expect(screen.getByRole('button', { name: '메모' })).toHaveTextContent(
-      '메모 없음'
-    )
+    expect(memo).toHaveValue('')
+    expect(memo).toHaveAttribute('placeholder', expect.stringContaining('적어 두세요'))
   })
 })
 

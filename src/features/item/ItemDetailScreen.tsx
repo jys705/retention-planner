@@ -5,6 +5,7 @@ import { Chip } from '../../components/Chip'
 import { InlineText } from '../../components/InlineText'
 import { OptionCards } from '../../components/OptionCards'
 import { MoreMenu } from '../../components/MoreMenu'
+import { MemoPanel } from './MemoPanel'
 import type { GoalRow, Intensity, ItemRow } from '../../db/types'
 import { defaultFsrs } from '../../core/fsrs/fsrs6'
 import { dueReason, statusBadgeOf } from '../../lib/badge'
@@ -227,16 +228,6 @@ export function ItemDetailScreen({
               </span>
             </div>
 
-            <div className="pt-[8px]">
-              <InlineText
-                value={item.memo}
-                label="메모"
-                placeholder="메모 없음. 눌러서 적을 수 있어요."
-                allowEmpty
-                className="-ml-[6px] w-full text-[13px] text-text-2"
-                onSave={(next) => void updateItem(found.id, { memo: next })}
-              />
-            </div>
           </div>
 
           {/* 오른쪽 268px 은 앱이 계산한 숫자 자리다. 한 값만 크게 세운다. */}
@@ -268,6 +259,13 @@ export function ItemDetailScreen({
           </div>
         </div>
       </div>
+
+      {/* 사람이 쓴 말이라 숫자 레일 없이 폭을 다 쓴다. 제목 바로 아래라 열자마자 적을 수 있다. */}
+      <MemoPanel
+        itemId={item.id}
+        value={item.memo}
+        onSave={(id, next) => void updateItem(id, { memo: next })}
+      />
 
       {editing ? (
         <section className="flex flex-col gap-4 rounded-panel border border-accent bg-surface px-[16px] py-[14px]">
