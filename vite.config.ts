@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -14,5 +15,7 @@ export default defineConfig({
     // 파일 맨 위의 @vitest-environment 주석으로 켠다. 나머지는 node 에서 돈다.
     environment: 'node',
     setupFiles: ['tests/setup.ts'],
+    // 옵시디언은 이 모듈을 실행 중에만 쥐여 준다. 시험에서는 흉내 낸 것을 끼운다.
+    alias: { obsidian: fileURLToPath(new URL('./tests/fakes/obsidian.ts', import.meta.url)) },
   },
 })

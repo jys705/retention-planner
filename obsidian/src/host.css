@@ -1,0 +1,91 @@
+/*
+  옵시디언 쪽 그릇을 다듬는 규칙. 이 파일만 가두지 않고 그대로 붙는다.
+
+  앱 뿌리(.rp-root)는 옵시디언이 만든 요소 안에 선다. 뿌리는 옵시디언에게서 글자 크기,
+  줄 간격, 공백 처리 같은 것을 물려받는다. 편집기 안이면 공백을 그대로 두는 설정까지
+  물려받는다. 그래서 뿌리에서 물려받는 값을 앱 기본값으로 되돌린다.
+*/
+.rp-root.rp-root.rp-root {
+  display: block;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 16px;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1.5;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-align: start;
+  text-indent: 0;
+  text-transform: none;
+  text-shadow: none;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: manual;
+  cursor: auto;
+  tab-size: 4;
+  -webkit-user-select: auto;
+  user-select: auto;
+}
+
+/*
+  옵시디언과 테마는 요소 이름과 본문 클래스로 글자와 단추를 꾸민다. 앱의 바탕 재설정은
+  브라우저 기본값만 되돌리므로 그 밖의 꾸밈이 앱 안으로 샌다. 물려받는 글자 성질은 앱
+  뿌리에서 다시 물려받게 하고, 단추와 입력 칸에 붙는 그림자와 높이는 걷는다.
+
+  무게는 앱 도구 클래스보다 가볍고 요소별 바탕 재설정보다도 가볍다. 앱이 정한 값은 늘 이긴다.
+  그림(svg) 안은 건드리지 않는다. 차트 글자는 속성으로 크기를 정한다.
+*/
+.rp-root.rp-root.rp-root :where(:not(svg, svg *)) {
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  font-style: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  word-spacing: inherit;
+  text-transform: inherit;
+  text-indent: inherit;
+}
+
+.rp-root.rp-root.rp-root :where(:not(svg, svg *, textarea, pre)) {
+  white-space: inherit;
+}
+
+.rp-root.rp-root.rp-root :where(button, input, select, textarea) {
+  box-shadow: none;
+  height: auto;
+  min-height: 0;
+  text-shadow: none;
+}
+
+.rp-root.rp-root.rp-root :where(button) {
+  cursor: default;
+}
+
+/* 노트와 캔버스 카드 속에서는 바탕을 깔지 않는다. 카드 테두리는 앱 카드가 그린다. */
+.rp-root.rp-root.rp-root.rp-block {
+  height: auto;
+  background: transparent;
+  margin-block: 4px;
+}
+
+/* 탭 하나를 앱이 다 쓴다. 옵시디언 보기의 안쪽 여백을 걷는다. */
+/*
+  탭 하나를 앱이 다 쓴다. 옵시디언 보기의 안쪽 여백을 걷는다. 앱은 데스크톱 창의 가장
+  좁은 폭(900px)에 맞춰 그렸다. 칸이 그보다 좁으면 줄이 부서지지 않게 옆으로 밀어 본다.
+*/
+.workspace-leaf-content[data-type='retention-planner'] > .view-content {
+  padding: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.rp-root.rp-root.rp-root.rp-app {
+  height: 100%;
+  min-width: 900px;
+}

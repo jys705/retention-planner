@@ -27,6 +27,7 @@ import {
   retentionOn,
 } from '../../lib/lifecycle'
 import { gradeColor, gradeName } from '../../lib/grade'
+import { isTypingTarget, useHost } from '../../lib/host'
 import { INTENSITY_META, intensityName } from '../../lib/intensity'
 import type { Settings } from '../../lib/settings'
 import { usePlanner } from '../../store/planner'
@@ -45,6 +46,7 @@ export function ItemDetailScreen({
   const { items, goals, reviews, settings, today, planned } = usePlanner()
   const updateItem = usePlanner((s) => s.updateItem)
   const deleteItem = usePlanner((s) => s.deleteItem)
+  const host = useHost()
 
   const [editing, setEditing] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -74,10 +76,9 @@ export function ItemDetailScreen({
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (!item) return
-      const target = event.target as HTMLElement | null
-      const typing =
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement
+      // 옵시디언에서는 창 하나를 노트와 나눠 쓴다. 다른 곳에서 친 키는 이 화면 것이 아니다.
+      if (!host.acceptsShortcut(event)) return
+      const typing = isTypingTarget(event.target)
       if (typing) {
         if (event.key === 'Escape') setEditing(false)
         return

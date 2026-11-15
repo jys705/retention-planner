@@ -1,31 +1,16 @@
-import { useRef, useState } from 'react'
-import type { Grade } from '../../core/fsrs/types'
+import { useRef } from 'react'
 import { Hint } from '../../components/Chip'
 import { RailPanel } from '../../components/Rail'
-import type { DateOnly } from '../../lib/date'
-import { fullDate, monthDay, percent, shortDate } from '../../lib/format'
-import { goalRestsOnDay, isActive } from '../../lib/domain'
-import {
-  dueBeyondEnd,
-  endedNotice,
-  itemLastReviewDay,
-  retentionOn,
-  scheduledItems,
-} from '../../lib/lifecycle'
-import { GRADE_HELP_THRESHOLD } from '../../lib/settings'
-import {
-  canUndo,
-  selectOverallRetention,
-  selectTodayItems,
-  selectUpcoming,
-  splitTodayItems,
-  usePlanner,
-} from '../../store/planner'
+import { fullDate, percent } from '../../lib/format'
+import { usePlanner } from '../../store/planner'
 import { QuickAdd, QuickAddHint } from '../newitem/QuickAdd'
 import { GoalDayNote } from './GoalDayNote'
 import { GoalEndedNote } from './GoalEndedNote'
-import { JustDone, type Ending } from './JustDone'
+import { JustDone } from './JustDone'
+import { OverdueNote } from './OverdueNote'
+import { TodayEmpty } from './TodayEmpty'
 import { TodayRow } from './TodayRow'
+import { useToday } from './useToday'
 
 export function TodayScreen({
   onOpenItem,
@@ -34,91 +19,39 @@ export function TodayScreen({
   onOpenItem: (itemId: string) => void
   onOpenGoal?: (goalId: string) => void
 }) {
-  const state = usePlanner()
-  const { items, goals, reviews, settings, today } = state
-  const rateItem = usePlanner((s) => s.rateItem)
-  const addItem = usePlanner((s) => s.addItem)
-  const undoLastRating = usePlanner((s) => s.undoLastRating)
-  const undoable = canUndo(state) ? state.lastRating : null
-  // 방금 본 것의 다음 날짜가 목표 밖이면 판이 그 날짜를 약속하지 않게 한다.
-  const lastItem = undoable
-    ? (items.find((i) => i.id === undoable.itemId) ?? null)
-    : null
-  const lastGoal = lastItem?.goal_id
-    ? (goals.find((g) => g.id === lastItem.goal_id) ?? null)
-    : null
-  const ending: Ending =
-    lastItem && dueBeyondEnd(lastItem, lastGoal, settings)
-      ? itemLastReviewDay(lastItem, lastGoal, settings) === today
-        ? lastGoal !== null && goalRestsOnDay(lastGoal)
-          ? 'restEve'
-          : 'lastDay'
-        : 'early'
-      : null
-  // 목표한 날을 비워 뒀으니 이것이 마지막이다. '다시' 처럼 막 무너진 것은 그날 아침
-  // 목표 아래로 내려와 있을 수 있다. 그날은 올리지 않으므로 지금 말해야 알 수 있다.
-  const goalDayRetention =
-    ending === 'restEve' && lastItem && lastGoal?.ready_at
-      ? retentionOn(lastItem, reviews, lastGoal.ready_at)
-      : null
-  const shortOnGoalDay =
-    goalDayRetention !== null &&
-    lastGoal !== null &&
-    goalDayRetention < lastGoal.target_retention
-      ? goalDayRetention
-      : null
-  // 오늘이 목표한 날인 목표들. 준비는 어제까지 끝나 있다. 대략 목표는 그날부터
-  // 기억을 붙잡는 기간이 시작되므로 '안 봐도 괜찮다' 고 할 날이 아니다.
-  const goalsToday = goals.filter(
-    (g) =>
-      g.archived_at === null && g.horizon_kind === 'date' && g.ready_at === today
-  )
-  const ended = endedNotice(items, goals, reviews, settings, today)
-  const acknowledgeEnded = usePlanner((s) => s.acknowledgeEnded)
-
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const {
+    items,
+    goals,
+    reviews,
+    settings,
+    today,
+    addItem,
+    undoable,
+    ending,
+    shortOnGoalDay,
+    goalsToday,
+    ended,
+    acknowledgeEnded,
+    expandedId,
+    setExpandedId,
+    overdue,
+    dueToday,
+    todayItems,
+    listedToday,
+    upcoming,
+    overall,
+    activeCount,
+    showFullGradeHelp,
+    handleRate,
+    handleUndo,
+  } = useToday()
   // 적어두기 줄은 카드 안에 있고 안내문은 카드 밖에 있다. 둘이 같은 상태를 봐야 한다.
   // 펼친 상태도 저장소에 둔다. 상세 설정을 펴 놓고 다른 탭에 갔다 오면
   // 접혀 있는 것도 쓰던 것을 잃는 것과 같다.
-  const detailOpen = state.draft.detailOpen
+  const detailOpen = usePlanner((s) => s.draft.detailOpen)
   const setDetailOpen = (open: boolean) =>
     usePlanner.getState().setDraft({ detailOpen: open })
   const listRef = useRef<HTMLDivElement>(null)
-
-  const { overdue, dueToday } = splitTodayItems({ items, goals, settings, today })
-  const todayItems = selectTodayItems({ items, goals, settings, today })
-  // 오늘 목록에 섰던 수. 다 보고 나면 목록은 비지만 올린 적이 없는 것은 아니다.
-  // 이걸 안 세면 다른 것을 다 본 뒤에 '오늘은 아무것도 올리지 않았어요' 가 된다.
-  const listedToday =
-    todayItems.length + reviews.filter((r) => r.reviewed_at === today).length
-  // 목표 뒤로 잡힌 날짜는 그 날이 오기 전에 목표가 끝나 내려간다. 다음 날짜로 세지 않는다.
-  const upcoming = selectUpcoming(scheduledItems(items, goals, settings), today)
-  const overall = selectOverallRetention(items, today)
-  const activeCount = items.filter(isActive).length
-  const showFullGradeHelp = settings.ratingCount < GRADE_HELP_THRESHOLD
-
-  // 평가가 끝나기 전에 또 누르면 되돌릴 사진이 낡는다. 저장소가 표로 걸러
-  // 내지만, 그러면 되돌리기 자리가 조용히 사라져 사람이 영문을 모른다.
-  const [rating, setRating] = useState(false)
-
-  async function handleRate(itemId: string, grade: Grade) {
-    if (rating) return
-    setRating(true)
-    setExpandedId(null)
-    try {
-      // 여기는 '오늘' 화면이다. 오늘 본 것으로만 기록한다.
-      await rateItem(itemId, grade, { reviewedAt: today })
-    } finally {
-      setRating(false)
-    }
-  }
-
-  async function handleUndo() {
-    const itemId = undoable?.itemId ?? null
-    await undoLastRating()
-    // 되돌린 사람은 대개 다른 등급을 고르려던 참이다. 그 줄을 다시 펴 준다.
-    if (itemId !== null) setExpandedId(itemId)
-  }
 
   return (
     <div ref={listRef} className="mx-auto w-full max-w-[940px] px-6 pb-7 pt-10">
@@ -243,24 +176,15 @@ export function TodayScreen({
           {/* 빈 화면은 목록이 설 자리에 선다. 적어두기 줄은 늘 그 아래다. */}
           {todayItems.length === 0 ? (
             <div className="relative p-[8px]">
-              {items.length === 0 ? (
-                <EmptyLibrary />
-              ) : activeCount === 0 ? (
-                <AllEnded />
-              ) : goalsToday.some(goalRestsOnDay) && listedToday === 0 ? (
-                // 다 봐서 빈 것이 아니다. 오늘을 비워 두기로 해서 올리지 않은 것이다.
-                // 다른 것을 올려서 다 봤다면 그건 다 본 날이다.
-                <RestDay upcoming={upcoming} />
-              ) : (
-                <EmptyToday
-                  upcoming={upcoming}
-                  // 남은 것이 모두 목표 뒤로 잡혀 있으면 할 일을 다 한 것이다.
-                  finishedForGoal={
-                    upcoming.length === 0 &&
-                    scheduledItems(items, goals, settings).length < activeCount
-                  }
-                />
-              )}
+              <TodayEmpty
+                items={items}
+                goals={goals}
+                settings={settings}
+                activeCount={activeCount}
+                goalsToday={goalsToday}
+                listedToday={listedToday}
+                upcoming={upcoming}
+              />
             </div>
           ) : null}
 
@@ -279,130 +203,6 @@ export function TodayScreen({
         <QuickAddHint detailOpen={detailOpen} />
       </div>
 
-    </div>
-  )
-}
-
-/**
- * 큰 숫자 가운데 몇이 밀린 것인지 알리는 줄.
- *
- * 큰 숫자가 이제 밀린 것까지 세므로 여기 수는 그 안쪽 몫이다. '이 가운데' 를
- * 앞에 두어 따로 더할 수가 아니라는 걸 밝힌다. 다 밀린 날에는 같이 볼 오늘 것이
- * 없으니 '같이' 라는 말을 빼고, 그때도 수는 같은 색으로 세워 둔다.
- *
- * '밀린 것' 이라는 말은 예보와 항목 상세도 쓴다. 화면마다 다른 이름으로 부르면
- * 같은 것을 가리키는 줄 모른다.
- */
-function OverdueNote({ overdue, mixed }: { overdue: number; mixed: boolean }) {
-  return (
-    <div className="flex items-baseline gap-[6px] pt-[2px]">
-      <span className="text-[13px] text-text-2">
-        {mixed ? '이 가운데 밀린 것' : '밀린 것'}
-      </span>
-      <span className="num text-[13px] font-semibold text-imp-fg">
-        {overdue}개
-      </span>
-      <span className="text-[12px] text-text-3">
-        {mixed
-          ? '볼 날이 지났어요. 오늘 같이 보면 됩니다.'
-          : '모두 볼 날이 지났어요.'}
-      </span>
-    </div>
-  )
-}
-
-/**
- * 오늘 것을 다 본 날.
- *
- * 다음 날짜와 그날 개수를 같이 적는다. 언제 또 올라오는지 알면 앱을 닫아도 된다.
- */
-function EmptyToday({
-  upcoming,
-  finishedForGoal,
-}: {
-  upcoming: { date: DateOnly; count: number }[]
-  finishedForGoal: boolean
-}) {
-  const next = upcoming[0]
-  return (
-    <EmptyFrame title="오늘 볼 건 다 봤어요.">
-      <p className="text-pretty break-keep text-[13.5px] text-text-2">
-        {next
-          ? `다음은 ${monthDay(next.date)}에 ${next.count}개예요. 그때 알려드릴게요.`
-          : finishedForGoal
-            ? '목표한 날까지 볼 것은 다 마쳤어요.'
-            : '앞으로 잡힌 복습이 없어요. 아래에 한 줄 적어보세요.'}
-      </p>
-      {upcoming.length > 0 ? (
-        <div className="num flex gap-[18px] pt-[6px] text-[12px] text-text-3">
-          {upcoming.map((entry) => (
-            <span key={entry.date}>
-              {shortDate(entry.date)} {entry.count}개
-            </span>
-          ))}
-        </div>
-      ) : null}
-    </EmptyFrame>
-  )
-}
-
-/** 목표한 날을 비워 두기로 해서 오늘 목록이 빈 날. */
-function RestDay({
-  upcoming,
-}: {
-  upcoming: { date: DateOnly; count: number }[]
-}) {
-  const next = upcoming[0]
-  return (
-    <EmptyFrame title="오늘은 비워 둔 날이에요.">
-      <p className="text-pretty break-keep text-[13.5px] text-text-2">
-        {next
-          ? `다음은 ${monthDay(next.date)}에 ${next.count}개예요. 그때 알려드릴게요.`
-          : '앞으로 잡힌 복습이 없어요.'}
-      </p>
-    </EmptyFrame>
-  )
-}
-
-/**
- * 적어둔 것이 모두 마친 목표의 것일 때.
- *
- * '다 봤어요' 는 맞지 않는다. 본 것이 아니라 목표가 끝난 것이다. 남은 일은 새로
- * 공부한 것을 적는 것뿐이다.
- */
-function AllEnded() {
-  return (
-    <EmptyFrame title="지금 볼 항목이 없어요.">
-      <p className="max-w-[460px] text-pretty break-keep text-[13.5px] leading-relaxed text-text-2">
-        마친 목표의 항목은 보관해 두었어요. 새로 공부한 것을 아래에 한 줄로 적으면 다시
-        볼 날을 계산해서 오늘 목록에 올려둘게요.
-      </p>
-    </EmptyFrame>
-  )
-}
-
-function EmptyLibrary() {
-  return (
-    <EmptyFrame title="아직 적어둔 게 없어요.">
-      <p className="max-w-[460px] text-pretty break-keep text-[13.5px] leading-relaxed text-text-2">
-        방금 공부한 걸 아래에 한 줄로 적어보세요. 다시 볼 날은 앱이 계산해서 오늘
-        목록에 올려둘게요.
-      </p>
-    </EmptyFrame>
-  )
-}
-
-function EmptyFrame({
-  title,
-  children,
-}: {
-  title: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-col gap-[9px] px-[20px] pb-[34px] pt-[38px]">
-      <p className="text-[17px] font-semibold tracking-[-0.01em]">{title}</p>
-      {children}
     </div>
   )
 }

@@ -29,16 +29,26 @@ const SettingsScreen = lazy(() =>
   }))
 )
 import { Onboarding } from './features/onboarding/Onboarding'
-import { nowMinutes, today as clockToday } from './lib/clock'
-import { notifyDueCount, shouldNotify } from './lib/notify'
-import { selectTodayItems, usePlanner } from './store/planner'
+import { today as clockToday } from './lib/clock'
+import { useHost } from './lib/host'
+import { usePlanner } from './store/planner'
+import { remindIfDue } from './store/reminder'
 
-type Route =
+export type Route =
   | { screen: ScreenKey }
   | { screen: 'goals'; goalId: string }
   | { screen: 'library'; itemId: string }
 
-export function App() {
+/**
+ * 밖에서 화면을 옮겨 달라는 부탁.
+ *
+ * 옮길 때마다 새로 만든다. 같은 화면을 두 번 부탁해도 두 번 옮긴다.
+ */
+export interface RouteRequest {
+  route: Route
+}
+
+export function App({ request = null }: { request?: RouteRequest | null } = {}) {
   const ready = usePlanner((s) => s.ready)
   const load = usePlanner((s) => s.load)
   const theme = usePlanner((s) => s.settings.theme)
@@ -46,11 +56,20 @@ export function App() {
   const items = usePlanner((s) => s.items)
   const goals = usePlanner((s) => s.goals)
   const today = usePlanner((s) => s.today)
-  const saveSetting = usePlanner((s) => s.saveSetting)
-  const [route, setRoute] = useState<Route>({ screen: 'today' })
+  const host = useHost()
+  const [route, setRoute] = useState<Route>(request?.route ?? { screen: 'today' })
+  // 옵시디언 노트 속 카드에서 항목을 누르면 떠 있는 앱 화면이 그 항목으로 옮겨 간다.
+  // 새 부탁이 온 것을 그리는 중에 알아채고 바로 옮긴다.
+  const [handled, setHandled] = useState<RouteRequest | null>(request)
+  if (request !== handled) {
+    setHandled(request)
+    if (request) setRoute(request.route)
+  }
 
+  // 옵시디언에서는 플러그인이 먼저 읽어 둔다. 탭을 열 때마다 다시 읽으면 노트 속
+  // 카드에서 방금 한 평가의 되돌리기 자리가 사라진다.
   useEffect(() => {
-    void load()
+    if (!usePlanner.getState().ready) void load()
   }, [load])
 
   // 오늘은 앱을 켤 때 한 번만 읽힌다. 창을 띄워 둔 채 자정을 넘기면 '오늘' 칩이
@@ -68,31 +87,19 @@ export function App() {
     }
   }, [load])
 
+  // 옵시디언 안에서는 문서 전체가 옵시디언 것이다. 밝기도 옵시디언 테마를 따른다.
   useEffect(() => {
+    if (!host.ownsTheme) return
     const root = document.documentElement
     if (theme === 'system') root.removeAttribute('data-theme')
     else root.setAttribute('data-theme', theme)
-  }, [theme])
+  }, [theme, host.ownsTheme])
 
   // 정해둔 시각이 지났으면 오늘 볼 게 몇 개인지 한 번 알려준다.
   useEffect(() => {
-    if (!ready || !settings.onboardingDone) return
-    if (
-      !shouldNotify(
-        nowMinutes(),
-        settings.notifyAt,
-        settings.lastNotifiedDate,
-        today
-      )
-    ) {
-      return
-    }
-    // 알림이 말하는 수와 화면 머리의 큰 숫자가 같은 데서 나와야 한다.
-    const due = selectTodayItems({ items, goals, settings, today }).length
-    void notifyDueCount(due, today).then((sent) => {
-      if (sent) void saveSetting('lastNotifiedDate', today)
-    })
-  }, [ready, settings, items, goals, today, saveSetting])
+    if (!host.ownsReminder) return
+    void remindIfDue()
+  }, [ready, settings, items, goals, today, host.ownsReminder])
 
   if (!ready) {
     return (

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { LocalRepository } from '../../src/db/local'
 import { MemoryRepository } from '../../src/db/memory'
+import {
+  SnapshotFormatError,
+  SnapshotRepository,
+  type Snapshot,
+  type SnapshotStore,
+} from '../../src/db/snapshot'
 import type {
   GoalRow,
   ItemRow,
@@ -400,5 +406,133 @@ describe('브라우저 저장소는 새로고침을 견딘다', () => {
     const repo = new LocalRepository()
     await expect(repo.init()).resolves.toBeUndefined()
     expect(await repo.listItems()).toEqual([])
+  })
+})
+
+/**
+ * 비동기로 쓰는 곳. 옵시디언의 saveData 가 이렇다.
+ *
+ * 쓰기마다 걸리는 시간을 따로 줄 수 있다. 늦게 시작한 쓰기가 먼저 끝나는 경우를 만든다.
+ */
+function asyncStore(initial: unknown = null, delays: number[] = []) {
+  const state = { saved: initial as unknown, writes: 0 }
+  const store: SnapshotStore = {
+    read: async () => (state.saved === null ? null : structuredClone(state.saved)),
+    write: (snapshot: Snapshot) => {
+      const copy = structuredClone(snapshot)
+      const delay = delays.shift() ?? 0
+      return new Promise<void>((resolve) =>
+        setTimeout(() => {
+          state.saved = copy
+          state.writes += 1
+          resolve()
+        }, delay)
+      )
+    },
+  }
+  return { store, state }
+}
+
+runRepositoryContract('snapshot', async () => {
+  const repo = new SnapshotRepository(asyncStore().store)
+  await repo.init()
+  return repo
+})
+
+describe('통째로 남기는 저장소', () => {
+  it('늦게 시작한 쓰기가 먼저 끝나도 마지막 상태가 남는다', async () => {
+    // 첫 쓰기는 오래 걸리고 두 번째는 바로 끝난다. 차례를 안 지키면 첫 쓰기가 나중에
+    // 끝나면서 그 전 상태로 덮는다.
+    const { store, state } = asyncStore(null, [40, 0])
+    const repo = new SnapshotRepository(store)
+    await repo.init()
+    const first = repo.insertGoal(makeGoal('g1'))
+    // 첫 쓰기가 제 몫을 찍어 들고 쓰는 동안 두 번째 쓰기가 끼어든다.
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    const second = repo.insertItem(makeItem('i1'))
+    await Promise.all([first, second])
+    await repo.flush()
+    const saved = state.saved as Snapshot
+    expect(saved.goals.map((g) => g.id)).toEqual(['g1'])
+    expect(saved.items.map((i) => i.id)).toEqual(['i1'])
+  })
+
+  it('다시 열면 남긴 기록과 지운 흔적을 그대로 읽는다', async () => {
+    const { store } = asyncStore()
+    const first = new SnapshotRepository(store)
+    await first.init()
+    await first.insertGoal(makeGoal('g1'))
+    await first.insertItem(makeItem('i1', { goal_id: 'g1' }))
+    await first.insertReview(makeReview('r1', 'i1'))
+    await first.addTombstones([{ id: 'i9', kind: 'item', deleted_at: '2026-08-02T00:00:00.000Z' }])
+    await first.setSetting('theme', 'dark')
+    await first.flush()
+
+    const second = new SnapshotRepository(store)
+    await second.init()
+    expect((await second.listItems()).map((i) => i.id)).toEqual(['i1'])
+    expect((await second.listReviews()).map((r) => r.id)).toEqual(['r1'])
+    expect((await second.listTombstones()).map((t) => t.id)).toEqual(['i9'])
+    expect(await second.getSetting('theme')).toBe('dark')
+  })
+
+  it('남은 것을 못 읽으면 멈추고 아무것도 쓰지 않는다', async () => {
+    const { store, state } = asyncStore({ items: '항목이 아님' })
+    const repo = new SnapshotRepository(store)
+    await expect(repo.init()).rejects.toBeInstanceOf(SnapshotFormatError)
+    expect(state.writes).toBe(0)
+    expect(state.saved).toEqual({ items: '항목이 아님' })
+  })
+
+  it('읽다가 던지면 그 오류를 그대로 넘긴다', async () => {
+    const repo = new SnapshotRepository({
+      read: async () => {
+        throw new SyntaxError('깨진 JSON')
+      },
+      write: async () => {
+        throw new Error('쓰면 안 된다')
+      },
+    })
+    await expect(repo.init()).rejects.toThrow('깨진 JSON')
+  })
+
+  it('빈 상태로 시작하라고 했으면 못 읽어도 빈 상태로 연다', async () => {
+    const { store } = asyncStore([1, 2, 3])
+    const repo = new SnapshotRepository(store, { startEmptyWhenUnreadable: true })
+    await repo.init()
+    expect(await repo.listItems()).toEqual([])
+  })
+
+  it('다른 곳에서 고친 것을 다시 읽는다', async () => {
+    const { store, state } = asyncStore()
+    const repo = new SnapshotRepository(store)
+    await repo.init()
+    await repo.insertItem(makeItem('i1'))
+    await repo.flush()
+    const outside = structuredClone(state.saved) as Snapshot
+    outside.items.push(makeItem('i2', { created_at: '2026-08-02T00:00:00.000Z' }))
+    state.saved = outside
+    await repo.reload()
+    expect((await repo.listItems()).map((i) => i.id)).toEqual(['i1', 'i2'])
+  })
+
+  it('잡아둔 복습도 같이 남겨 켜자마자 보여 준다', async () => {
+    const { store } = asyncStore()
+    const repo = new SnapshotRepository(store)
+    await repo.init()
+    await repo.insertItem(makeItem('i1'))
+    const planned: PlannedReviewRow = {
+      id: 'p1',
+      item_id: 'i1',
+      date: '2026-08-05',
+      ordinal: 0,
+      kind: 'normal',
+      source: 'fsrs',
+    }
+    await repo.replacePlannedReviews([planned])
+    await repo.flush()
+    const again = new SnapshotRepository(store)
+    await again.init()
+    expect((await again.listPlannedReviews()).map((p) => p.id)).toEqual(['p1'])
   })
 })

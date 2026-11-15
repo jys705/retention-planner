@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:obsidian": "vite build --config obsidian/vite.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "test:core": "vitest run tests/",
@@ -42,6 +43,8 @@
     "globals": "^17.11.0",
     "happy-dom": "^20.11.6",
     "jsdom": "^30.0.1",
+    "obsidian": "^1.14.4",
+    "postcss": "^8.5.33",
     "tailwindcss": "^4.3.3",
     "ts-fsrs": "^5.4.1",
     "typescript": "^5.9.3",

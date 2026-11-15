@@ -1,0 +1,11 @@
+/*
+  옵시디언 플러그인의 앱 스타일.
+
+  데스크톱 앱과 같은 Tailwind 와 같은 색을 쓴다. 빌드가 이 결과 전체를 앱 뿌리
+  요소(.rp-root) 안으로 가둔다. 옵시디언 화면에는 한 줄도 닿지 않는다.
+*/
+@import 'tailwindcss' source(none);
+@import '../../src/styles/app.css';
+
+@source '../../src';
+@source '.';

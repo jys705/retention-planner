@@ -18,6 +18,7 @@ import { GRADE_META } from '../../lib/grade'
 import { INTENSITY_META, intensityName } from '../../lib/intensity'
 import type { Settings } from '../../lib/settings'
 import type { NewItemDraft } from '../../store/planner'
+import { submitAfterComposition } from '../../lib/ime'
 import { HorizonPicker } from './HorizonPicker'
 import { PlanPreview } from './PlanPreview'
 
@@ -72,8 +73,8 @@ export function QuickAdd({
     setDetailOpen(false)
   }
 
-  function submit() {
-    const trimmed = title.trim()
+  function submit(value: string = title) {
+    const trimmed = value.trim()
     if (!trimmed) return
     onAdd({
       title: trimmed,
@@ -110,11 +111,13 @@ export function QuickAdd({
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              submit()
+            if (event.key !== 'Enter') return
+            event.preventDefault()
+            if (event.nativeEvent.isComposing) {
+              submitAfterComposition(event.currentTarget, submit)
               return
             }
+            submit()
           }}
           placeholder="예: 4장 연습문제 1번에서 10번"
           aria-label="새 항목 제목"
@@ -129,7 +132,7 @@ export function QuickAdd({
         </button>
         <button
           type="button"
-          onClick={submit}
+          onClick={() => submit()}
           disabled={title.trim() === ''}
           className="flex-none rounded-ctl bg-accent px-[12px] py-[6px] text-[12.5px] font-semibold text-white disabled:opacity-35"
         >

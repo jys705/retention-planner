@@ -1,25 +1,6 @@
-import { MemoryRepository } from './memory'
-import type {
-  GoalRow,
-  ItemRow,
-  PlannedReviewRow,
-  Repository,
-  ReviewRow,
-  TombstoneRow,
-} from './types'
+import { SnapshotRepository, type SnapshotStore } from './snapshot'
 
 const STORAGE_KEY = 'retention-planner:v1'
-
-interface Snapshot {
-  goals: GoalRow[]
-  items: ItemRow[]
-  reviews: ReviewRow[]
-  settings: Record<string, string>
-  /** 잡아둔 복습. 계산으로 다시 만들 수 있지만 켜자마자 보여줄 수 있게 함께 남긴다. */
-  planned?: PlannedReviewRow[]
-  /** 지운 흔적. 이 칸이 생기기 전에 남긴 것에는 없다. */
-  tombstones?: TombstoneRow[]
-}
 
 /**
  * 브라우저에서 도는 동안 데이터를 남겨 둔다.
@@ -28,143 +9,21 @@ interface Snapshot {
  * 새로고침 한 번에 적어둔 게 사라지지 않게 하려는 것이다.
  * 계약은 인메모리 구현과 완전히 같고, 바뀔 때마다 통째로 한 번 저장한다.
  */
-export class LocalRepository implements Repository {
-  private readonly inner = new MemoryRepository()
+export class LocalRepository extends SnapshotRepository {
+  constructor() {
+    // 저장된 내용을 못 읽으면 빈 상태로 시작한다. 지우지는 않는다.
+    super(browserStore, { startEmptyWhenUnreadable: true })
+  }
+}
 
-  async init(): Promise<void> {
-    await this.inner.init()
+const browserStore: SnapshotStore = {
+  async read() {
     const raw = readRaw()
-    if (!raw) return
-    try {
-      const parsed = JSON.parse(raw) as Snapshot
-      await this.inner.replaceAll({
-        goals: parsed.goals ?? [],
-        items: parsed.items ?? [],
-        reviews: parsed.reviews ?? [],
-        settings: parsed.settings ?? {},
-        tombstones: parsed.tombstones ?? [],
-      })
-      await this.inner.replacePlannedReviews(parsed.planned ?? [])
-    } catch {
-      // 저장된 내용을 못 읽으면 빈 상태로 시작한다. 지우지는 않는다.
-    }
-  }
-
-  async close(): Promise<void> {
-    await this.inner.close()
-  }
-
-  private async save(): Promise<void> {
-    const snapshot: Snapshot = {
-      goals: await this.inner.listGoals(),
-      items: await this.inner.listItems(),
-      reviews: await this.inner.listReviews(),
-      settings: await this.inner.listSettings(),
-      planned: await this.inner.listPlannedReviews(),
-      tombstones: await this.inner.listTombstones(),
-    }
+    return raw ? JSON.parse(raw) : null
+  },
+  async write(snapshot) {
     writeRaw(JSON.stringify(snapshot))
-  }
-
-  listGoals(): Promise<GoalRow[]> {
-    return this.inner.listGoals()
-  }
-
-  getGoal(id: string): Promise<GoalRow | null> {
-    return this.inner.getGoal(id)
-  }
-
-  async insertGoal(goal: GoalRow): Promise<void> {
-    await this.inner.insertGoal(goal)
-    await this.save()
-  }
-
-  async updateGoal(id: string, patch: Partial<GoalRow>): Promise<void> {
-    await this.inner.updateGoal(id, patch)
-    await this.save()
-  }
-
-  async deleteGoal(id: string): Promise<void> {
-    await this.inner.deleteGoal(id)
-    await this.save()
-  }
-
-  listItems(): Promise<ItemRow[]> {
-    return this.inner.listItems()
-  }
-
-  getItem(id: string): Promise<ItemRow | null> {
-    return this.inner.getItem(id)
-  }
-
-  async insertItem(item: ItemRow): Promise<void> {
-    await this.inner.insertItem(item)
-    await this.save()
-  }
-
-  async updateItem(id: string, patch: Partial<ItemRow>): Promise<void> {
-    await this.inner.updateItem(id, patch)
-    await this.save()
-  }
-
-  async deleteItem(id: string): Promise<void> {
-    await this.inner.deleteItem(id)
-    await this.save()
-  }
-
-  listPlannedReviews(): Promise<PlannedReviewRow[]> {
-    return this.inner.listPlannedReviews()
-  }
-
-  async replacePlannedReviews(rows: PlannedReviewRow[]): Promise<void> {
-    await this.inner.replacePlannedReviews(rows)
-    await this.save()
-  }
-
-  listReviews(): Promise<ReviewRow[]> {
-    return this.inner.listReviews()
-  }
-
-  listReviewsByItem(itemId: string): Promise<ReviewRow[]> {
-    return this.inner.listReviewsByItem(itemId)
-  }
-
-  async insertReview(review: ReviewRow): Promise<void> {
-    await this.inner.insertReview(review)
-    await this.save()
-  }
-
-  async deleteReview(id: string): Promise<void> {
-    await this.inner.deleteReview(id)
-    await this.save()
-  }
-
-  listTombstones(): Promise<TombstoneRow[]> {
-    return this.inner.listTombstones()
-  }
-
-  async addTombstones(rows: TombstoneRow[]): Promise<void> {
-    await this.inner.addTombstones(rows)
-    await this.save()
-  }
-
-  getSetting(key: string): Promise<string | null> {
-    return this.inner.getSetting(key)
-  }
-
-  async setSetting(key: string, value: string): Promise<void> {
-    await this.inner.setSetting(key, value)
-    await this.save()
-  }
-
-  listSettings(): Promise<Record<string, string>> {
-    return this.inner.listSettings()
-  }
-
-  async replaceAll(data: Snapshot): Promise<void> {
-    await this.inner.replaceAll(data)
-    await this.save()
-  }
+  },
 }
 
 function readRaw(): string | null {

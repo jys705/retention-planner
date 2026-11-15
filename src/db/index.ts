@@ -7,6 +7,13 @@ export * from './types'
 export { LocalRepository } from './local'
 export { MemoryRepository } from './memory'
 export { SqliteRepository } from './sqlite'
+export {
+  parseSnapshot,
+  SnapshotFormatError,
+  SnapshotRepository,
+  type Snapshot,
+  type SnapshotStore,
+} from './snapshot'
 
 /** Tauri 셸 안에서 도는지. 브라우저에서는 SQL 플러그인이 없다. */
 export function isTauri(): boolean {
@@ -42,6 +49,16 @@ export async function getRepository(): Promise<Repository> {
   await repo.init()
   cached = repo
   return repo
+}
+
+/**
+ * 저장소를 밖에서 정해 준다.
+ *
+ * 옵시디언 플러그인처럼 저장할 곳을 껍데기가 쥐고 있을 때 쓴다. 넘기기 전에 init 을
+ * 끝내 둔다. 못 읽었을 때 어떻게 할지는 껍데기가 정해야 한다.
+ */
+export function provideRepository(repo: Repository): void {
+  cached = repo
 }
 
 export function resetRepositoryForTest(): void {

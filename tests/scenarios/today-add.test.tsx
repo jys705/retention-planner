@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TodayScreen } from '../../src/features/today/TodayScreen'
 import { usePlanner } from '../../src/store/planner'
@@ -137,6 +137,33 @@ describe('오늘 화면: 항목 적기', () => {
     await user.type(screen.getByPlaceholderText('3, 7번 틀림'), '3, 7번 틀림')
     await user.click(screen.getByRole('button', { name: /적어두기/ }))
     expect(usePlanner.getState().items[0].memo).toBe('3, 7번 틀림')
+  })
+
+  it('S-308 한글을 조합하던 Enter 로 적어도 한 번만 적고 칸에 글자가 남지 않는다', async () => {
+    // 크롬 계열(옵시디언)은 조합 중인 Enter 를 먼저 보내고 조합을 끝낸 뒤 Enter 를 또 보낸다.
+    // 첫 Enter 에서 바로 비우면 조합이 끝나며 마지막 글자가 빈 칸에 다시 들어간다.
+    await setupApp(TODAY)
+    render(<TodayScreen onOpenItem={() => {}} />)
+    const input = screen.getByLabelText('새 항목 제목') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '요약함' } })
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(usePlanner.getState().items).toHaveLength(1))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(usePlanner.getState().items.map((i) => i.title)).toEqual(['요약함'])
+    expect(input).toHaveValue('')
+  })
+
+  it('S-309 조합 중인 Enter 하나만 와도 조합이 끝난 글로 적는다', async () => {
+    await setupApp(TODAY)
+    render(<TodayScreen onOpenItem={() => {}} />)
+    const input = screen.getByLabelText('새 항목 제목') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '요약' } })
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true })
+    // 조합이 끝나며 마지막 글자가 붙는다.
+    fireEvent.change(input, { target: { value: '요약함' } })
+    await waitFor(() => expect(usePlanner.getState().items).toHaveLength(1))
+    expect(usePlanner.getState().items[0].title).toBe('요약함')
   })
 
   it('S-009 소속 목표를 골라 적는다', async () => {

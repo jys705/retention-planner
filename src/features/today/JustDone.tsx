@@ -36,7 +36,7 @@ export function JustDone({
       label="방금 한 일"
       actions={<NoteButton onClick={onUndo}>되돌리기</NoteButton>}
     >
-      <span className="text-[12.5px] leading-relaxed text-text-2">
+      <span className="text-pretty break-keep text-[12.5px] leading-relaxed text-text-2">
         {/* 제목이 길거나 숫자로 끝나도 문장과 안 엉키게 따옴표로 떼어 놓는다. */}
         <span className="text-text">{`"${last.title}"`}</span>
         {josa(last.title, '을', '를')}{' '}

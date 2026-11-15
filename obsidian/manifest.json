@@ -1,0 +1,10 @@
+{
+  "id": "retention-planner",
+  "name": "Retention Planner",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.7",
+  "description": "공부한 것을 적어 두면 다시 볼 날을 계산해 줍니다. 오늘 볼 항목을 노트와 캔버스 카드에 띄웁니다.",
+  "author": "jys705",
+  "authorUrl": "https://github.com/jys705",
+  "isDesktopOnly": true
+}

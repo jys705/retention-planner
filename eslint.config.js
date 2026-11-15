@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'src-tauri'] },
+  { ignores: ['dist', 'obsidian/dist', 'node_modules', 'src-tauri'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],
@@ -30,7 +30,13 @@ export default tseslint.config(
     },
   },
   {
-    files: ['tests/**/*.{ts,tsx}', 'vite.config.ts', 'eslint.config.js'],
+    files: [
+      'tests/**/*.{ts,tsx}',
+      'vite.config.ts',
+      'eslint.config.js',
+      'obsidian/vite.config.ts',
+      'obsidian/build/**/*.ts',
+    ],
     languageOptions: { globals: { ...globals.node } },
   },
   {

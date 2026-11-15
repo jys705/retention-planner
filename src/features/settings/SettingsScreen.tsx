@@ -8,7 +8,7 @@ import { relativeWindow } from '../../core/horizon/horizon'
 import type { DateOnly } from '../../lib/date'
 import { monthDay, percent } from '../../lib/format'
 import type { ThemePreference } from '../../lib/settings'
-import { fileNameOf, saveTextFile } from '../../lib/saveFile'
+import { useHost, type SavedFile } from '../../lib/host'
 import {
   BackupFormatError,
   backupFilename,
@@ -55,27 +55,28 @@ export function SettingsScreen() {
   const importAll = usePlanner((s) => s.importAll)
   const mergeAll = usePlanner((s) => s.mergeAll)
   const exportBackup = usePlanner((s) => s.exportBackup)
+  const host = useHost()
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [paramsOpen, setParamsOpen] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const mergeRef = useRef<HTMLInputElement>(null)
 
-  // 데스크톱 앱이면 다운로드 폴더에 쓴다. 어디에 생겼는지 알아야 다른 컴퓨터로 옮긴다.
-  function savedTo(path: string | null): string {
-    return path ? ` 다운로드 폴더에 저장했어요. 파일 이름은 ${fileNameOf(path)} 이에요.` : ''
+  // 어디에 생겼는지 알아야 다른 컴퓨터로 옮긴다. 브라우저가 받아 갔으면 브라우저가 알린다.
+  function savedTo(saved: SavedFile | null): string {
+    return saved ? ` ${saved.place}에 저장했어요. 파일 이름은 ${saved.name} 이에요.` : ''
   }
 
   async function exportJson() {
     try {
       const backup = await exportBackup()
-      const path = await saveTextFile(
+      const saved = await host.saveTextFile(
         backupFilename(clockToday()),
         JSON.stringify(backup, null, 2),
         'application/json'
       )
       setMessage(
-        `항목 ${items.length}개와 평가 ${reviews.length}건을 내보냈어요.${savedTo(path)}`
+        `항목 ${items.length}개와 평가 ${reviews.length}건을 내보냈어요.${savedTo(saved)}`
       )
     } catch {
       setMessage('내보내지 못했어요. 다시 해 보세요.')
@@ -84,12 +85,12 @@ export function SettingsScreen() {
 
   async function exportCsv() {
     try {
-      const path = await saveTextFile(
+      const saved = await host.saveTextFile(
         csvFilename(clockToday()),
         toCsv(items, goals),
         'text/csv'
       )
-      setMessage(`항목 ${items.length}개를 표로 내보냈어요.${savedTo(path)}`)
+      setMessage(`항목 ${items.length}개를 표로 내보냈어요.${savedTo(saved)}`)
     } catch {
       setMessage('내보내지 못했어요. 다시 해 보세요.')
     }
@@ -192,19 +193,22 @@ export function SettingsScreen() {
           </div>
         </Row>
 
-        <Row label="테마" note="시스템을 고르면 macOS 설정을 따라가요.">
-          <div className="flex flex-wrap gap-[6px]">
-            {THEMES.map((theme) => (
-              <Chip
-                key={theme.key}
-                active={settings.theme === theme.key}
-                onClick={() => void saveSetting('theme', theme.key)}
-              >
-                {theme.name}
-              </Chip>
-            ))}
-          </div>
-        </Row>
+        {/* 옵시디언 안에서는 옵시디언 테마를 따른다. 여기서 골라도 바뀌지 않는 줄은 두지 않는다. */}
+        {host.ownsTheme ? (
+          <Row label="테마" note="시스템을 고르면 macOS 설정을 따라가요.">
+            <div className="flex flex-wrap gap-[6px]">
+              {THEMES.map((theme) => (
+                <Chip
+                  key={theme.key}
+                  active={settings.theme === theme.key}
+                  onClick={() => void saveSetting('theme', theme.key)}
+                >
+                  {theme.name}
+                </Chip>
+              ))}
+            </div>
+          </Row>
+        ) : null}
 
         <Row
           label="대략 목표의 여유 폭"

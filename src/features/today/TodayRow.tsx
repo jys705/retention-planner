@@ -2,22 +2,14 @@ import type { Grade } from '../../core/fsrs/types'
 import { AdjustedBadge, Badge } from '../../components/Badge'
 import { RailRow } from '../../components/Rail'
 import type { GoalRow, ItemRow, ReviewRow } from '../../db/types'
-import { statusBadgeOf, dueReason } from '../../lib/badge'
+import { dueReason } from '../../lib/badge'
 import { cn } from '../../lib/cn'
 import type { DateOnly } from '../../lib/date'
-import {
-  effectiveConfig,
-  goalColor,
-  memoryStateOf,
-  stateForRating,
-  splitTitle,
-} from '../../lib/domain'
+import { goalColor } from '../../lib/domain'
 import { dueLabel, percent } from '../../lib/format'
 import type { Settings } from '../../lib/settings'
-import { defaultFsrs } from '../../core/fsrs/fsrs6'
-import { diffDays } from '../../lib/date'
 import { GRADE_HINT_SHORT } from '../../lib/grade'
-import { gradeOptions } from './gradeOptions'
+import { todayRowModel } from './rowModel'
 
 export interface TodayRowProps {
   item: ItemRow
@@ -47,34 +39,13 @@ export function TodayRow({
   onOpen,
   reviews,
 }: TodayRowProps) {
-  const config = effectiveConfig(item, goal, settings)
-  const state = memoryStateOf(item)
-  // 저장할 때와 같은 계산을 봐야 버튼이 약속한 날짜가 실제로 잡힌다.
-  const rating = stateForRating(item, reviews, today)
-  const retention = state && item.last_review
-    ? defaultFsrs.retrievability(
-        Math.max(0, diffDays(item.last_review, today)),
-        state.stability
-      )
-    : 1
-
-  const options = gradeOptions({
-    reviewedAt: today,
-    lastReview: rating.lastReview,
-    state: rating.state,
-    horizon: config.horizon,
-    intensity: config.intensity,
-    targetRetention: config.targetRetention,
-    minReviews: config.minReviews,
-    // 저장할 때와 같이 지금 볼 이 한 번도 센다.
-    repsSinceGoal: item.reps_since_goal + 1,
-    bufferDays: settings.bufferDays,
-    maxIntervalDays: config.maxIntervalDays,
-    postGoalMode: config.postGoalMode,
+  const { retention, options, badge, parts } = todayRowModel({
+    item,
+    goal,
+    reviews,
+    settings,
+    today,
   })
-
-  const badge = statusBadgeOf(item.due_kind, item.goal_risk)
-  const parts = splitTitle(item.title)
 
   return (
     <div
