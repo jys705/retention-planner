@@ -81,7 +81,8 @@ describe('오늘 화면: 평가', () => {
         86400000
     )
     const expected =
-      gap === 0 ? '오늘' : gap === 1 ? '내일' : `${gap}일 뒤`
+      // 'N일 뒤' 는 줄이 갈리지 않게 줄을 바꾸지 않는 빈칸으로 붙어 있다.
+      gap === 0 ? '오늘' : gap === 1 ? '내일' : `${gap}일\u00a0뒤`
     expect(promised).toBe(expected)
   })
 
@@ -96,7 +97,7 @@ describe('오늘 화면: 평가', () => {
       ).getByText(/뒤$|^내일$|^오늘$/).textContent!
       if (text === '오늘') return 0
       if (text === '내일') return 1
-      return Number(text.replace('일 뒤', ''))
+      return Number(text.replace(/일\s뒤$/, ''))
     }
     expect(days('쉬움')).toBeGreaterThan(days('무난함'))
     expect(days('무난함')).toBeGreaterThan(days('어려움'))

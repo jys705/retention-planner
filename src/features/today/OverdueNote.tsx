@@ -27,13 +27,13 @@ export function OverdueNote({
         compact ? 'flex-wrap gap-x-[6px] gap-y-[1px]' : 'gap-[6px]'
       )}
     >
-      <span className="text-[13px] text-text-2">
+      <span className="break-keep text-[13px] text-text-2">
         {mixed ? '이 가운데 밀린 것' : '밀린 것'}
       </span>
       <span className="num text-[13px] font-semibold text-imp-fg">
         {overdue}개
       </span>
-      <span className="text-[12px] text-text-3">
+      <span className="break-keep text-[12px] text-text-3">
         {mixed
           ? '볼 날이 지났어요. 오늘 같이 보면 됩니다.'
           : '모두 볼 날이 지났어요.'}

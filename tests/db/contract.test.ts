@@ -484,6 +484,42 @@ describe('통째로 남기는 저장소', () => {
     expect(state.saved).toEqual({ items: '항목이 아님' })
   })
 
+  it('아는 칸이 하나도 없이 다른 칸만 있으면 빈 기록으로 읽지 않고 멈춘다', async () => {
+    // 다른 판이 다르게 남긴 것이거나 손으로 고치다 한 겹 더 싼 것이다. 빈 기록으로 읽으면 다음 쓰기가 지운다.
+    const nested = { data: { items: [makeItem('i1')] } }
+    const { store, state } = asyncStore(nested)
+    const repo = new SnapshotRepository(store)
+    await expect(repo.init()).rejects.toThrow('알아볼 수 있는 칸이 하나도 없어요')
+    expect(state.writes).toBe(0)
+    expect(state.saved).toEqual(nested)
+  })
+
+  it('아무 칸도 없는 빈 덩어리는 잃을 것이 없어 빈 기록으로 연다', async () => {
+    const repo = new SnapshotRepository(asyncStore({}).store)
+    await repo.init()
+    expect(await repo.listItems()).toEqual([])
+  })
+
+  it('이름표가 없는 줄이 있으면 망가진 파일로 보고 멈춘다', async () => {
+    const { store, state } = asyncStore({ items: [{ title: '이름표 없음' }] })
+    const repo = new SnapshotRepository(store)
+    await expect(repo.init()).rejects.toThrow('items 칸에 이름표가 없는 줄이 있어요')
+    expect(state.writes).toBe(0)
+  })
+
+  it('제목이 빠진 항목과 이름이 빠진 목표는 그렇다고 적어 읽는다. 화면이 멈추지도 비지도 않는다', async () => {
+    const item = makeItem('i1') as unknown as Record<string, unknown>
+    const other = makeItem('i2', { created_at: '2026-08-02T00:00:00.000Z' }) as unknown as Record<string, unknown>
+    const goal = makeGoal('g1') as unknown as Record<string, unknown>
+    delete item.title
+    other.title = { 이름: '묶음' }
+    goal.name = null
+    const repo = new SnapshotRepository(asyncStore({ items: [item, other], goals: [goal] }).store)
+    await repo.init()
+    expect((await repo.listItems()).map((i) => i.title)).toEqual(['제목 없음', '제목 없음'])
+    expect((await repo.listGoals())[0].name).toBe('이름 없는 목표')
+  })
+
   it('읽다가 던지면 그 오류를 그대로 넘긴다', async () => {
     const repo = new SnapshotRepository({
       read: async () => {

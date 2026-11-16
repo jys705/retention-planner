@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import type { Grade } from '../../core/fsrs/types'
 import { DEFAULT_INITIAL_GRADE } from '../../core/policy/constraints'
 import { AdjustedBadge, Badge } from '../../components/Badge'
@@ -8,10 +8,11 @@ import { cn } from '../../lib/cn'
 import type { DateOnly } from '../../lib/date'
 import { goalColor } from '../../lib/domain'
 import { dueLabel, fullDate, josa, percent } from '../../lib/format'
-import { GRADE_HINT_SHORT } from '../../lib/grade'
+import { GRADE_HINT_PAIRS } from '../../lib/grade'
 import type { Settings } from '../../lib/settings'
 import { usePlanner, type NewItemDraft } from '../../store/planner'
 import { submitAfterComposition } from '../../lib/ime'
+import { useReveal } from '../../lib/reveal'
 import { JustDone } from './JustDone'
 import { OverdueNote } from './OverdueNote'
 import { todayRowModel } from './rowModel'
@@ -42,7 +43,7 @@ export function TodayCard({
   if (!ready) {
     return (
       <CardFrame>
-        <p className="px-[14px] py-[16px] text-[13px] text-text-3">불러오는 중</p>
+        <p className="rp-card-pad px-[14px] py-[16px] text-[13px] text-text-3">불러오는 중</p>
       </CardFrame>
     )
   }
@@ -51,7 +52,7 @@ export function TodayCard({
   if (!onboardingDone) {
     return (
       <CardFrame>
-        <div className="flex flex-col gap-[8px] px-[16px] pb-[16px] pt-[14px]">
+        <div className="rp-card-pad flex flex-col gap-[8px] px-[16px] pb-[16px] pt-[14px]">
           <p className="text-[15px] font-semibold tracking-[-0.01em]">
             처음 쓰시나요?
           </p>
@@ -63,7 +64,7 @@ export function TodayCard({
             <button
               type="button"
               onClick={() => onOpenApp(null)}
-              className="rounded-ctl bg-accent px-[12px] py-[6px] text-[12.5px] font-semibold text-white"
+              className="rounded-ctl bg-accent px-[12px] py-[6px] text-[12.5px] font-semibold text-on-fill"
             >
               시작하기
             </button>
@@ -90,6 +91,7 @@ export function TodayCard({
     dueToday,
     todayItems,
     listedToday,
+    reviewedToday,
     upcoming,
     activeCount,
     showFullGradeHelp,
@@ -99,7 +101,12 @@ export function TodayCard({
 
   return (
     <CardFrame>
-      <header className="flex items-center gap-[10px] px-[14px] pb-[10px] pt-[12px]">
+      {/*
+        rp-card-head, rp-card-list, rp-card-add, rp-card-pad 는 옵시디언이 쓰는 이름표다. 캔버스 칸을
+        채울 때 머리와 한 줄 적기를 칸의 위아래에 붙이고 그 사이만 넘긴다. 노트 편집 화면에서는 고치기
+        단추 자리를 비운다. 데스크톱 앱에서는 아무 일도 없다.
+      */}
+      <header className="rp-card-head flex flex-none items-center gap-[10px] px-[16px] pb-[10px] pt-[12px]">
         <div className="flex min-w-0 flex-col gap-[3px]">
           <span className="truncate text-[11.5px] text-text-3">
             {fullDate(today)}
@@ -124,7 +131,7 @@ export function TodayCard({
       </header>
 
       {overdue.length > 0 ? (
-        <div className="px-[14px] pb-[10px]">
+        <div className="flex-none px-[16px] pb-[10px]">
           <OverdueNote
             overdue={overdue.length}
             mixed={dueToday.length > 0}
@@ -134,7 +141,7 @@ export function TodayCard({
       ) : null}
 
       {undoable ? (
-        <div className="px-[10px]">
+        <div className="flex-none px-[6px]">
           <JustDone
             last={undoable}
             today={today}
@@ -145,7 +152,8 @@ export function TodayCard({
         </div>
       ) : null}
 
-      <div className="border-t border-line">
+      {/* 캔버스 칸을 채울 때는 목록만 안에서 넘긴다. 머리와 한 줄 적기는 늘 보인다. */}
+      <div className="rp-card-list min-h-0 flex-1 overflow-y-auto border-t border-line">
         {todayItems.length > 0 ? (
           <div
             role="list"
@@ -185,6 +193,7 @@ export function TodayCard({
               activeCount={activeCount}
               goalsToday={goalsToday}
               listedToday={listedToday}
+              reviewedToday={reviewedToday}
               upcoming={upcoming}
               compact
             />
@@ -192,7 +201,7 @@ export function TodayCard({
         )}
       </div>
 
-      <div className="border-t border-line">
+      <div className="rp-card-add flex-none border-t border-line">
         <CardAdd today={today} onAdd={addItem} />
       </div>
     </CardFrame>
@@ -203,7 +212,7 @@ function CardFrame({ children }: { children: React.ReactNode }) {
   return (
     <section
       aria-label="오늘 복습"
-      className="@container flex flex-col overflow-hidden rounded-panel border border-line bg-surface text-text shadow-[var(--shadow-sm)]"
+      className="rp-card @container flex flex-col overflow-hidden rounded-panel border border-line bg-surface text-text shadow-[var(--shadow-sm)]"
     >
       {children}
     </section>
@@ -249,6 +258,7 @@ function CardRow({
     today,
   })
   const dot = goal ? goalColor(goal, goalIndex) : 'var(--dot)'
+  const panel = useReveal<HTMLDivElement>(expanded)
 
   return (
     <div
@@ -277,11 +287,11 @@ function CardRow({
           onClick={onOpen}
           title={`${item.title} 자세히 보기`}
           aria-label={`${item.title} 자세히 보기`}
-          className="min-w-0 flex-1 truncate text-left text-[14px] font-medium tracking-[-0.005em] hover:text-accent"
+          className="group min-w-0 flex-1 truncate text-left text-[14px] font-medium tracking-[-0.005em] hover:text-accent"
         >
-          <span className="text-text-2">{parts.pre}</span>
+          <span className="text-text-2 group-hover:text-accent">{parts.pre}</span>
           <span className="num text-[13px] font-medium">{parts.num}</span>
-          <span className="text-text-2">{parts.post}</span>
+          <span className="text-text-2 group-hover:text-accent">{parts.post}</span>
         </button>
         {badge ? (
           <span className="hidden flex-none @sm:inline-flex">
@@ -293,29 +303,30 @@ function CardRow({
             <AdjustedBadge hint="하루에 볼 게 많아서 날짜를 옮겼어요." />
           </span>
         ) : null}
-        <span className="num hidden w-[54px] flex-none text-right text-[12px] text-text-2 @md:inline">
-          {dueLabel(today, item.due ?? today)}
-        </span>
+        {/* 열은 앱의 줄과 같은 차례다. 폭을 고정해 줄마다 같은 자리에 선다. */}
         <span className="num w-[38px] flex-none text-right text-[12.5px] text-text">
           {percent(retention)}
         </span>
+        <span className="num hidden w-[64px] flex-none text-right text-[12px] text-text-2 @md:inline">
+          {dueLabel(today, item.due ?? today)}
+        </span>
         <span
           title={goal?.name ?? '목표 없음'}
-          className="flex min-w-0 flex-none items-center gap-[5px]"
+          className="flex flex-none items-center gap-[5px] @md:w-[100px]"
         >
           <span
             aria-hidden
             className="h-[6px] w-[6px] flex-none rounded-full"
             style={{ background: dot }}
           />
-          <span className="hidden max-w-[96px] truncate text-[12px] text-text-3 @md:inline">
+          <span className="hidden min-w-0 truncate text-[12px] text-text-3 @md:inline">
             {goal?.name ?? '없음'}
           </span>
         </span>
       </div>
 
       {expanded ? (
-        <div className="px-[10px] pb-[12px] pt-[2px] @sm:pl-[36px]">
+        <div ref={panel} className="px-[10px] pb-[12px] pt-[2px] @sm:pl-[36px]">
           <p className="pb-[8px] text-[12.5px] text-text-2">얼마나 기억났나요?</p>
           <div className="grid grid-cols-2 gap-[6px] @md:grid-cols-4">
             {options.map((option) => (
@@ -341,13 +352,19 @@ function CardRow({
                     {option.hint}
                   </span>
                 ) : null}
-                <span className="num text-[12px] text-accent">{option.next}</span>
+                {/* 설명 줄 수가 달라도 다음 날짜는 네 칸 모두 바닥에 맞춘다. */}
+                <span className="num mt-auto text-[12px] text-accent">{option.next}</span>
               </button>
             ))}
           </div>
           {!showFullGradeHelp ? (
             <p className="text-pretty break-keep pt-[8px] text-[11px] leading-snug text-text-3">
-              {GRADE_HINT_SHORT}
+              {GRADE_HINT_PAIRS.map((pair, index) => (
+                <Fragment key={pair}>
+                  {index > 0 ? ' | ' : ''}
+                  <span className="whitespace-nowrap">{pair}</span>
+                </Fragment>
+              ))}
             </p>
           ) : null}
           <p className="text-pretty break-keep pt-[6px] text-[11px] leading-snug text-text-3">
@@ -398,7 +415,7 @@ function CardAdd({
 
   return (
     <div>
-      <div className="flex h-[48px] items-center gap-[10px] pl-[16px] pr-[10px]">
+      <div className="flex h-[48px] items-center gap-[10px] px-[16px]">
         <span
           aria-hidden
           className="flex h-[16px] w-[16px] flex-none items-center justify-center text-[15px] text-text-3"
@@ -422,13 +439,13 @@ function CardAdd({
           }}
           placeholder="방금 공부한 것을 한 줄로"
           aria-label="새 항목 제목"
-          className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-text-3"
+          className="min-w-0 flex-1 text-ellipsis bg-transparent text-[14px] outline-none placeholder:text-text-3"
         />
         <button
           type="button"
           onClick={() => void submit()}
           disabled={title.trim() === ''}
-          className="flex-none rounded-ctl bg-accent px-[11px] py-[5px] text-[12.5px] font-semibold text-white disabled:opacity-35"
+          className="flex-none rounded-ctl bg-accent px-[11px] py-[5px] text-[12.5px] font-semibold text-on-fill disabled:opacity-35"
         >
           적어두기
         </button>

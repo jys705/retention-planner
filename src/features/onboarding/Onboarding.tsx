@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { addDays, type DateOnly } from '../../lib/date'
 import { monthDay } from '../../lib/format'
 import { usePlanner } from '../../store/planner'
+import { NumText } from '../../components/NumText'
+import { cn } from '../../lib/cn'
 
 /**
  * 단계별 안내.
@@ -46,7 +48,6 @@ export function Onboarding() {
     await saveSetting('onboardingDone', true)
   }
 
-  const current = list[step]
   const last = step === list.length - 1
 
   return (
@@ -65,15 +66,28 @@ export function Onboarding() {
           </button>
         </div>
 
-        <h1 className="pt-4 text-[19px] font-semibold leading-snug">
-          {current.title}
-        </h1>
-        <p className="pt-2 text-[13.5px] leading-relaxed text-text-2">
-          {current.body}
-        </p>
+        {/*
+          단계마다 글 길이가 달라도 상자 높이가 같아야 아래 단추가 제자리에 선다. 세 단계의 글을
+          한 칸에 겹쳐 두고 지금 단계만 보인다. 가장 긴 단계가 높이를 정한다.
+        */}
+        <div className="grid">
+          {list.map((item, index) => (
+            <div
+              key={item.title}
+              aria-hidden={index !== step}
+              className={cn('col-start-1 row-start-1', index !== step && 'invisible')}
+            >
+              <h1 className="pt-4 text-[19px] font-semibold leading-snug">{item.title}</h1>
+              <p className="text-pretty break-keep pt-2 text-[13.5px] leading-relaxed text-text-2">
+                {item.body}
+              </p>
 
-        <div className="num mt-5 rounded-card bg-rail px-[14px] py-[12px] text-[13px] text-text-2">
-          {current.example}
+              {/* 예시는 한글 문장이다. 통째로 등폭이면 낱말 사이가 벌어진다. 숫자 덩어리만 등폭으로. */}
+              <div className="mt-5 rounded-card bg-rail px-[14px] py-[12px] text-[13px] text-text-2">
+                <NumText text={item.example} />
+              </div>
+            </div>
+          ))}
         </div>
 
         <div className="flex items-center justify-between pt-6">
@@ -91,7 +105,7 @@ export function Onboarding() {
               if (last) void finish()
               else setStep((s) => s + 1)
             }}
-            className="rounded-ctl bg-accent px-[16px] py-[8px] text-[13px] font-semibold text-white"
+            className="rounded-ctl bg-accent px-[16px] py-[8px] text-[13px] font-semibold text-on-fill"
           >
             {last ? '시작하기' : '다음'}
           </button>

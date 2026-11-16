@@ -1,11 +1,11 @@
 /*
-  옵시디언 쪽 그릇을 다듬는 규칙. 이 파일만 가두지 않고 그대로 붙는다.
+  옵시디언 쪽 그릇을 다듬는 규칙. 앱 CSS 뒤에 붙는다.
 
-  앱 뿌리(.rp-root)는 옵시디언이 만든 요소 안에 선다. 뿌리는 옵시디언에게서 글자 크기,
-  줄 간격, 공백 처리 같은 것을 물려받는다. 편집기 안이면 공백을 그대로 두는 설정까지
-  물려받는다. 그래서 뿌리에서 물려받는 값을 앱 기본값으로 되돌린다.
+  뿌리는 .rp-root 하나로 적는다. 빌드가 앱 CSS 와 같은 무게의 뿌리 선택자로 바꿔 넣는다.
+  옵시디언 CSS 는 reset.css 가 앞에서 걷는다. 여기서는 데스크톱 창의 html, body 가 앱에
+  주던 바탕을 뿌리에 다시 준다.
 */
-.rp-root.rp-root.rp-root {
+.rp-root {
   display: block;
   box-sizing: border-box;
   margin: 0;
@@ -22,70 +22,221 @@
   text-transform: none;
   text-shadow: none;
   white-space: normal;
-  word-break: normal;
-  overflow-wrap: normal;
+  /* 데스크톱 앱의 body 와 같다. 한글은 낱말 가운데서 줄을 바꾸지 않는다. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
   hyphens: manual;
   cursor: auto;
   tab-size: 4;
   -webkit-user-select: auto;
   user-select: auto;
+  /*
+    옵시디언은 aria-label 이 붙은 것 위에 마우스를 두면 자기 말풍선을 띄운다. 앱의 aria-label 은
+    화면 낭독기에 읽어 줄 말이라 말풍선으로 보이면 어색하다. 데스크톱 앱처럼 띄우지 않는다.
+    값은 옵시디언이 정한 이름이다. 물려받으므로 앱 전체에 닿는다.
+  */
+  --no-tooltip: true;
 }
 
 /*
-  옵시디언과 테마는 요소 이름과 본문 클래스로 글자와 단추를 꾸민다. 앱의 바탕 재설정은
-  브라우저 기본값만 되돌리므로 그 밖의 꾸밈이 앱 안으로 샌다. 물려받는 글자 성질은 앱
-  뿌리에서 다시 물려받게 하고, 단추와 입력 칸에 붙는 그림자와 높이는 걷는다.
-
-  무게는 앱 도구 클래스보다 가볍고 요소별 바탕 재설정보다도 가볍다. 앱이 정한 값은 늘 이긴다.
-  그림(svg) 안은 건드리지 않는다. 차트 글자는 속성으로 크기를 정한다.
+  노트와 캔버스 카드 속에서는 바탕을 깔지 않는다. 카드 테두리는 앱 카드가 그린다.
+  카드를 한 덩어리(inline-block)로 둔다. 조상에 걸린 밑줄이나 취소선은 속의 글자로 번지는데,
+  한 덩어리 안으로는 번지지 않는다. 폭은 그대로 다 쓴다.
 */
-.rp-root.rp-root.rp-root :where(:not(svg, svg *)) {
-  color: inherit;
-  font-family: inherit;
-  font-size: inherit;
-  font-style: inherit;
-  font-weight: inherit;
-  line-height: inherit;
-  letter-spacing: inherit;
-  word-spacing: inherit;
-  text-transform: inherit;
-  text-indent: inherit;
-}
-
-.rp-root.rp-root.rp-root :where(:not(svg, svg *, textarea, pre)) {
-  white-space: inherit;
-}
-
-.rp-root.rp-root.rp-root :where(button, input, select, textarea) {
-  box-shadow: none;
-  height: auto;
-  min-height: 0;
-  text-shadow: none;
-}
-
-.rp-root.rp-root.rp-root :where(button) {
-  cursor: default;
-}
-
-/* 노트와 캔버스 카드 속에서는 바탕을 깔지 않는다. 카드 테두리는 앱 카드가 그린다. */
-.rp-root.rp-root.rp-root.rp-block {
+.rp-root.rp-block {
+  display: inline-block;
+  width: 100%;
+  vertical-align: top;
   height: auto;
   background: transparent;
-  margin-block: 4px;
+  /* 한 덩어리의 바깥 여백은 옆 문단과 겹치지 않고 그대로 더해진다. 노트 글과의 사이는 옵시디언 것만 둔다. */
+  margin-block: 0;
 }
 
-/* 탭 하나를 앱이 다 쓴다. 옵시디언 보기의 안쪽 여백을 걷는다. */
+/* 캔버스 카드의 빈자리를 누르면 뿌리가 초점을 받는다. 테두리는 그리지 않는다. */
+.rp-root.rp-block:focus {
+  outline: none;
+}
+
+/*
+  캔버스 칸에 이 카드 하나만 있으면 카드가 칸을 꽉 채운다.
+
+  칸의 높이는 사람이 정하고, 카드는 오늘 볼 것이 많을수록 길어진다. 칸이 짧으면 칸이 넘기고,
+  카드 머리와 한 줄 적기는 칸의 위아래에 붙어 늘 보인다. 칸이 길면 카드가 늘어 칸을 채운다.
+  카드 높이를 칸에 묶지 않는다. 옵시디언의 '높이 맞추기'(칸 아래 모서리를 두 번 누르기)는 칸을
+  1px 로 줄여 놓고 내용 높이를 재는데, 묶어 두면 내용이 0 으로 재어져 칸이 4px 로 줄어든다.
+  칸 테두리가 카드 테두리 노릇을 하므로 카드 테두리와 그림자는 걷는다. 옵시디언이 칸 안쪽에
+  두는 좌우 여백, 위아래 16px 빈 줄, 스크롤바 자리도 걷는다. 칸에 다른 글이 같이 있으면 건드리지 않는다.
+*/
+.canvas-node-content .markdown-preview-view:has(> .markdown-preview-sizer > .el-pre > .block-language-retention-planner):not(:has(> .markdown-preview-sizer > :not(.markdown-preview-pusher, .el-pre), > .markdown-preview-sizer > .el-pre ~ .el-pre)) {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  /*
+    스크롤바 자리를 늘 비워 둔다. 목록이 길어져 스크롤바가 생기는 순간 카드가 15px 좁아지면,
+    카드 폭에 따라 보이는 열이 바뀌어 배지와 날짜가 들쭉날쭉 튄다.
+  */
+  scrollbar-gutter: stable;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* 키보드로 옮기거나 방금 한 일을 보여 줄 때, 위아래에 붙은 머리와 한 줄 적기 밑에 숨기지 않는다. */
+  scroll-padding-top: 76px;
+  scroll-padding-bottom: 56px;
+}
+
+/* 비워 둔 스크롤바 자리도 카드 바탕색이다. 안 그러면 칸 색이 오른쪽에 띠로 보인다. */
+body.theme-light .canvas-node-content .markdown-preview-view:has(> .markdown-preview-sizer > .el-pre > .block-language-retention-planner):not(:has(> .markdown-preview-sizer > :not(.markdown-preview-pusher, .el-pre), > .markdown-preview-sizer > .el-pre ~ .el-pre)) {
+  background-color: #ffffff;
+}
+
+body.theme-dark .canvas-node-content .markdown-preview-view:has(> .markdown-preview-sizer > .el-pre > .block-language-retention-planner):not(:has(> .markdown-preview-sizer > :not(.markdown-preview-pusher, .el-pre), > .markdown-preview-sizer > .el-pre ~ .el-pre)) {
+  background-color: #212320;
+}
+
+.canvas-node-content .markdown-preview-view:has(> .markdown-preview-sizer > .el-pre > .block-language-retention-planner):not(:has(> .markdown-preview-sizer > :not(.markdown-preview-pusher, .el-pre), > .markdown-preview-sizer > .el-pre ~ .el-pre))::before,
+.canvas-node-content .markdown-preview-view:has(> .markdown-preview-sizer > .el-pre > .block-language-retention-planner):not(:has(> .markdown-preview-sizer > :not(.markdown-preview-pusher, .el-pre), > .markdown-preview-sizer > .el-pre ~ .el-pre))::after {
+  content: none;
+}
+
+.canvas-node-content .markdown-preview-view:has(> .markdown-preview-sizer > .el-pre > .block-language-retention-planner):not(:has(> .markdown-preview-sizer > :not(.markdown-preview-pusher, .el-pre), > .markdown-preview-sizer > .el-pre ~ .el-pre)) > .markdown-preview-sizer {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  /* 옵시디언이 내용 높이를 글자로 박아 둔다. 카드가 줄어도 빈 자리가 남는다. */
+  min-height: 0 !important;
+  padding: 0;
+}
+
+.canvas-node-content .markdown-preview-view:has(> .markdown-preview-sizer > .el-pre > .block-language-retention-planner):not(:has(> .markdown-preview-sizer > :not(.markdown-preview-pusher, .el-pre), > .markdown-preview-sizer > .el-pre ~ .el-pre)) > .markdown-preview-sizer > .el-pre {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  margin: 0;
+  padding: 0;
+}
+
+.canvas-node-content .markdown-preview-view:has(> .markdown-preview-sizer > .el-pre > .block-language-retention-planner):not(:has(> .markdown-preview-sizer > :not(.markdown-preview-pusher, .el-pre), > .markdown-preview-sizer > .el-pre ~ .el-pre)) .block-language-retention-planner {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  margin: 0;
+}
+
+.canvas-node-content .markdown-preview-view:has(> .markdown-preview-sizer > .el-pre > .block-language-retention-planner):not(:has(> .markdown-preview-sizer > :not(.markdown-preview-pusher, .el-pre), > .markdown-preview-sizer > .el-pre ~ .el-pre)) .rp-root.rp-block {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  width: auto;
+  margin: 0;
+}
+
+.canvas-node-content .markdown-preview-view:has(> .markdown-preview-sizer > .el-pre > .block-language-retention-planner):not(:has(> .markdown-preview-sizer > :not(.markdown-preview-pusher, .el-pre), > .markdown-preview-sizer > .el-pre ~ .el-pre)) .rp-root .rp-card {
+  flex: 1 0 auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  /* 머리와 한 줄 적기가 칸의 스크롤에 붙으려면 카드가 넘침을 자르지 않아야 한다. */
+  overflow: visible;
+}
+
+.canvas-node-content .markdown-preview-view:has(> .markdown-preview-sizer > .el-pre > .block-language-retention-planner):not(:has(> .markdown-preview-sizer > :not(.markdown-preview-pusher, .el-pre), > .markdown-preview-sizer > .el-pre ~ .el-pre)) .rp-root .rp-card-list {
+  flex: 1 0 auto;
+  overflow: visible;
+}
+
+.canvas-node-content .markdown-preview-view:has(> .markdown-preview-sizer > .el-pre > .block-language-retention-planner):not(:has(> .markdown-preview-sizer > :not(.markdown-preview-pusher, .el-pre), > .markdown-preview-sizer > .el-pre ~ .el-pre)) .rp-root .rp-card-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+}
+
+.canvas-node-content .markdown-preview-view:has(> .markdown-preview-sizer > .el-pre > .block-language-retention-planner):not(:has(> .markdown-preview-sizer > :not(.markdown-preview-pusher, .el-pre), > .markdown-preview-sizer > .el-pre ~ .el-pre)) .rp-root .rp-card-add {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--surface);
+}
+
+/*
+  노트 편집 화면(라이브 미리보기)에서 옵시디언은 블록 오른쪽 위에 고치기 단추(</>)를 띄운다.
+  카드 머리의 '앱에서 보기' 와 겹친다. 블록 밖으로 빼면 옵시디언이 블록을 잘라(contain: paint)
+  안 보인다. 넓으면 카드 머리 오른쪽에 단추 자리를 비워 두고 그 줄 가운데에 세운다. 좁으면 그
+  자리를 비우는 만큼 머리 글이 잘리므로, 카드 위에 단추 한 줄을 두고 거기에 세운다.
+*/
+.markdown-source-view.mod-cm6 .cm-embed-block.cm-lang-retention-planner {
+  container: rp-live / inline-size;
+}
+
+@container rp-live (width >= 400px) {
+  .markdown-source-view.mod-cm6 .cm-embed-block.cm-lang-retention-planner .embed-actions {
+    top: 30px;
+    right: 14px;
+  }
+
+  .markdown-source-view.mod-cm6 .cm-embed-block.cm-lang-retention-planner .rp-root .rp-card-head,
+  .markdown-source-view.mod-cm6 .cm-embed-block.cm-lang-retention-planner .rp-root .rp-card-pad {
+    padding-right: 52px;
+  }
+}
+
+@container rp-live (width < 400px) {
+  .markdown-source-view.mod-cm6 .cm-embed-block.cm-lang-retention-planner .embed-actions {
+    top: 2px;
+    right: 4px;
+  }
+
+  .markdown-source-view.mod-cm6 .cm-embed-block.cm-lang-retention-planner .rp-root.rp-block {
+    margin-top: 30px;
+  }
+}
+
+/*
+  기록을 못 읽었거나 화면이 멈췄다는 말. 앱 탭에서는 탭 가장자리에 붙지 않게 가운데 둔다.
+  뿌리는 제 안의 여백을 밖으로 내보내지 않는다(flow-root). 안 그러면 위 여백이 뿌리 밖으로 새어
+  앱 전체가 40px 내려가고 그 자리에 옵시디언 바탕이 띠로 보인다.
+*/
+.rp-root.rp-app {
+  display: flow-root;
+}
+
+.rp-root.rp-app > .rp-gate {
+  max-width: 560px;
+  margin: 40px auto;
+}
+
 /*
   탭 하나를 앱이 다 쓴다. 옵시디언 보기의 안쪽 여백을 걷는다. 앱은 데스크톱 창의 가장
-  좁은 폭(900px)에 맞춰 그렸다. 칸이 그보다 좁으면 줄이 부서지지 않게 옆으로 밀어 본다.
+  좁은 폭(900px)에 맞춰 그렸다. 탭이 그보다 좁으면 왼쪽 메뉴는 그대로 두고 본문만 옆으로
+  넘긴다. 탭 전체를 넘기면 메뉴가 밀려나고 본문의 세로 스크롤바가 화면 밖으로 나간다.
 */
 .workspace-leaf-content[data-type='retention-planner'] > .view-content {
   padding: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
 }
 
-.rp-root.rp-root.rp-root.rp-app {
+.rp-root.rp-app {
   height: 100%;
-  min-width: 900px;
+}
+
+.rp-root.rp-app main {
+  overflow: auto;
+}
+
+.rp-root.rp-app main > * {
+  min-width: 704px;
+}
+
+/*
+  차트 라이브러리는 축 글자의 폭을 문서 body 에 붙인 숨은 글자로 잰다. 그 글자는 앱 밖이라
+  옵시디언 글꼴로 재어져서, 데스크톱 앱과 다른 날짜를 축에 고른다. 앱 글꼴로 재게 한다.
+*/
+#recharts_measurement_span {
+  font-family: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', system-ui, sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  letter-spacing: normal;
+  word-spacing: normal;
+  font-feature-settings: normal;
+  text-transform: none;
 }

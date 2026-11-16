@@ -260,12 +260,29 @@ describe('설정', () => {
       await user.click(screen.getByRole('button', { name: '내보내기' }))
       expect(
         await screen.findByText(
-          '항목 1개와 평가 0건을 내보냈어요. 다운로드 폴더에 저장했어요. 파일 이름은 retention-planner-2026-10-01.json 이에요.'
+          '항목 1개와 평가 0건을 내보냈어요. 다운로드 폴더에 저장했어요. 파일 이름은 retention-planner-2026-10-01.json이에요.'
         )
       ).toBeInTheDocument()
       const [cmd, args] = invoke.mock.calls[0] as unknown as [string, { name: string; contents: string }]
       expect(cmd).toBe('save_to_downloads')
       expect(JSON.parse(args.contents).tombstones).toEqual([])
+    } finally {
+      delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
+    }
+  })
+
+  it('S-318 표로 내보낸 파일 이름에는 읽는 소리에 맞는 말끝을 붙인다', async () => {
+    await setupApp(TODAY, { items: [anItem({ id: 'i1' })] })
+    const { user } = render(<SettingsScreen />)
+    ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+    try {
+      await user.click(screen.getByRole('button', { name: '표로 내보내기' }))
+      // 'csv' 는 씨에스브이로 읽어 받침이 없다. 'json' 은 제이슨이라 받침이 있다.
+      expect(
+        await screen.findByText(
+          '항목 1개를 표로 내보냈어요. 다운로드 폴더에 저장했어요. 파일 이름은 retention-planner-2026-10-01.csv예요.'
+        )
+      ).toBeInTheDocument()
     } finally {
       delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
     }

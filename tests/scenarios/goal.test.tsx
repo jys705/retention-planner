@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
+import { buildItemView } from '../../src/features/item/itemView'
 import { GoalDetailScreen } from '../../src/features/goal/GoalDetailScreen'
 import { GoalListScreen } from '../../src/features/goal/GoalListScreen'
 import { usePlanner } from '../../src/store/planner'
@@ -345,9 +346,9 @@ describe('목표 상세', () => {
 })
 
 describe('목표한 날 기억률', () => {
-  it('S-187 밀린 기간을 빼먹지 않는다', async () => {
-    // 지난 날수를 오늘부터 세면 밀린 기간이 통째로 빠진다. 스무 날 밀린 것과
-    // 이틀 전에 본 것이 같은 수를 적고, 위태로운 줄이 맨 위로 안 올라온다.
+  it('S-187 목표한 날 기억률은 항목 화면의 곡선과 같은 계획으로 센다', async () => {
+    // 더 안 보면 얼마인지를 적으면 계획대로 가는 목표의 항목이 거의 다 모자라 보이고, 화면 위의
+    // '목표를 지키는 중' 과 다른 말을 한다. 앞으로 잡힌 복습을 다 하면 그날 아침 얼마인지를 적는다.
     await setupApp(TODAY, {
       goals: [
         aGoal({
@@ -393,13 +394,22 @@ describe('목표한 날 기억률', () => {
       const row = rows.find((r) => r.textContent?.includes(title))!
       return Number(row.querySelectorAll('td')[2].textContent!.replace('%', ''))
     }
+    const { items, goals, reviews, settings } = usePlanner.getState()
+    const planned = (id: string) => {
+      const item = items.find((i) => i.id === id)!
+      const view = buildItemView(item, goals[0], reviews, settings, TODAY)
+      const day = view.curve.find((p) => p.date === '2026-10-13')!
+      return Math.round(day.before * 100)
+    }
 
-    // 기억 지속력이 같아도 밀린 쪽이 목표한 날 더 낮아야 한다.
-    expect(read('밀린 것')).toBeLessThan(read('제때 본 것'))
-    // 복습을 안 했는데 기억률이 오르는 그림이 나오면 안 된다.
-    expect(read('밀린 것')).toBeLessThan(83)
-
-    // 정렬은 낮은 것부터. 가장 위태로운 줄이 맨 위에 온다.
-    expect(rows[0].textContent).toContain('밀린 것')
+    // 항목 화면의 곡선이 목표한 날 아침에 가리키는 값과 같다.
+    expect(read('제때 본 것')).toBe(planned('ontime'))
+    expect(read('밀린 것')).toBe(planned('late'))
+    // 계획대로 하면 둘 다 목표 90% 를 지킨다. 밀린 것도 오늘 보기로 잡혀 있다.
+    expect(read('제때 본 것')).toBeGreaterThanOrEqual(90)
+    expect(read('밀린 것')).toBeGreaterThanOrEqual(90)
+    // 정렬은 낮은 것부터.
+    const shown = rows.map((r) => Number(r.querySelectorAll('td')[2].textContent!.replace('%', '')))
+    expect([...shown].sort((a, b) => a - b)).toEqual(shown)
   })
 })

@@ -7,8 +7,9 @@
 
 export class Notice {
   static messages: string[] = []
-  constructor(message: string) {
-    Notice.messages.push(message)
+  /** 옵시디언처럼 글이나 글 조각을 받는다. 시험은 보이는 글만 본다. */
+  constructor(message: string | DocumentFragment) {
+    Notice.messages.push(typeof message === 'string' ? message : (message.textContent ?? ''))
   }
 }
 
@@ -70,10 +71,11 @@ export class Component {
   registerDomEvent(
     el: EventTarget,
     type: string,
-    callback: (event: Event) => unknown
+    callback: (event: Event) => unknown,
+    options?: boolean | AddEventListenerOptions
   ): void {
-    el.addEventListener(type, callback)
-    this.cleanups.push(() => el.removeEventListener(type, callback))
+    el.addEventListener(type, callback, options)
+    this.cleanups.push(() => el.removeEventListener(type, callback, options))
   }
 }
 
@@ -85,9 +87,22 @@ export class MarkdownRenderChild extends Component {
   }
 }
 
+/** 옵시디언 단축키 차례 하나. 시험은 무엇을 걸었는지만 본다. */
+export class Scope {
+  readonly parent: Scope | undefined
+  keys: { modifiers: string[]; key: string; func: (event: KeyboardEvent) => unknown }[] = []
+  constructor(parent?: Scope) {
+    this.parent = parent
+  }
+  register(modifiers: string[], key: string, func: (event: KeyboardEvent) => unknown): void {
+    this.keys.push({ modifiers, key, func })
+  }
+}
+
 export class View extends Component {
   app: App
   leaf: WorkspaceLeaf
+  scope: Scope | null = null
   containerEl: HTMLElement
   constructor(leaf: WorkspaceLeaf) {
     super()
@@ -168,7 +183,7 @@ export class Workspace {
   creators = new Map<string, (leaf: WorkspaceLeaf) => View>()
   leaves: WorkspaceLeaf[] = []
   activeLeaf: WorkspaceLeaf | null = null
-  private handlers = new Map<string, Set<() => unknown>>()
+  private handlers = new Map<string, Set<(...args: unknown[]) => unknown>>()
 
   constructor(app: App) {
     this.app = app
@@ -184,8 +199,22 @@ export class Workspace {
     return leaf
   }
 
+  /** 옵시디언처럼 탭을 앞으로 내기만 한다. 쓰고 있는 탭은 바꾸지 않는다. */
   async revealLeaf(leaf: WorkspaceLeaf): Promise<void> {
+    this.revealed = leaf
+  }
+
+  revealed: WorkspaceLeaf | null = null
+
+  setActiveLeaf(leaf: WorkspaceLeaf, _options?: { focus?: boolean }): void {
+    this.revealed = leaf
     this.activeLeaf = leaf
+  }
+
+  layoutReady = true
+
+  onLayoutReady(callback: () => unknown): void {
+    void callback()
   }
 
   getActiveViewOfType<T extends View>(type: new (...args: never[]) => T): T | null {
@@ -193,15 +222,16 @@ export class Workspace {
     return view instanceof type ? view : null
   }
 
-  on(name: string, callback: () => unknown): EventRef {
+  on(name: string, callback: (...args: never[]) => unknown): EventRef {
     const set = this.handlers.get(name) ?? new Set()
-    set.add(callback)
+    const listener = callback as (...args: unknown[]) => unknown
+    set.add(listener)
     this.handlers.set(name, set)
-    return { off: () => set.delete(callback) }
+    return { off: () => set.delete(listener) }
   }
 
-  trigger(name: string): void {
-    for (const callback of this.handlers.get(name) ?? []) callback()
+  trigger(name: string, ...args: unknown[]): void {
+    for (const callback of this.handlers.get(name) ?? []) callback(...args)
   }
 }
 
@@ -217,6 +247,20 @@ export class Vault {
   configDir = '.obsidian'
   files = new Map<string, string>()
   folders = new Set<string>()
+  private handlers = new Map<string, Set<(...args: unknown[]) => unknown>>()
+
+  /** 'raw' 는 보관함 안의 파일이 바뀌거나 지워질 때마다 그 경로로 온다. 설정 폴더도 온다. */
+  on(name: string, callback: (...args: never[]) => unknown): EventRef {
+    const set = this.handlers.get(name) ?? new Set()
+    const listener = callback as (...args: unknown[]) => unknown
+    set.add(listener)
+    this.handlers.set(name, set)
+    return { off: () => set.delete(listener) }
+  }
+
+  trigger(name: string, ...args: unknown[]): void {
+    for (const callback of this.handlers.get(name) ?? []) callback(...args)
+  }
 
   getFolderByPath(path: string): TFolder | null {
     return this.folders.has(path) ? new TFolder(path) : null
@@ -243,6 +287,7 @@ export class Vault {
 export class App {
   workspace: Workspace
   vault = new Vault()
+  scope = new Scope()
   constructor() {
     this.workspace = new Workspace(this)
   }
@@ -287,8 +332,17 @@ export class Plugin extends Component {
     this.manifest = manifest
   }
 
+  /**
+   * 옵시디언과 같이 깨진 JSON 에서 던지지 않는다. 콘솔에 남기고 undefined 를 준다.
+   * 파일이 없을 때만 null 이다.
+   */
   async loadData(): Promise<unknown> {
-    return this.dataText === null ? null : JSON.parse(this.dataText)
+    if (this.dataText === null) return null
+    try {
+      return JSON.parse(this.dataText)
+    } catch {
+      return undefined
+    }
   }
 
   async saveData(data: unknown): Promise<void> {

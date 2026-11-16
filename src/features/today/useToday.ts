@@ -76,6 +76,11 @@ export function useToday() {
   // 이걸 안 세면 다른 것을 다 본 뒤에 '오늘은 아무것도 올리지 않았어요' 가 된다.
   const listedToday =
     todayItems.length + reviews.filter((r) => r.reviewed_at === today).length
+  // 오늘 실제로 복습한 것이 있는지. 새로 적으면서 매긴 첫 평가는 복습이 아니다. 그것만 있는
+  // 날에 '오늘 볼 건 다 봤어요' 라고 하면 볼 게 없던 날을 다 본 날로 말하게 된다.
+  const reviewedToday = reviews.some(
+    (r) => r.reviewed_at === today && r.state_before !== 'new'
+  )
   // 목표 뒤로 잡힌 날짜는 그 날이 오기 전에 목표가 끝나 내려간다. 다음 날짜로 세지 않는다.
   const upcoming = selectUpcoming(scheduledItems(items, goals, settings), today)
   const overall = selectOverallRetention(items, today)
@@ -125,6 +130,7 @@ export function useToday() {
     dueToday,
     todayItems,
     listedToday,
+    reviewedToday,
     upcoming,
     overall,
     activeCount,

@@ -1,6 +1,6 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import { yAxisMin, yAxisTicks } from '../../src/features/charts/axis'
+import { dayTicks, yAxisMin, yAxisTicks } from '../../src/features/charts/axis'
 
 describe('기억 곡선 y축', () => {
   it('데이터가 높으면 하한이 기본값에 머문다', () => {
@@ -53,5 +53,33 @@ describe('기억 곡선 y축', () => {
   it('축이 열리면 눈금도 따라 내려간다', () => {
     const ticks = yAxisTicks(yAxisMin([0.4]))
     expect(ticks[0]).toBeCloseTo(0.3, 10)
+  })
+})
+
+describe('가로축 날짜 눈금', () => {
+  it('첫날부터 세기 쉬운 같은 간격으로 놓는다', () => {
+    expect(dayTicks(0, 30)).toEqual([0, 7, 14, 21, 28])
+    expect(dayTicks(100, 104)).toEqual([100, 101, 102, 103, 104])
+    expect(dayTicks(0, 60)).toEqual([0, 14, 28, 42, 56])
+  })
+
+  it('글자 폭을 재지 않는다. 같은 기간이면 어디서나 같은 날짜가 찍힌다', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 30000 }), fc.integer({ min: 0, max: 800 }), (start, span) => {
+        const ticks = dayTicks(start, start + span)
+        expect(ticks).toEqual(dayTicks(start, start + span))
+        expect(ticks[0]).toBe(start)
+        // 많아야 여섯 개라 좁은 칸에서도 날짜끼리 겹치지 않는다.
+        expect(ticks.length).toBeLessThanOrEqual(6)
+        expect(ticks.length).toBeGreaterThanOrEqual(1)
+        for (const tick of ticks) {
+          expect(Number.isInteger(tick)).toBe(true)
+          expect(tick).toBeGreaterThanOrEqual(start)
+          expect(tick).toBeLessThanOrEqual(start + span)
+        }
+        const gaps = new Set(ticks.slice(1).map((t, i) => t - ticks[i]))
+        expect(gaps.size).toBeLessThanOrEqual(1)
+      })
+    )
   })
 })

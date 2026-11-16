@@ -12,7 +12,10 @@ export type PluginStatus =
   | { kind: 'ready' }
   | {
       kind: 'failed'
+      /** 사람이 읽을 까닭. */
       reason: string
+      /** 읽다가 난 오류 글 그대로. 영어일 수 있어 '자세히' 안에 둔다. */
+      detail?: string
       /** 기록이 담긴 파일의 보관함 안 경로. 사람이 찾아가 볼 수 있게 알린다. */
       file: string
     }

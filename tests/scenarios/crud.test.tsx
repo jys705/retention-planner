@@ -81,6 +81,31 @@ describe('항목 고치기', () => {
     )
   })
 
+  it('S-315 긴 제목은 잘라 두지 않고, 고칠 때 붙여 넣은 줄바꿈은 빈칸이 된다', async () => {
+    const long = '데이터베이스 정규화 1NF 부터 3NF 까지 예시와 함께 길게 적은 제목'
+    await withItem({ title: long })
+    const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)
+    // 이 화면의 주인공인 글이다. 한 줄로 자르면 고치기를 눌러야만 끝까지 읽을 수 있다.
+    const title = await screen.findByRole('button', { name: '제목' })
+    expect(title).toHaveTextContent(long)
+    expect(title).not.toHaveClass('truncate')
+
+    await user.click(title)
+    const field = screen.getByRole('textbox', { name: '제목' })
+    expect(field).toHaveValue(long)
+    await user.tripleClick(field)
+    await user.paste('둘로\n나뉜 제목')
+    expect(field).toHaveValue('둘로 나뉜 제목')
+    // 가운데에 붙여 넣어도 커서는 붙인 글 끝에 있다. 이어 친 글자가 맨 끝으로 가지 않는다.
+    ;(field as HTMLTextAreaElement).setSelectionRange(2, 2)
+    await user.paste(' 붙인\n줄')
+    await user.keyboard('X')
+    expect(field).toHaveValue('둘로 붙인 줄X 나뉜 제목')
+    await user.keyboard('{Enter}')
+    expect(usePlanner.getState().items[0].title).toBe('둘로 붙인 줄X 나뉜 제목')
+    expect(screen.queryByRole('textbox', { name: '제목' })).toBeNull()
+  })
+
   it('S-123 제목을 비우면 안 저장된다', async () => {
     await withItem()
     const { user } = render(<ItemDetailScreen itemId="i1" onBack={noop} />)

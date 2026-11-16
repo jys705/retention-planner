@@ -3,6 +3,7 @@ import { dueLabel, josa, percent } from '../../lib/format'
 import { gradeName } from '../../lib/grade'
 import type { LastRating } from '../../store/planner'
 import type { DateOnly } from '../../lib/date'
+import { useReveal } from '../../lib/reveal'
 
 /**
  * 방금 본 것의 다음 날짜가 목표 밖일 때. 목표의 마지막 날인지, 목표한 날을 비워
@@ -31,22 +32,25 @@ export function JustDone({
   shortOnGoalDay?: number | null
   onUndo: () => void
 }) {
+  const ref = useReveal<HTMLDivElement>(last.seq)
   return (
-    <Note
-      label="방금 한 일"
-      actions={<NoteButton onClick={onUndo}>되돌리기</NoteButton>}
-    >
-      <span className="text-pretty break-keep text-[12.5px] leading-relaxed text-text-2">
-        {/* 제목이 길거나 숫자로 끝나도 문장과 안 엉키게 따옴표로 떼어 놓는다. */}
-        <span className="text-text">{`"${last.title}"`}</span>
-        {josa(last.title, '을', '를')}{' '}
-        {gradeName(last.grade)}
-        {josa(gradeName(last.grade), '으로', '로')} 적었어요. {tail(last, today, ending)}
-        {ending === 'restEve' && shortOnGoalDay !== null
-          ? ` 그날 아침에는 기억이 ${percent(shortOnGoalDay)}로 목표에 모자라요. 그날도 보시려면 목표 화면에서 '훑어볼 것 올리기'로 바꾸세요.`
-          : ''}
-      </span>
-    </Note>
+    <div ref={ref}>
+      <Note
+        label="방금 한 일"
+        actions={<NoteButton onClick={onUndo}>되돌리기</NoteButton>}
+      >
+        <span className="text-pretty break-keep text-[12.5px] leading-relaxed text-text-2">
+          {/* 제목이 길거나 숫자로 끝나도 문장과 안 엉키게 따옴표로 떼어 놓는다. */}
+          <span className="text-text">{`"${last.title}"`}</span>
+          {josa(last.title, '을', '를')}{' '}
+          {gradeName(last.grade)}
+          {josa(gradeName(last.grade), '으로', '로')} 적었어요. {tail(last, today, ending)}
+          {ending === 'restEve' && shortOnGoalDay !== null
+            ? ` 그날 아침에는 기억이 ${percent(shortOnGoalDay)}로 목표에 모자라요. 그날도 보시려면 목표 화면에서 '훑어볼 것 올리기'로 바꾸세요.`
+            : ''}
+        </span>
+      </Note>
+    </div>
   )
 }
 

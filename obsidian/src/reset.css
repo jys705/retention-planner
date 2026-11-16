@@ -1,0 +1,73 @@
+/*
+  옵시디언 CSS 를 앱 안에서 걷어 내는 규칙. 앱 CSS 보다 먼저 붙는다.
+
+  옵시디언은 요소 이름으로 단추, 입력 칸, 목록을 꾸민다. 단추를 가운데 정렬한 flex 로
+  만드는 것이 그 하나다. 그러면 단추 속 글자 조각이 따로 놓여 가운데로 몰리고, 조각 끝의
+  빈칸이 사라진다. 속성을 하나씩 골라 되돌리면 고르지 않은 속성이 다시 샌다.
+
+  그래서 앱 안의 요소는 모든 속성을 브라우저 기본값으로 되돌리고(revert), 뿌리는 물려받는
+  값까지 처음 값으로 비운다(initial). 그 위에 앱 CSS 가 그대로 얹힌다. 데스크톱 앱과 같은
+  조건이다. 뿌리는 .rp-root 하나로 적고 빌드가 앱 CSS 와 같은 뿌리 선택자로 바꾼다. 그래서
+  이 규칙의 무게는 앱 CSS 의 가장 가벼운 규칙과 같고, 앞에 오므로 앱이 늘 이긴다. 뿌리
+  선택자에는 아이디 하나의 무게가 붙어 있어서 클래스만 쌓은 옵시디언과 테마 규칙을 이긴다.
+
+  그림(svg) 안은 걷지 않는다. 차트는 색과 굵기를 속성으로 주는데 revert 는 그것까지 지운다.
+  그림에는 속성으로 주지 않는 것만 따로 걷는다.
+  스크롤바 색과 글자를 고를 때의 색은 옵시디언 것을 따른다. 옵시디언 안에서는 옵시디언과
+  같아야 자연스럽다.
+*/
+.rp-root {
+  all: initial;
+  direction: ltr;
+  unicode-bidi: normal;
+  scrollbar-color: inherit;
+  scrollbar-width: inherit;
+}
+
+.rp-root :where(:not(svg, svg *)) {
+  all: revert;
+  direction: revert;
+  unicode-bidi: revert;
+}
+
+.rp-root :where(:not(svg, svg *))::before {
+  all: revert;
+}
+
+.rp-root :where(:not(svg, svg *))::after {
+  all: revert;
+}
+
+.rp-root :where(:not(svg, svg *))::placeholder {
+  all: revert;
+}
+
+.rp-root :where(:not(svg, svg *))::marker {
+  all: revert;
+}
+
+.rp-root :where(:not(svg, svg *))::file-selector-button {
+  all: revert;
+}
+
+/* 옵시디언은 ':focus { outline: none }' 을 건다. 차트는 키보드로 고를 수 있는데 테두리가 사라진다. */
+.rp-root :where(svg, svg *):focus {
+  outline: revert;
+  box-shadow: revert;
+}
+
+/* 테마가 맨 svg 에 거는 가림과 효과. 그림의 속성으로는 주지 않는 것들이다. */
+.rp-root :where(svg) {
+  mask: none;
+  filter: none;
+  clip-path: none;
+}
+
+/*
+  그림 속 요소에 거는 흐림과 가림도 걷는다. 차트는 이 둘을 속성으로 주지 않는다. 자르기(clip-path)는
+  차트가 속성으로 주므로 그대로 둔다. 선 색과 굵기처럼 차트가 속성으로 주는 것은 걷으면 차트도 지워진다.
+*/
+.rp-root :where(svg *) {
+  mask: none;
+  filter: none;
+}

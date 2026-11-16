@@ -21,6 +21,15 @@ export function nowIso(): string {
   return frozenInstant ?? new Date().toISOString()
 }
 
+/** 파일 이름에 붙일 이 컴퓨터의 시각. '2026-11-16-182005' 처럼 쓴다. 세계 표준시로 적으면 아홉 시간 어긋나 보인다. */
+export function localStamp(): string {
+  const minutes = nowMinutes()
+  const hh = String(Math.floor(minutes / 60)).padStart(2, '0')
+  const mm = String(minutes % 60).padStart(2, '0')
+  const ss = frozenMinutes !== null ? '00' : String(new Date().getSeconds()).padStart(2, '0')
+  return `${today()}-${hh}${mm}${ss}`
+}
+
 /** 자정부터 지금까지의 분. 알림 시각을 지났는지 볼 때 쓴다. */
 export function nowMinutes(): number {
   if (frozenMinutes !== null) return frozenMinutes

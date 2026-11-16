@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { defaultFsrs } from '../../core/fsrs/fsrs6'
 import type { Horizon } from '../../core/horizon/horizon'
 import { Badge } from '../../components/Badge'
@@ -8,10 +8,10 @@ import { MoreMenu } from '../../components/MoreMenu'
 import { Note, NoteButton } from '../../components/Note'
 import { OptionCards } from '../../components/OptionCards'
 import { Expand } from '../../components/Expand'
-import type { GoalRow } from '../../db/types'
+import type { GoalRow, ItemRow, ReviewRow } from '../../db/types'
 import { statusBadgeOf } from '../../lib/badge'
 import { cn } from '../../lib/cn'
-import { diffDays } from '../../lib/date'
+import { diffDays, type DateOnly } from '../../lib/date'
 import {
   effectiveConfig,
   goalColor,
@@ -37,9 +37,12 @@ import {
   restingToday,
 } from '../../lib/lifecycle'
 import { INTENSITY_META } from '../../lib/intensity'
+import type { Settings } from '../../lib/settings'
+import { isTypingTarget, useHost } from '../../lib/host'
 import { canUndoReopen, usePlanner } from '../../store/planner'
 import { LoadBars, type LoadBar } from '../charts/LoadBars'
 import { rollout } from '../forecast/rollout'
+import { buildItemView } from '../item/itemView'
 import { HorizonPicker } from '../newitem/HorizonPicker'
 import { FinishedGoal } from './FinishedGoal'
 import { RetentionBar } from './RetentionBar'
@@ -53,12 +56,28 @@ export function GoalDetailScreen({
   onOpenItem: (itemId: string) => void
   onDeleted: () => void
 }) {
-  const { items, goals, settings, today } = usePlanner()
+  const { items, goals, settings, today, reviews } = usePlanner()
   const updateGoal = usePlanner((s) => s.updateGoal)
   const deleteGoal = usePlanner((s) => s.deleteGoal)
   const undoReopen = usePlanner((s) => s.undoReopen)
   const reopened = usePlanner((s) => (canUndoReopen(s) ? s.lastReopen : null))
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const host = useHost()
+  // 옵시디언에서 따로 띄운 창이면 그 창의 키를 들어야 한다.
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  // 지울지 묻는 것은 항목 화면처럼 Esc 로 닫는다. 훅은 이른 반환보다 앞에 와야 한다.
+  useEffect(() => {
+    if (!confirmingDelete) return
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== 'Escape' || isTypingTarget(event.target)) return
+      if (!host.acceptsShortcut(event)) return
+      setConfirmingDelete(false)
+    }
+    const win = rootRef.current?.ownerDocument.defaultView ?? window
+    win.addEventListener('keydown', onKey)
+    return () => win.removeEventListener('keydown', onKey)
+  }, [confirmingDelete, host])
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
   const goal = goals.find((g) => g.id === goalId)
@@ -94,16 +113,20 @@ export function GoalDetailScreen({
             state.stability
           )
         : 1
-    // 지난 날수는 마지막으로 본 날부터 센다. 오늘부터 세면 밀린 기간이 통째로
-    // 빠져서, 스무 날 밀린 것과 어제 본 것이 목표한 날 기억률을 같게 적는다.
-    // 복습을 안 했는데 기억률이 오르는 그림까지 나온다.
+    // 목표한 날의 기억률은 항목 화면의 기억 곡선과 같은 계획으로 셈한다. 앞으로 잡힌 복습을
+    // 다 하면 그날 아침에 얼마인지다. 더 안 보면 얼마인지를 적으면 계획대로 가는 목표의
+    // 항목이 거의 다 모자라 보이고, 화면 위의 '목표를 지키는 중' 과 서로 다른 말을 한다.
+    const planned = goalDay ? plannedRetentionOn(item, goal, reviews, settings, today, goalDay) : null
+    // 계획을 못 그리는 항목은 마지막으로 본 날부터 그날까지 내려온 값이다. 오늘부터 세면
+    // 밀린 기간이 통째로 빠진다.
     const retentionAtGoal =
-      state && goalDay && item.last_review
+      planned ??
+      (state && goalDay && item.last_review
         ? defaultFsrs.retrievability(
             Math.max(0, diffDays(item.last_review, goalDay)),
             state.stability
           )
-        : retention
+        : retention)
     return { item, config, retention, retentionAtGoal }
   })
 
@@ -151,7 +174,7 @@ export function GoalDetailScreen({
   ).length
 
   return (
-    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 pb-7 pt-10">
+    <div ref={rootRef} className="mx-auto flex w-full max-w-[940px] flex-col gap-4 px-6 pb-7 pt-10">
       <header className="grid grid-cols-[1fr_268px] items-start gap-6">
         <div className="flex min-w-0 flex-col gap-[7px]">
           <div className="flex items-center gap-[9px]">
@@ -262,7 +285,7 @@ export function GoalDetailScreen({
               onClick={() =>
                 void deleteGoal(goal.id).then(() => onDeleted())
               }
-              className="rounded-ctl bg-imp-fg px-[14px] py-[7px] text-[13px] font-semibold text-white"
+              className="rounded-ctl bg-imp-fg px-[14px] py-[7px] text-[13px] font-semibold text-on-fill"
             >
               지우기
             </button>
@@ -413,7 +436,8 @@ export function GoalDetailScreen({
                 <th className="py-2 font-normal">항목</th>
                 <th className="py-2 font-normal">준비</th>
                 <th className="py-2 text-right font-normal">
-                  목표한 날 기억률
+                  {/* 목표한 날을 안 정한 목표는 그날이 없다. 지금 값을 적고 그렇다고 이름 붙인다. */}
+                  {goalDay ? '목표한 날 기억률' : '지금 기억률'}
                 </th>
                 <th className="py-2 text-right font-normal">다음에 볼 날</th>
               </tr>
@@ -573,4 +597,23 @@ function didSentence(
     parts.push(`밀린 ${overdue}개는 오늘 목록에 그대로 올려뒀어요.`)
   }
   return parts.join(' ')
+}
+
+/**
+ * 계획대로 복습하면 그날 아침의 기억률. 그날 잡힌 복습은 하기 전 값이다.
+ *
+ * 항목 화면의 기억 곡선을 그대로 쓴다. 두 화면이 같은 항목을 두고 다른 수를 말하면 안 된다.
+ */
+function plannedRetentionOn(
+  item: ItemRow,
+  goal: GoalRow,
+  reviews: readonly ReviewRow[],
+  settings: Settings,
+  today: DateOnly,
+  day: DateOnly
+): number | null {
+  const ahead = Math.max(90, diffDays(today, day) + 1)
+  const view = buildItemView(item, goal, [...reviews], settings, today, ahead)
+  const point = view.curve.find((p) => p.date === day)
+  return point ? point.before : null
 }

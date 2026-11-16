@@ -32,6 +32,62 @@ describe('항목 상세', () => {
     expect(screen.getByText(/지금 기억률은/)).toBeInTheDocument()
   })
 
+  it('S-316 예정일인데 아직 목표 위면 낮다고 하지 않고 오늘 중에 내려간다고 한다', async () => {
+    // 예정일은 기억률이 목표 아래로 내려가는 날이다. 그날 아침에는 화면의 수가 목표와 같거나 높다.
+    await setupApp(TODAY, {
+      items: [
+        anItem({
+          id: 'i1',
+          title: '제때 보는 항목',
+          stability: 10,
+          last_review: shift(TODAY, -10),
+          first_studied_at: shift(TODAY, -10),
+          due: TODAY,
+        }),
+      ],
+    })
+    const item = usePlanner.getState().items[0]
+    const shown = Math.round(defaultFsrs.retrievability(10, item.stability!) * 100)
+    // 이 시험이 보려는 처지: 오늘 볼 차례이고, 적히는 기억률이 목표 90% 보다 낮지 않다.
+    expect(item.due).toBe(TODAY)
+    expect(shown).toBeGreaterThanOrEqual(90)
+
+    render(<ItemDetailScreen itemId="i1" onBack={noop} />)
+    expect(
+      await screen.findByText(
+        `지금 기억률은 ${shown}%예요. 오늘 중에 목표 기억률 90% 아래로 내려가서 오늘 보라고 잡았어요.`
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByText(/오늘 중에 목표 기억률 90%를 밑돌아서 오늘로 잡았습니다/)).toBeInTheDocument()
+    expect(screen.queryByText(/보다 낮아서/)).toBeNull()
+  })
+
+  it('S-317 아직 차례가 아니면 며칠 뒤에 올라오는지 조사까지 맞춰 말한다', async () => {
+    await setupApp(TODAY, {
+      items: [
+        anItem({
+          id: 'i1',
+          title: '나중에 볼 항목',
+          stability: 13,
+          last_review: TODAY,
+          first_studied_at: TODAY,
+          due: shift(TODAY, 13),
+        }),
+      ],
+    })
+    const due = usePlanner.getState().items[0].due!
+    const gap = Math.round((Date.parse(due) - Date.parse(TODAY)) / 86_400_000)
+    // 이 시험이 보려는 처지: '내일' 이나 '모레' 가 아니라 'N일 뒤' 로 적히는 날이다.
+    expect(gap).toBeGreaterThan(2)
+    expect(gap).toBeLessThanOrEqual(13)
+
+    render(<ItemDetailScreen itemId="i1" onBack={noop} />)
+    expect(
+      await screen.findByText(`아직 오늘 볼 차례는 아니에요. ${gap}일 뒤에 올라옵니다.`)
+    ).toBeInTheDocument()
+    expect(screen.getByText(new RegExp(`떨어지기 전인 ${gap}일 뒤에 보라고 잡아두었어요`))).toBeInTheDocument()
+  })
+
   it('S-061 기억률이 낮아도 곡선이 안 잘린다', async () => {
     // 반년 넘게 안 본 항목. 기억률이 60% 아래로 내려간다.
     await setupApp(TODAY, {

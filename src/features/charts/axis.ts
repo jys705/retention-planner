@@ -30,3 +30,32 @@ export function yAxisTicks(min: number): number[] {
   if (ticks[ticks.length - 1] !== 1) ticks.push(1)
   return ticks
 }
+
+/** 날짜 눈금 사이로 쓸 날 수. 달력에서 세기 쉬운 간격만 쓴다. */
+const DAY_STEPS = [1, 2, 3, 5, 7, 10, 14, 21, 30, 45, 60, 90, 120, 180, 270, 365]
+
+/**
+ * 가로축 날짜 눈금. 날 수만 보고 고른다.
+ *
+ * 글자 폭을 재서 고르면 글꼴이 다른 곳에서 다른 날짜가 찍힌다. 데스크톱 앱과 옵시디언이
+ * 같은 날짜를 보여야 한다. 첫날부터 같은 간격으로 놓고 많아야 most 개다.
+ */
+export function dayTicks(start: number, end: number, most = 6): number[] {
+  const span = Math.max(0, end - start)
+  const step =
+    DAY_STEPS.find((s) => Math.floor(span / s) + 1 <= most) ??
+    Math.ceil(span / Math.max(1, most - 1))
+  const ticks: number[] = []
+  for (let day = start; day <= end; day += step) ticks.push(day)
+  return ticks
+}
+
+/**
+ * 막대 그림의 날짜 눈금을 몇 칸마다 찍을지. 많아야 most 개다.
+ *
+ * 글자 폭을 재서 고르면 글꼴이 다른 곳에서 다른 날짜가 찍히고 간격도 들쭉날쭉해진다.
+ */
+export function barTickStep(count: number, most = 8): number {
+  const steps = [1, 2, 3, 4, 5, 7, 10, 14, 15, 21, 30, 45, 60, 90]
+  return steps.find((step) => Math.ceil(count / step) <= most) ?? Math.ceil(count / most)
+}

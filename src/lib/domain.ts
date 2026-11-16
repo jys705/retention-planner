@@ -165,6 +165,37 @@ export function isActive(item: ItemRow): boolean {
 const NUMBER_TOKEN =
   /\d+\s*[~\-\u2013]\s*\d+\s*(번|쪽|페이지|문제)?|\d+\s*(번|회차|회|장|절|단원|챕터|쪽|페이지|일차|주차)/
 
+/** 앞의 0 을 뗀 숫자 글자. 자릿수가 많으면 큰 수다. */
+function digits(run: string): string {
+  return run.replace(/^0+(?=\d)/, '')
+}
+
+/**
+ * 제목을 사람이 읽는 차례로 견준다. 숫자 덩어리는 수로 견줘서 '2장' 이 '10장' 앞에 온다.
+ *
+ * 나머지는 글자 차례 그대로다. 실행하는 곳의 언어 설정을 타는 비교를 쓰면 데스크톱 앱과
+ * 옵시디언에서 차례가 달라질 수 있어서 직접 견준다.
+ */
+export function compareTitles(a: string, b: string): number {
+  const left = a.match(/\d+|\D+/g) ?? []
+  const right = b.match(/\d+|\D+/g) ?? []
+  for (let i = 0; i < Math.min(left.length, right.length); i += 1) {
+    const x = left[i]
+    const y = right[i]
+    if (x === y) continue
+    if (/^\d/.test(x) && /^\d/.test(y)) {
+      const dx = digits(x)
+      const dy = digits(y)
+      if (dx.length !== dy.length) return dx.length < dy.length ? -1 : 1
+      if (dx !== dy) return dx < dy ? -1 : 1
+      // 007 과 7 처럼 수가 같으면 짧게 적은 쪽이 앞이다.
+      return x.length < y.length ? -1 : 1
+    }
+    return x < y ? -1 : 1
+  }
+  return left.length === right.length ? 0 : left.length < right.length ? -1 : 1
+}
+
 /** 제목을 앞부분, 숫자 부분, 뒷부분으로 가른다. 숫자만 등폭으로 뽑아 쓰기 위해서다. */
 export function splitTitle(title: string): {
   pre: string

@@ -90,7 +90,8 @@ export function toCsv(items: ItemRow[], goals: GoalRow[]): string {
     String(item.lapses),
     item.stability === null ? '' : item.stability.toFixed(2),
   ])
-  return [CSV_COLUMNS, ...rows].map((row) => row.map(escapeCsv).join(',')).join('\r\n')
+  // 맨 앞의 BOM 이 있어야 엑셀이 UTF-8 로 읽는다. 없으면 한글 제목과 목표 이름이 깨진다.
+  return '\uFEFF' + [CSV_COLUMNS, ...rows].map((row) => row.map(escapeCsv).join(',')).join('\r\n')
 }
 
 function escapeCsv(value: string): string {

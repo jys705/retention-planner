@@ -85,13 +85,51 @@ describe('노트 속 오늘 카드', () => {
 
   it('S-305 오늘 것을 다 봤으면 다음에 올라올 날을 알려 준다', async () => {
     await setupApp(TODAY, {
-      items: [anItem({ id: 'i3', title: '다음 주 것', due: '2026-10-08' })],
+      items: [
+        anItem({ id: 'i3', title: '다음 주 것', due: '2026-10-08' }),
+        anItem({ id: 'i4', title: '오늘 본 것', due: '2026-10-20', last_review: TODAY }),
+      ],
+      reviews: [
+        {
+          id: 'r1',
+          item_id: 'i4',
+          reviewed_at: TODAY,
+          recorded_at: `${TODAY}T09:00:00.000Z`,
+          rating: 3,
+          state_before: 'review',
+          s_before: 2.3065,
+          d_before: 5.2,
+          s_after: 19,
+          d_after: 5.2,
+          elapsed_days: 0,
+          scheduled_days: 19,
+          r_at_review: 0.9,
+          next_interval: 19,
+          memo_snapshot: null,
+        },
+      ],
     })
     render(<TodayCard onOpenApp={() => {}} />)
     expect(screen.getByText('오늘 볼 건 다 봤어요.')).toBeInTheDocument()
     expect(screen.getByText('다음은 10월 8일에 1개예요. 그때 알려드릴게요.')).toBeInTheDocument()
     // 적어두기 줄은 늘 있다.
     expect(screen.getByRole('textbox', { name: '새 항목 제목' })).toBeInTheDocument()
+  })
+
+  it('S-310 오늘 볼 것이 처음부터 없던 날은 다 봤다고 하지 않는다', async () => {
+    await setupApp(TODAY, {
+      items: [anItem({ id: 'i3', title: '다음 주 것', due: '2026-10-08' })],
+    })
+    const { user } = render(<TodayCard onOpenApp={() => {}} />)
+    expect(screen.getByText('오늘은 볼 게 없어요.')).toBeInTheDocument()
+    expect(screen.queryByText('오늘 볼 건 다 봤어요.')).toBeNull()
+    expect(screen.getByText('다음은 10월 8일에 1개예요. 그때 알려드릴게요.')).toBeInTheDocument()
+
+    // 새로 적으며 매긴 첫 평가는 복습이 아니다. 적고 나서도 다 봤다고 하지 않는다.
+    await user.type(screen.getByRole('textbox', { name: '새 항목 제목' }), '6장 요약{Enter}')
+    await screen.findByRole('status')
+    expect(screen.getByText('오늘은 볼 게 없어요.')).toBeInTheDocument()
+    expect(screen.queryByText('오늘 볼 건 다 봤어요.')).toBeNull()
   })
 
   it('S-306 아직 적어둔 게 없으면 한 줄 적어 보라고 한다', async () => {

@@ -84,7 +84,7 @@ export function HorizonPicker({
       />
 
       {value.kind === 'open' ? (
-        <p className="text-[12px] leading-relaxed text-text-3">
+        <p className="text-pretty break-keep text-[12px] leading-relaxed text-text-3">
           마감 없이, 잊을 만할 때마다 계속 올려드릴게요. 간격은 볼수록 길어집니다.
         </p>
       ) : null}
@@ -101,7 +101,7 @@ export function HorizonPicker({
             text={fullDate(value.at)}
             active
           />
-          <p className="text-[12px] text-text-3">
+          <p className="text-pretty break-keep text-[12px] text-text-3">
             그날까지 기억이 가장 높게 올라오도록 잡아요.
           </p>
           {restChoice ? (
@@ -127,7 +127,7 @@ export function HorizonPicker({
                   비워 두기
                 </Chip>
               </div>
-              <p className="text-[12px] leading-relaxed text-text-3">
+              <p className="text-pretty break-keep text-[12px] leading-relaxed text-text-3">
                 {value.rest === true
                   ? '그날에는 아무것도 올리지 않아요. 준비하다 못 본 것도 올리지 않아요.'
                   : '그날에는 시간이 되면 훑어볼 것만 올려 둬요. 안 봐도 괜찮아요.'}
@@ -214,7 +214,7 @@ export function HorizonPicker({
             </div>
           ) : null}
 
-          <p className="text-[12px] leading-relaxed text-text-3">
+          <p className="text-pretty break-keep text-[12px] leading-relaxed text-text-3">
             정확한 날을 모를 땐 앞뒤로 여유를 둡니다. 이른 쪽(
             <span className="num">{monthDay(value.readyAt)}</span>)까지는 준비를
             끝내고, 늦은 쪽(

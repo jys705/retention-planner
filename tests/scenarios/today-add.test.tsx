@@ -343,13 +343,13 @@ describe('앞으로 보게 될 횟수', () => {
     const rail = screen.getByLabelText('앞으로 보게 될 횟수')
     // 한 줄에 '10월 5일 (월)' 과 '4일 뒤' 가 나란히 선다. 둘이 서로 맞는지 본다.
     const rows = [...rail.querySelectorAll('div')].filter((el) =>
-      /\d+월 \d+일/.test(el.textContent ?? '')
+      /\d+월\s\d+일/.test(el.textContent ?? '')
     )
     expect(rows.length).toBeGreaterThan(2)
 
     for (const row of rows) {
       const text = row.textContent ?? ''
-      const date = text.match(/(\d+)월 (\d+)일/)!
+      const date = text.match(/(\d+)월\s(\d+)일/)!
       const label = text.match(/(오늘|\d+일 뒤)/)!
       const shown = new Date(2026, Number(date[1]) - 1, Number(date[2]))
       const days = Math.round(

@@ -4,11 +4,12 @@ import { ROOT_CLASS } from '../src/constants.ts'
 /**
  * 뿌리를 가리키는 선택자.
  *
- * 같은 클래스를 세 번 겹쳐 무게를 올린다. 옵시디언과 테마는 `button:not(.clickable-icon)`,
- * `.markdown-rendered ul > li` 같은 선택자로 단추와 목록을 꾸민다. 앱의 규칙이 그보다
- * 가벼우면 노트 속 카드에서 단추에 옵시디언 바탕색이 깔린다.
+ * 옵시디언과 테마, 사용자 조각은 `.theme-dark .markdown-rendered button:not(.clickable-icon)`
+ * 같은 선택자로 단추와 목록을 꾸민다. 클래스를 몇 겹 쌓아도 그보다 더 쌓은 규칙이 이긴다.
+ * :is() 는 안에 든 것 가운데 가장 무거운 것의 무게를 갖는다. 없는 아이디를 하나 넣어 두면
+ * 뿌리는 그대로 고르면서 아이디 하나의 무게를 얻는다. 클래스만 쓴 규칙은 아무리 쌓아도 못 이긴다.
  */
-export const ROOT_SELECTOR = `.${ROOT_CLASS}.${ROOT_CLASS}.${ROOT_CLASS}`
+export const ROOT_SELECTOR = `.${ROOT_CLASS}:is(#${ROOT_CLASS}-never, .${ROOT_CLASS})`
 
 /** 문서 꼭대기를 가리키는 선택자. 옵시디언 안에서는 앱 뿌리가 그 자리를 대신한다. */
 const TOP = /^(?::root|:host|html|body|#root)(?![\w-])/
@@ -139,4 +140,61 @@ export function unscopedSelectors(css: string, root = ROOT_SELECTOR): string[] {
     }
   })
   return left
+}
+
+/** 주석을 걷는다. 주석 속 '.rp-root' 같은 글자를 선택자로 잘못 읽지 않게. */
+function withoutComments(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, '')
+}
+
+const REM = /(-?(?:\d+\.?\d*|\.\d+))rem\b/g
+
+/**
+ * rem 을 px 로 바꾼다. 1rem 은 16px.
+ *
+ * rem 은 문서 뿌리(html)의 글자 크기를 따른다. 옵시디언은 글꼴 크기 설정을 html 에 건다.
+ * 그대로 두면 사용자가 글꼴을 한 칸 키울 때 앱의 간격과 카드 폭 기준(@container)이 같이
+ * 늘어 날짜와 목표 이름이 사라진다. 데스크톱 앱의 뿌리는 16px 이라 바꿔도 모양이 같다.
+ */
+export function remToPx(css: string): string {
+  const px = (value: string) =>
+    value.replace(REM, (_, n: string) => `${Number((parseFloat(n) * 16).toFixed(4))}px`)
+  const ast = postcss.parse(css)
+  ast.walkDecls((decl) => {
+    decl.value = px(decl.value)
+  })
+  ast.walkAtRules((rule) => {
+    if (/^(container|media|supports)$/i.test(rule.name)) rule.params = px(rule.params)
+  })
+  return ast.toString()
+}
+
+const TOKEN = new RegExp(`\\.${ROOT_CLASS}(?![\\w-])`, 'g')
+
+/**
+ * reset.css 와 host.css 의 뿌리 자리(.rp-root)에 앱 CSS 와 같은 뿌리 선택자를 넣는다.
+ * 세 곳의 무게가 늘 같아야 차례대로 이긴다. 손으로 겹쳐 적은 것은 받지 않는다.
+ */
+function rooted(css: string, name: string, root: string): string {
+  const body = withoutComments(css)
+  if (body.includes(`#${ROOT_CLASS}-never`) || body.includes(`.${ROOT_CLASS}.${ROOT_CLASS}`)) {
+    throw new Error(`${name} 은 뿌리를 .${ROOT_CLASS} 하나로 적는다. 무게는 빌드가 붙인다.`)
+  }
+  return css.replace(TOKEN, root)
+}
+
+/**
+ * 옵시디언이 읽을 styles.css 를 묶는다.
+ *
+ * 차례가 중요하다. reset 은 앱 CSS 보다 앞이어야 한다. 무게가 앱 CSS 의 가장 가벼운 규칙과
+ * 같으니 앞에 와야 앱이 이긴다. host 는 뒤에 와서 옵시디언 그릇과 뿌리를 다듬는다.
+ * reset 과 host 는 뿌리를 .rp-root 하나로 적고, 여기서 ROOT_SELECTOR 로 바꿔 넣는다.
+ */
+export function packageCss(appCss: string, resetCss: string, hostCss: string, root = ROOT_SELECTOR): string {
+  const scoped = remToPx(scopeCss(appCss, root))
+  const leaks = unscopedSelectors(scoped, root)
+  if (leaks.length > 0) {
+    throw new Error(`앱 뿌리 밖을 고르는 선택자가 남았다: ${leaks.slice(0, 5).join(', ')}`)
+  }
+  return `${rooted(resetCss, 'reset.css', root)}\n${scoped}\n${rooted(hostCss, 'host.css', root)}`
 }

@@ -116,7 +116,7 @@ describe('CSV 내보내기', () => {
     )
     const lines = csv.split('\r\n')
     expect(lines[0]).toBe(
-      '제목,메모,소속 목표,공부한 날,다음에 볼 날,지금까지 본 횟수,잊은 횟수,기억 지속력(일)'
+      '\uFEFF제목,메모,소속 목표,공부한 날,다음에 볼 날,지금까지 본 횟수,잊은 횟수,기억 지속력(일)'
     )
     expect(lines[1]).toBe(
       '1~10번 문제 풀이,,시험 준비,2026-08-01,2026-08-13,2,1,12.35'
@@ -130,6 +130,13 @@ describe('CSV 내보내기', () => {
 
   it('항목이 없으면 머리글만 나온다', () => {
     expect(toCsv([], []).split('\r\n')).toHaveLength(1)
+  })
+
+  it('엑셀이 한글을 깨뜨리지 않게 맨 앞에 UTF-8 표시를 하나만 둔다', () => {
+    const csv = toCsv([item('i1', '가나다')], [])
+    // 표시가 없으면 엑셀은 이 파일을 지역 인코딩으로 읽어 한글이 깨진다.
+    expect(csv.charCodeAt(0)).toBe(0xfeff)
+    expect(csv.indexOf('\uFEFF', 1)).toBe(-1)
   })
 })
 

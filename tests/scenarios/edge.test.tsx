@@ -114,6 +114,8 @@ describe('경계', () => {
   it('S-103b 항목이 없어도 서재가 뜬다', async () => {
     await setupApp(TODAY)
     render(<LibraryScreen onOpenItem={noop} onOpenGoal={noop} />)
-    expect(await screen.findByText('찾는 항목이 없어요.')).toBeInTheDocument()
+    expect(await screen.findByText('아직 적어둔 게 없어요.')).toBeInTheDocument()
+    // 찾기를 한 적이 없다. 찾기가 실패했다는 말을 하지 않는다.
+    expect(screen.queryByText('찾는 항목이 없어요.')).toBeNull()
   })
 })

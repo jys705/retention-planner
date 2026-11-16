@@ -19,6 +19,7 @@ export function TodayEmpty({
   activeCount,
   goalsToday,
   listedToday,
+  reviewedToday,
   upcoming,
   compact = false,
 }: {
@@ -28,6 +29,8 @@ export function TodayEmpty({
   activeCount: number
   goalsToday: readonly GoalRow[]
   listedToday: number
+  /** 오늘 실제로 복습한 것이 있는지. 새로 적으며 매긴 첫 평가는 세지 않는다. */
+  reviewedToday: boolean
   upcoming: { date: DateOnly; count: number }[]
   compact?: boolean
 }) {
@@ -41,6 +44,7 @@ export function TodayEmpty({
   return (
     <EmptyToday
       upcoming={upcoming}
+      reviewedToday={reviewedToday}
       // 남은 것이 모두 목표 뒤로 잡혀 있으면 할 일을 다 한 것이다.
       finishedForGoal={
         upcoming.length === 0 &&
@@ -52,22 +56,28 @@ export function TodayEmpty({
 }
 
 /**
- * 오늘 것을 다 본 날.
+ * 오늘 목록이 빈 날.
  *
  * 다음 날짜와 그날 개수를 같이 적는다. 언제 또 올라오는지 알면 앱을 닫아도 된다.
+ * 오늘 본 것이 하나도 없으면 '다 봤어요' 는 맞지 않는다. 처음부터 볼 것이 없던 날이다.
  */
 function EmptyToday({
   upcoming,
+  reviewedToday,
   finishedForGoal,
   compact,
 }: {
   upcoming: { date: DateOnly; count: number }[]
+  reviewedToday: boolean
   finishedForGoal: boolean
   compact: boolean
 }) {
   const next = upcoming[0]
   return (
-    <EmptyFrame title="오늘 볼 건 다 봤어요." compact={compact}>
+    <EmptyFrame
+      title={reviewedToday ? '오늘 볼 건 다 봤어요.' : '오늘은 볼 게 없어요.'}
+      compact={compact}
+    >
       <p className={cn('text-pretty break-keep text-text-2', bodySize(compact))}>
         {next
           ? `다음은 ${monthDay(next.date)}에 ${next.count}개예요. 그때 알려드릴게요.`

@@ -35,11 +35,13 @@ export function MoreMenu({
       event.stopPropagation()
       setOpen(false)
     }
-    document.addEventListener('mousedown', onPointerDown)
-    document.addEventListener('keydown', onKey)
+    // 옵시디언에서 따로 띄운 창이면 그 창의 문서를 들어야 한다.
+    const doc = boxRef.current?.ownerDocument ?? document
+    doc.addEventListener('mousedown', onPointerDown)
+    doc.addEventListener('keydown', onKey)
     return () => {
-      document.removeEventListener('mousedown', onPointerDown)
-      document.removeEventListener('keydown', onKey)
+      doc.removeEventListener('mousedown', onPointerDown)
+      doc.removeEventListener('keydown', onKey)
     }
   }, [open])
 

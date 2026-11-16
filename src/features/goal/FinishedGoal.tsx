@@ -199,7 +199,7 @@ export function FinishedGoal({
                   withItems: members.length > 0 && deleteScope === 'all',
                 }).then(() => onDeleted())
               }
-              className="rounded-ctl bg-imp-fg px-[14px] py-[7px] text-[13px] font-semibold text-white"
+              className="rounded-ctl bg-imp-fg px-[14px] py-[7px] text-[13px] font-semibold text-on-fill"
             >
               지우기
             </button>
@@ -280,7 +280,7 @@ export function FinishedGoal({
               <button
                 type="button"
                 onClick={() => void reopenGoal(goal.id, { kind: 'open' })}
-                className="rounded-ctl bg-accent px-[14px] py-[7px] text-[13px] font-semibold text-white"
+                className="rounded-ctl bg-accent px-[14px] py-[7px] text-[13px] font-semibold text-on-fill"
               >
                 다시 올리기
               </button>
@@ -313,7 +313,7 @@ export function FinishedGoal({
                 type="button"
                 disabled={!draftOpen}
                 onClick={() => void reopenGoal(goal.id, draft)}
-                className="rounded-ctl bg-accent px-[14px] py-[7px] text-[13px] font-semibold text-white disabled:opacity-35"
+                className="rounded-ctl bg-accent px-[14px] py-[7px] text-[13px] font-semibold text-on-fill disabled:opacity-35"
               >
                 이 시점으로 다시 시작하기
               </button>

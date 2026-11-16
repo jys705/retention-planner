@@ -68,7 +68,7 @@ export function GoalListScreen({
         <button
           type="button"
           onClick={() => setCreating((c) => !c)}
-          className="rounded-ctl bg-accent px-[12px] py-[6px] text-[12.5px] font-semibold text-white"
+          className="rounded-ctl bg-accent px-[12px] py-[6px] text-[12.5px] font-semibold text-on-fill"
         >
           {creating ? '취소' : '목표 만들기'}
         </button>
@@ -136,7 +136,7 @@ export function GoalListScreen({
               type="button"
               onClick={() => void submit()}
               disabled={name.trim() === '' || noDayLeft}
-              className="rounded-ctl bg-accent px-[14px] py-[7px] text-[13px] font-semibold text-white disabled:opacity-35"
+              className="rounded-ctl bg-accent px-[14px] py-[7px] text-[13px] font-semibold text-on-fill disabled:opacity-35"
             >
               만들기
             </button>

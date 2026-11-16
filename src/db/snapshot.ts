@@ -115,6 +115,15 @@ export class SnapshotRepository implements Repository {
     return this.writing
   }
 
+  /**
+   * 바뀐 것이 없어도 지금 기록 전체를 다시 쓴다. 다른 쓰기와 같은 차례를 탄다.
+   *
+   * 밖에서 깨뜨린 파일을 지금 기록으로 되살릴 때 쓴다.
+   */
+  rewrite(): Promise<void> {
+    return this.save()
+  }
+
   async close(): Promise<void> {
     await this.writing
     await this.inner.close()
@@ -253,11 +262,23 @@ export function parseSnapshot(value: unknown): Snapshot | null {
     throw new SnapshotFormatError('남아 있는 기록이 알아볼 수 있는 꼴이 아니에요.')
   }
   const raw = value as Record<string, unknown>
+  // 아는 칸이 하나도 없이 다른 칸만 있으면 빈 기록이 아니다. 다른 판이 다르게 남긴 것이거나
+  // 손으로 고치다 한 겹 더 싼 것이다. 빈 기록으로 읽으면 다음 쓰기가 그 안의 것을 지운다.
+  const keys = Object.keys(raw)
+  if (keys.length > 0 && !keys.some((key) => SNAPSHOT_KEYS.has(key))) {
+    throw new SnapshotFormatError('남아 있는 기록에 알아볼 수 있는 칸이 하나도 없어요.')
+  }
   const list = <T>(key: string): T[] => {
     const field = raw[key]
     if (field === undefined || field === null) return []
     if (!Array.isArray(field)) {
       throw new SnapshotFormatError(`남아 있는 기록의 ${key} 칸을 읽을 수 없어요.`)
+    }
+    // 줄마다 이름표(id)가 있어야 고치고 지우고 합칠 수 있다. 없으면 파일이 망가진 것이다.
+    for (const row of field) {
+      if (typeof row !== 'object' || row === null || typeof (row as { id?: unknown }).id !== 'string') {
+        throw new SnapshotFormatError(`남아 있는 기록의 ${key} 칸에 이름표가 없는 줄이 있어요.`)
+      }
     }
     return field as T[]
   }
@@ -270,11 +291,23 @@ export function parseSnapshot(value: unknown): Snapshot | null {
     throw new SnapshotFormatError('남아 있는 기록의 settings 칸을 읽을 수 없어요.')
   }
   return {
-    goals: list<GoalRow>('goals'),
-    items: list<ItemRow>('items'),
+    // 이름과 제목은 글이어야 화면이 그린다. 빠졌거나 글이 아니면 그렇다고 적어 둔다. 빈칸으로 두면
+    // 줄이 비어 보이고 단추 이름이 ' 평가하기' 가 된다. 사람이 나중에 고칠 수 있다.
+    goals: list<GoalRow>('goals').map((g) => ({ ...g, name: textOf(g.name) || '이름 없는 목표' })),
+    items: list<ItemRow>('items').map((i) => ({ ...i, title: textOf(i.title) || '제목 없음' })),
     reviews: list<ReviewRow>('reviews'),
     settings: (settings as Record<string, string> | null | undefined) ?? {},
     planned: list<PlannedReviewRow>('planned'),
     tombstones: list<TombstoneRow>('tombstones'),
   }
+}
+
+/** 덩어리에 들어가는 칸 이름. */
+const SNAPSHOT_KEYS = new Set(['goals', 'items', 'reviews', 'settings', 'planned', 'tombstones'])
+
+function textOf(value: unknown): string {
+  if (typeof value === 'string') return value.trim() === '' ? '' : value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  // 묶음이나 목록을 글로 바꾸면 '[object Object]' 가 된다. 없는 것으로 본다.
+  return ''
 }

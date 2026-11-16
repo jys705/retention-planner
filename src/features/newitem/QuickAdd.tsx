@@ -134,7 +134,7 @@ export function QuickAdd({
           type="button"
           onClick={() => submit()}
           disabled={title.trim() === ''}
-          className="flex-none rounded-ctl bg-accent px-[12px] py-[6px] text-[12.5px] font-semibold text-white disabled:opacity-35"
+          className="flex-none rounded-ctl bg-accent px-[12px] py-[6px] text-[12.5px] font-semibold text-on-fill disabled:opacity-35"
         >
           적어두기
         </button>
@@ -285,7 +285,7 @@ export function QuickAddHint({ detailOpen }: { detailOpen: boolean }) {
     <p className="px-[18px] pt-[10px] text-[12px] text-text-3">
       {detailOpen
         ? '한 항목은 20분에서 40분에 훑을 분량이 적당해요.'
-        : '제목만 치고 Enter 를 누르면 끝입니다. 목표에 넣거나 날짜를 바꾸려면 상세 설정을 펼치세요.'}
+        : '제목만 치고 Enter를 누르면 끝입니다. 목표에 넣거나 날짜를 바꾸려면 상세 설정을 펼치세요.'}
     </p>
   )
 }

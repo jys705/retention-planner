@@ -6,7 +6,7 @@ import { Expand } from '../../components/Expand'
 import { today as clockToday } from '../../lib/clock'
 import { relativeWindow } from '../../core/horizon/horizon'
 import type { DateOnly } from '../../lib/date'
-import { monthDay, percent } from '../../lib/format'
+import { josa, monthDay, percent } from '../../lib/format'
 import type { ThemePreference } from '../../lib/settings'
 import { useHost, type SavedFile } from '../../lib/host'
 import {
@@ -64,7 +64,9 @@ export function SettingsScreen() {
 
   // 어디에 생겼는지 알아야 다른 컴퓨터로 옮긴다. 브라우저가 받아 갔으면 브라우저가 알린다.
   function savedTo(saved: SavedFile | null): string {
-    return saved ? ` ${saved.place}에 저장했어요. 파일 이름은 ${saved.name} 이에요.` : ''
+    return saved
+      ? ` ${saved.place}에 저장했어요. 파일 이름은 ${saved.name}${josa(saved.name, '이에요', '예요')}.`
+      : ''
   }
 
   async function exportJson() {
@@ -265,7 +267,7 @@ export function SettingsScreen() {
             />
           </div>
           {message ? (
-            <p className="text-right text-[12px] text-accent">{message}</p>
+            <p className="max-w-[340px] text-pretty break-keep text-right text-[12px] text-accent">{message}</p>
           ) : null}
         </Row>
       </section>
@@ -368,13 +370,13 @@ export function SettingsScreen() {
       <section className="flex flex-col gap-3 rounded-panel border border-line bg-surface px-[20px] py-[15px]">
         <h2 className="text-[13px] font-semibold">이 앱이 쓰는 방식</h2>
         <p className="text-[13px] leading-relaxed text-text-2">
-          다시 볼 날은 <strong className="font-semibold">FSRS</strong> 라는
-          방식으로 계산합니다. 사람이 시간이 지나며 잊는 곡선을 항목마다 따로
+          다시 볼 날은 <strong className="font-semibold">FSRS</strong>라는 방식으로
+          계산합니다. 사람이 시간이 지나며 잊는 곡선을 항목마다 따로
           추정하는 방법이에요.
         </p>
         <p className="text-[13px] leading-relaxed text-text-2">
-          예전에 널리 쓰던 <strong className="font-semibold">SM-2</strong> 는
-          정해진 배수로 간격을 늘렸습니다. 잘 아는 것도 여러 번 보게 되고, 잘
+          예전에 널리 쓰던 <strong className="font-semibold">SM-2</strong>는 정해진
+          배수로 간격을 늘렸습니다. 잘 아는 것도 여러 번 보게 되고, 잘
           모르는 것은 충분히 자주 보지 못했어요.
         </p>
         <p className="text-[13px] leading-relaxed text-text-2">
@@ -417,12 +419,12 @@ function Row({
     <div
       role="group"
       aria-label={label}
-      className="grid grid-cols-[1fr_auto] items-start gap-4 border-t border-line px-[20px] py-[13px] first:border-t-0"
+      className="grid grid-cols-[minmax(220px,1fr)_auto] items-start gap-4 border-t border-line px-[20px] py-[13px] first:border-t-0"
     >
       <div className="flex min-w-0 flex-col gap-[3px]">
         <span className="text-[13px] font-medium">{label}</span>
         {note ? (
-          <span className="text-[12px] leading-relaxed text-text-3">{note}</span>
+          <span className="text-pretty break-keep text-[12px] leading-relaxed text-text-3">{note}</span>
         ) : null}
       </div>
       <div className="flex min-w-0 flex-col items-end gap-[4px]">{children}</div>

@@ -16,4 +16,22 @@ describe('조사', () => {
     expect(josa('다시', '으로', '로')).toBe('로')
     expect(josa('무난함', '으로', '로')).toBe('으로')
   })
+
+  it('영문자로 끝나면 그 글자를 읽는 소리로 고른다', () => {
+    // 내보낸 파일 이름: retention-planner.json 이에요, retention-planner.csv 예요.
+    expect(josa('retention-planner-2026-11-16.json', '이에요', '예요')).toBe('이에요')
+    expect(josa('retention-planner-2026-11-16.csv', '이에요', '예요')).toBe('예요')
+    expect(josa('양자 컴퓨팅', '과', '와')).toBe('과')
+    expect(josa('Rust', '과', '와')).toBe('와')
+    expect(josa('SQL', '을', '를')).toBe('을')
+    expect(josa('TCP 3-way handshake', '과', '와')).toBe('와')
+  })
+
+  it('닫는 괄호와 따옴표 너머 마지막 소리를 본다', () => {
+    expect(josa('암호학 개론 2부 (블록 암호)', '과', '와')).toBe('와')
+    expect(josa('운영체제 (9장)', '과', '와')).toBe('과')
+    expect(josa('"해시 함수 2장"', '과', '와')).toBe('과')
+    expect(josa('"파이썬 기초"', '과', '와')).toBe('와')
+    expect(josa('해킹 기법 ', '과', '와')).toBe('과')
+  })
 })

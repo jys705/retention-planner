@@ -23,6 +23,8 @@
   --accent: #3f7a52;
   --accent-2: #2f6641;
   --accent-soft: #e8f0e9;
+  /* 채운 단추(바탕이 accent, imp-fg) 위의 글자. 어두운 테마는 채움이 밝아 흰 글자가 안 읽힌다. */
+  --on-fill: #ffffff;
 
   --imp-fg: #7a5712;
   --imp-bg: #f6ebd2;
@@ -68,6 +70,7 @@
     --accent: #7fb58d;
     --accent-2: #9bc9a6;
     --accent-soft: #25302a;
+    --on-fill: #1a1b18;
 
     --imp-fg: #d9b87a;
     --imp-bg: #332b1b;
@@ -108,6 +111,7 @@
   --accent: #7fb58d;
   --accent-2: #9bc9a6;
   --accent-soft: #25302a;
+  --on-fill: #1a1b18;
 
   --imp-fg: #d9b87a;
   --imp-bg: #332b1b;
@@ -147,6 +151,7 @@
   --color-accent: var(--accent);
   --color-accent-2: var(--accent-2);
   --color-accent-soft: var(--accent-soft);
+  --color-on-fill: var(--on-fill);
 
   --color-imp-fg: var(--imp-fg);
   --color-imp-bg: var(--imp-bg);
@@ -191,12 +196,45 @@ body {
     'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', system-ui,
     sans-serif;
   -webkit-font-smoothing: antialiased;
+  /*
+    한글은 낱말 가운데서 줄을 바꾸지 않는다. 좁아지면 '…유지해/요' 처럼 글자 하나가 다음 줄로 넘어간다.
+    영문과 숫자는 원래대로 끊긴다. 띄어 쓰지 않은 아주 긴 덩어리만 칸을 넘을 때 끊는다.
+  */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 /* 앱이 계산한 숫자는 전부 등폭으로. 자릿수가 바뀌어도 열이 밀리지 않는다. */
 .num {
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
   font-variant-numeric: tabular-nums;
+  /*
+    등폭 글꼴은 빈칸도 글자 한 칸(0.6em)만큼 넓다. '2일 지남', '12월 10일' 처럼 덩어리 안에
+    빈칸이 있으면 두 칸 띈 것처럼 보인다. 빈칸만 본문 글꼴의 폭쯤으로 줄인다. 숫자의 폭은
+    그대로라 자릿수가 바뀌어도 열이 밀리지 않는다.
+  */
+  word-spacing: -0.33em;
+}
+
+/*
+  줄인 빈칸 폭은 글자 크기를 곱한 길이로 물려 내려간다. 숫자 칸 안에 본문 글꼴로 적은 이름과
+  설명('정보보안 공부', '다음에 볼 날', ' (목)')에까지 가면 빈칸이 아예 사라진다. 그런 글은 제 빈칸을 쓴다.
+*/
+.num .font-sans {
+  word-spacing: normal;
+}
+
+/*
+  차트는 키보드로 골라 날짜를 옮겨 볼 수 있다. 마우스로 누를 때는 테를 그리지 않고, 키보드로
+  왔을 때만 앱 색으로 그린다. 브라우저 기본 테는 운영체제 강조색이라 앱 색과 어긋난다.
+*/
+.recharts-surface:focus {
+  outline: none;
+}
+
+.recharts-surface:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* 레일 패널의 폭 계산이 어긋나지 않게 테두리와 패딩을 폭에 포함시킨다. */

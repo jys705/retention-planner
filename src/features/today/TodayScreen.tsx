@@ -38,6 +38,7 @@ export function TodayScreen({
     dueToday,
     todayItems,
     listedToday,
+    reviewedToday,
     upcoming,
     overall,
     activeCount,
@@ -183,6 +184,7 @@ export function TodayScreen({
                 activeCount={activeCount}
                 goalsToday={goalsToday}
                 listedToday={listedToday}
+                reviewedToday={reviewedToday}
                 upcoming={upcoming}
               />
             </div>

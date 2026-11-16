@@ -27,11 +27,12 @@ export function Note({
     <section
       aria-label={ariaLabel ?? label}
       className={cn(
-        'flex items-center gap-3 rounded-card border border-line bg-surface px-[16px] py-[11px]',
+        // 좁으면 단추가 글 아래로 내려간다. 글이 한 줄에 두세 낱말씩 끊겨 길게 늘어지지 않는다.
+        'flex flex-wrap items-center gap-3 rounded-card border border-line bg-surface px-[16px] py-[11px]',
         flush ? '' : 'mb-[10px]'
       )}
     >
-      <div className="flex min-w-0 flex-col gap-[3px]">
+      <div className="flex min-w-0 grow basis-[200px] flex-col gap-[3px]">
         {label ? (
           <span className="text-[11.5px] text-text-3">{label}</span>
         ) : null}

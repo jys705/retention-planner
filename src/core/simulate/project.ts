@@ -129,17 +129,28 @@ export function projectItem(input: ProjectItemInput): ProjectedReview[] {
 
 export interface CurvePoint {
   date: DateOnly
+  /**
+   * 그날의 기억률. 복습한 날은 복습 직후의 값이다.
+   * 오늘은 아직 안 본 지금 값이다. 오늘 볼 차례여도 본 것으로 치지 않는다.
+   */
   retention: number
-  /** 그날 복습이 있는지. 곡선의 톱니가 여기서 100% 로 튄다. */
+  /** 그날 복습하기 바로 전의 기억률. 복습이 없는 날은 retention 과 같다. */
+  before: number
+  /** 그날 복습이 있는지. 곡선의 톱니가 여기서 튄다. */
   reviewed: boolean
   /** 아직 오지 않은 구간인지. 화면에서 점선으로 그린다. */
   projected: boolean
+  /**
+   * 오늘 볼 차례일 때 오늘에만 있는 값. 오늘 보고 난 직후의 기억률이다.
+   * 앞날의 예상은 모두 오늘 본 것을 전제로 잡혔으므로 점선은 여기서 시작한다.
+   */
+  planned: number | null
 }
 
 export interface MemoryCurveInput {
   /** 지난 평가들. 날짜와 그 직후의 기억 상태. */
   history: { date: DateOnly; state: MemoryState }[]
-  /** 앞으로의 예상 복습들. */
+  /** 앞으로의 예상 복습들. 오늘이거나 그 전 날짜인 것은 오늘 할 복습이다. */
   future: { date: DateOnly; state: MemoryState }[]
   from: DateOnly
   to: DateOnly
@@ -147,46 +158,79 @@ export interface MemoryCurveInput {
   engine?: Fsrs6
 }
 
+type Mark = { date: DateOnly; state: MemoryState }
+
+const byDate = (a: Mark, b: Mark) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
+
 /**
  * 날짜별 기억률을 뽑는다.
  *
  * 복습할 때마다 1 로 튀었다가 망각 곡선을 따라 내려온다. 그 톱니가 그래프의 본체다.
+ *
+ * 오늘까지는 실제로 한 평가만 쓴다. 예정일이 오늘이거나 지났어도 아직 안 본 것이라
+ * 화면이 크게 적어 둔 '지금 기억률' 과 그림이 같아야 한다.
+ * 내일부터는 계획을 쓴다. 밀렸거나 오늘인 예상 복습은 오늘 하는 것으로 계획이 잡혀
+ * 있으므로, 그것을 오늘 했다고 치고 이어 그린다. 그러지 않으면 점선이 오늘 할 복습을
+ * 빼먹은 채 목표 아래로 떨어지다가, 오늘 본 것을 전제로 잡힌 다음 복습에서야 튄다.
  */
 export function memoryCurve(input: MemoryCurveInput): CurvePoint[] {
   const engine = input.engine ?? defaultFsrs
-  const todayMark = toEpochDay(input.today)
-  // 앞으로 잡힌 복습은 아직 안 한 것이다. 예정일이 오늘이거나 지났다고 해서
-  // 곡선을 100% 로 올려 버리면, 화면이 말하는 '지금 기억률' 과 그림이 어긋난다.
-  const marks = [
-    ...input.history,
-    ...input.future.filter((f) => toEpochDay(f.date) > todayMark),
-  ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-  const reviewDays = new Set(marks.map((m) => m.date))
-  const todayDay = todayMark
+  const now = toEpochDay(input.today)
+  const done = [...input.history].sort(byDate)
+  const dueNow = input.future
+    .filter((f) => toEpochDay(f.date) <= now)
+    .sort(byDate)
+    .at(-1)
+  const planNow: Mark | null = dueNow ? { date: input.today, state: dueNow.state } : null
+  // 정렬은 안정적이다. 같은 날이면 실제로 한 평가가 오늘 할 복습보다 앞에 선다.
+  const plan = [
+    ...done,
+    ...(planNow ? [planNow] : []),
+    ...input.future.filter((f) => toEpochDay(f.date) > now),
+  ].sort(byDate)
 
   const out: CurvePoint[] = []
   const start = toEpochDay(input.from)
   const end = toEpochDay(input.to)
-  let index = -1
 
   for (let day = start; day <= end; day += 1) {
     const date = addDays(input.from, day - start)
-    while (index + 1 < marks.length && marks[index + 1].date <= date) {
-      index += 1
-    }
-    const active = index >= 0 ? marks[index] : null
-    const retention = active
-      ? engine.retrievability(diffDays(active.date, date), active.state.stability)
-      : 0
+    const projected = day > now
+    const { after, before, reviewed } = readOn(projected ? plan : done, date, engine)
     out.push({
       date,
-      retention,
-      reviewed: reviewDays.has(date),
-      projected: day > todayDay,
+      retention: after,
+      before,
+      reviewed,
+      projected,
+      planned:
+        day === now && planNow
+          ? engine.retrievability(0, planNow.state.stability)
+          : null,
     })
   }
 
   return out
+}
+
+/** 그날의 기억률을 평가 목록에서 읽는다. 그날 평가가 있으면 그 전과 후를 같이 준다. */
+function readOn(
+  marks: readonly Mark[],
+  date: DateOnly,
+  engine: Fsrs6
+): { after: number; before: number; reviewed: boolean } {
+  let last: Mark | null = null
+  let prior: Mark | null = null
+  for (const mark of marks) {
+    if (mark.date > date) break
+    if (mark.date < date) prior = mark
+    last = mark
+  }
+  const at = (mark: Mark | null) =>
+    mark ? engine.retrievability(diffDays(mark.date, date), mark.state.stability) : 0
+  const reviewed = last !== null && last.date === date
+  // 처음 공부한 날은 그 전이 없다. 0 에서 솟는 선을 그리지 않는다.
+  return { after: at(last), before: reviewed && prior ? at(prior) : at(last), reviewed }
 }
 
 export interface GroupProjectionInput {

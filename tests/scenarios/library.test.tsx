@@ -91,6 +91,35 @@ describe('서재', () => {
     ])
   })
 
+  it('S-311 이름순은 제목 속 숫자를 수로 견준다', async () => {
+    // 글자 차례로만 견주면 '13장' 이 '1장' 과 '7장' 사이에 끼고, '101~110' 이 '41~50' 앞에 온다.
+    const titles = [
+      '분산 시스템 13장',
+      '분산 시스템 1장',
+      '분산 시스템 7장',
+      '분산 시스템 19장',
+      '영어 단어 101~110',
+      '영어 단어 41~50',
+      '영어 단어 161~170',
+    ]
+    await setupApp(TODAY, {
+      items: titles.map((title, index) =>
+        anItem({ id: `t${index}`, title, due: '2026-10-05', last_review: '2026-09-30' })
+      ),
+    })
+    const { user } = render(<LibraryScreen onOpenItem={noop} onOpenGoal={noop} />)
+    await user.click(screen.getByRole('button', { name: '이름순' }))
+    expect(visibleTitles()).toEqual([
+      '분산 시스템 1장',
+      '분산 시스템 7장',
+      '분산 시스템 13장',
+      '분산 시스템 19장',
+      '영어 단어 41~50',
+      '영어 단어 101~110',
+      '영어 단어 161~170',
+    ])
+  })
+
   it('S-075 검색으로 걸러낸다', async () => {
     await setupApp(TODAY, mixed())
     const { user } = render(
@@ -111,6 +140,11 @@ describe('서재', () => {
     await user.type(screen.getByLabelText('항목 찾기'), '없는말')
     expect(screen.getByText('찾는 항목이 없어요.')).toBeInTheDocument()
     expect(screen.getByText(/다른 말로 찾아보거나/)).toBeInTheDocument()
+    // 조사는 찾은 말의 받침을 따른다.
+    expect(screen.getByText(/^'없는말'과 맞는 제목이 없습니다/)).toBeInTheDocument()
+    await user.clear(screen.getByLabelText('항목 찾기'))
+    await user.type(screen.getByLabelText('항목 찾기'), '파이썬 기초')
+    expect(screen.getByText(/^'파이썬 기초'와 맞는 제목이 없습니다/)).toBeInTheDocument()
   })
 
   it('S-077 목표 묶음을 접고 편다', async () => {

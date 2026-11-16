@@ -173,13 +173,14 @@ export function ForecastScreen() {
         </div>
       </header>
 
+      {/* 막대 위에 뜨는 상자가 이 칸 밖으로 나가도 잘리지 않게 넘침을 막지 않는다. */}
       <section
         aria-label={`앞으로 ${horizonDays}일`}
-        className="relative overflow-hidden rounded-panel border border-line bg-surface"
+        className="relative rounded-panel border border-line bg-surface"
       >
         <div
           aria-hidden
-          className="absolute bottom-0 right-0 top-0 w-[268px] bg-rail"
+          className="absolute bottom-0 right-0 top-0 w-[268px] rounded-r-panel bg-rail"
         />
         <div className="relative grid grid-cols-[1fr_268px]">
           <div className="min-w-0 px-[20px] py-[16px]">
@@ -314,10 +315,10 @@ export function ForecastScreen() {
                 <span className="text-[11.5px] text-text-3">
                   한 달 단위로 보면
                 </span>
-                <p className="text-[12.5px] leading-relaxed text-text-2">
+                <p className="text-pretty break-keep text-[12.5px] leading-relaxed text-text-2">
                   {monthSentence(dailyCount, settings.dailyCap, today)}
                 </p>
-                <p className="text-[11.5px] leading-relaxed text-text-3">
+                <p className="text-pretty break-keep text-[11.5px] leading-relaxed text-text-3">
                   칸에 마우스를 올리면 그날 무엇을 보는지 여기 나옵니다. 누르면
                   고정돼요.
                 </p>
@@ -353,7 +354,8 @@ function monthSentence(
     ([date, count]) => date > today && count > cap
   )
   if (over.length === 0) {
-    return '두 달 모두 하루 상한 안에서 고르게 퍼져 있어요.'
+    // 상한만 보고 하는 말이다. 하루에 몰려 있어도 상한 안이면 이 말이 나오므로 '고르게' 라고 하지 않는다.
+    return `두 달 모두 하루 상한 ${cap}개를 넘는 날이 없어요.`
   }
   return `색이 진한 칸이 그날 볼 게 많은 날이에요. 상한을 넘는 ${over.length}일은 앞으로 펴서 잡습니다.`
 }
@@ -401,7 +403,8 @@ function DayCard({
   /** 막대 위에 떠 있는 상자인지. 그때는 더 짧게 줄인다. */
   floating?: boolean
 }) {
-  const limit = floating ? 6 : 12
+  // 떠 있는 상자는 막대 그림 높이 안에 들어와야 한다. 넘친 것은 '외 N개' 로 센다.
+  const limit = floating ? 4 : 12
   const overdue = items.filter((i) => i.overdue).length
   const byGoal = new Map<string, PlannedItem[]>()
   for (const item of items) {
@@ -409,7 +412,14 @@ function DayCard({
     byGoal.set(key, [...(byGoal.get(key) ?? []), item])
   }
 
-  let shownSoFar = 0
+  // 보일 줄을 먼저 골라 묶는다. 줄이 하나도 안 남은 목표는 이름도 세우지 않는다.
+  const groups: { goalName: string; total: number; rows: PlannedItem[] }[] = []
+  let left = limit
+  for (const [goalName, rows] of byGoal.entries()) {
+    const shown = rows.slice(0, Math.max(0, left))
+    left -= shown.length
+    if (shown.length > 0) groups.push({ goalName, total: rows.length, rows: shown })
+  }
 
   return (
     <div
@@ -431,41 +441,38 @@ function DayCard({
         <p className="pt-[6px] text-[12px] text-text-3">이날은 볼 게 없어요.</p>
       ) : (
         <div className="flex flex-col gap-[8px] pt-[8px]">
-          {[...byGoal.entries()].map(([goalName, rows]) => (
+          {groups.map(({ goalName, total, rows }) => (
             <div key={goalName} className="flex flex-col gap-[3px]">
               <div className="flex items-baseline gap-[6px]">
                 <span className="text-[11.5px] font-medium text-text-2">
                   {goalName}
                 </span>
                 <span className="num text-[11px] text-text-3">
-                  {rows.length}개
+                  {total}개
                 </span>
               </div>
-              {rows.map((row) => {
-                if (shownSoFar >= limit) return null
-                shownSoFar += 1
-                return (
-                  <div
-                    key={row.itemId}
-                    className="flex items-baseline gap-2 pl-[6px]"
+              {rows.map((row) => (
+                <div
+                  key={row.itemId}
+                  className="flex items-baseline gap-2 pl-[6px]"
+                >
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-text-2">
+                    {row.title}
+                  </span>
+                  <span
+                    className="num flex-none text-[11px] text-text-3"
+                    title="그날 보기 직전에 떠올릴 확률이에요."
                   >
-                    <span className="min-w-0 flex-1 truncate text-[12px] text-text-2">
-                      {row.title}
-                    </span>
-                    <span
-                      className="num flex-none text-[11px] text-text-3"
-                      title="그날 보기 직전에 떠올릴 확률이에요."
-                    >
-                      {percent(row.retention)}
-                    </span>
-                  </div>
-                )
-              })}
+                    {percent(row.retention)}
+                  </span>
+                </div>
+              ))}
             </div>
           ))}
           {items.length > limit ? (
-            <p className="num pl-[6px] text-[11px] text-text-3">
-              외 {items.length - limit}개
+            // 목표 이름과 같은 자리에서 시작한다. 마지막 목표의 줄처럼 들여 쓰면 그 목표 것으로 읽힌다.
+            <p className="text-[11px] text-text-3">
+              외 <span className="num">{items.length - limit}개</span>
             </p>
           ) : null}
           <p className="pt-[2px] text-[11px] leading-relaxed text-text-3">

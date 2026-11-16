@@ -67,7 +67,7 @@ describe('예보', () => {
     await screen.findByText('달력으로 보기')
     // 개수가 있는 칸 하나를 골라 누른다.
     const cell = [...document.querySelectorAll('button[title]')].find((b) =>
-      /10월 \d+일 [1-9]\d*개/.test(b.getAttribute('title') ?? '')
+      /10월\s\d+일 [1-9]\d*개/.test(b.getAttribute('title') ?? '')
     )!
     const [, count] = /(\d+)개$/.exec(cell.getAttribute('title')!)!
     await user.click(cell)
@@ -107,7 +107,7 @@ describe('예보', () => {
     await screen.findByText('달력으로 보기')
 
     const cell = [...document.querySelectorAll('button[title]')].find((b) =>
-      /10월 5일 1개/.test(b.getAttribute('title') ?? '')
+      /10월\s5일 1개/.test(b.getAttribute('title') ?? '')
     )!
     await user.click(cell)
 
@@ -135,7 +135,7 @@ describe('예보', () => {
     await screen.findByText('달력으로 보기')
 
     const cell = [...document.querySelectorAll('button[title]')].find((b) =>
-      /10월 5일 1개/.test(b.getAttribute('title') ?? '')
+      /10월\s5일 1개/.test(b.getAttribute('title') ?? '')
     )!
     await user.hover(cell)
     const card = screen.getByRole('region', { name: '그날 무엇을 보나' })

@@ -1,13 +1,14 @@
 // @vitest-environment happy-dom
 import { act, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { DataFile } from '../../obsidian/src/datafile'
 import RetentionPlannerPlugin from '../../obsidian/src/main'
 import { setPluginStatus } from '../../obsidian/src/status'
 import { resetRepositoryForTest } from '../../src/db'
 import { freezeToday, unfreezeToday } from '../../src/lib/clock'
 import { resetPlannerForTest, usePlanner } from '../../src/store/planner'
-import { App, Component, Notice, WorkspaceLeaf } from '../fakes/obsidian'
+import { App, Component, Notice, View, WorkspaceLeaf } from '../fakes/obsidian'
 import { aGoal, anItem } from '../scenarios/harness'
 
 const TODAY = '2026-10-01'
@@ -31,6 +32,44 @@ function savedData(over: Record<string, unknown> = {}) {
     settings: { onboardingDone: 'true' },
     ...over,
   })
+}
+
+/**
+ * data.json 노릇을 하는 파일의 손잡이. 내용은 fake().dataText 에 둔다.
+ *
+ * 플러그인은 data.json 을 옵시디언 loadData 를 거치지 않고 직접 읽고 쓴다. 시험은 그 파일을
+ * 이것으로 바꿔 끼우고, 쓰기 실패나 쓰는 도중에 읽은 것 같은 일을 일으킨다.
+ */
+const disk = {
+  failWrites: false,
+  /** 다음 한 번은 바로 전에 쓴 내용을 읽게 한다. 새로 쓰는 도중에 읽은 것과 같다. */
+  staleNextRead: false,
+  previous: null as string | null,
+  copies: [] as { tag: string; text: string }[],
+}
+
+function linkedFile(): DataFile {
+  return {
+    read: async () => {
+      if (disk.staleNextRead) {
+        disk.staleNextRead = false
+        return disk.previous
+      }
+      return fake().dataText
+    },
+    write: async (text) => {
+      if (disk.failWrites) throw new Error('디스크가 가득 찼다')
+      disk.previous = fake().dataText
+      fake().dataText = text
+      fake().saves += 1
+    },
+    keepCopy: async (tag) => {
+      const text = fake().dataText
+      if (text === null) return null
+      disk.copies.push({ tag, text })
+      return `data.json.${tag}`
+    },
+  }
 }
 
 let app: App
@@ -64,6 +103,10 @@ beforeEach(() => {
   usePlanner.setState({ ready: false, goals: [], items: [], reviews: [], planned: [], today: TODAY, lastRating: null })
   setPluginStatus({ kind: 'loading' })
   Notice.messages = []
+  disk.failWrites = false
+  disk.staleNextRead = false
+  disk.previous = null
+  disk.copies = []
   browserStore = installBrowserStore()
   document.body.className = 'theme-light'
   app = new App()
@@ -83,7 +126,8 @@ afterEach(async () => {
 })
 
 async function start(data: string | null = savedData()) {
-  ;(plugin as unknown as { dataText: string | null }).dataText = data
+  fake().dataText = data
+  plugin.dataFile = linkedFile()
   await act(() => (plugin as unknown as Component).load())
 }
 
@@ -345,7 +389,7 @@ describe('옵시디언 플러그인', () => {
     await user.click(await within(view).findByRole('button', { name: '내보내기' }, LAZY))
     expect(
       await within(view).findByText(
-        '항목 2개와 평가 0건을 내보냈어요. 다운로드 폴더에 저장했어요. 파일 이름은 retention-planner-2026-10-01 (1).json 이에요.'
+        '항목 2개와 평가 0건을 내보냈어요. 다운로드 폴더에 저장했어요. 파일 이름은 retention-planner-2026-10-01 (1).json이에요.'
       )
     ).toBeInTheDocument()
     expect(JSON.parse(written[0].text).items).toHaveLength(2)
@@ -364,7 +408,7 @@ describe('옵시디언 플러그인', () => {
     await user.click(await within(view).findByRole('button', { name: '설정 화면' }))
     await user.click(await within(view).findByRole('button', { name: '내보내기' }, LAZY))
     expect(
-      await within(view).findByText(/보관함의 retention-planner 폴더에 저장했어요. 파일 이름은 retention-planner-2026-10-01 \(1\).json 이에요./)
+      await within(view).findByText(/보관함의 retention-planner 폴더에 저장했어요. 파일 이름은 retention-planner-2026-10-01 \(1\).json이에요./)
     ).toBeInTheDocument()
     expect(app.vault.files.has('retention-planner/retention-planner-2026-10-01 (1).json')).toBe(true)
   })
@@ -376,8 +420,7 @@ describe('옵시디언 플러그인', () => {
     const reading = new Promise<void>((resolve) => {
       release = resolve
     })
-    const slow = plugin as unknown as { loadData: () => Promise<unknown> }
-    slow.loadData = () => reading.then(() => JSON.parse(savedData()))
+    plugin.dataFile = { ...linkedFile(), read: () => reading.then(() => savedData()) }
     const loading = (plugin as unknown as Component).load()
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(fake().processors.size).toBe(0)
@@ -418,5 +461,264 @@ describe('옵시디언 플러그인', () => {
     expect(host.querySelectorAll('.rp-root')).toHaveLength(1)
     parent.unload()
     expect(host.querySelectorAll('.rp-root')).toHaveLength(0)
+  })
+
+  it('옵시디언이 우리가 쓴 것을 바뀌었다고 알려 와도 다시 읽지 않는다', async () => {
+    await start()
+    const host = await renderBlock()
+    const user = userEvent.setup()
+    await user.click(await within(host).findByRole('checkbox', { name: '4장 연습문제 평가하기' }))
+    await user.click(within(host).getByRole('button', { name: /무난함/ }))
+    await within(host).findByLabelText('방금 한 일')
+    await waitFor(() => expect(stored().reviews).toHaveLength(1))
+    const saves = fake().saves
+
+    // 옵시디언은 누가 썼든 data.json 이 바뀌면 알려 온다.
+    await act(() => plugin.onExternalSettingsChange())
+    // 새로 쓰는 도중에 읽으면 우리가 바로 전에 쓴 내용이 보인다. 그것도 우리 것이다.
+    disk.staleNextRead = true
+    await act(() => plugin.onExternalSettingsChange())
+
+    // 다시 읽었다면 방금 한 평가의 되돌리기가 사라진다.
+    expect(within(host).getByLabelText('방금 한 일')).toBeInTheDocument()
+    // 다시 읽고 다시 쓰는 일이 돌지 않는다.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(fake().saves).toBe(saves)
+  })
+
+  it('남이 고친 data.json 이 깨져 있으면 지금 기록을 지키고, 다음에 쓸 때 그 파일을 옆에 남긴다', async () => {
+    await start()
+    const host = await renderBlock()
+    await within(host).findByRole('button', { name: '4장 연습문제 자세히 보기' })
+    // 동기화 프로그램이 쓰다 만 파일이다.
+    fake().dataText = '{ "items": [ 반쯤'
+    await act(() => plugin.onExternalSettingsChange())
+    expect(Notice.messages.some((m) => m.includes('바뀐 기록을 읽지 못해서'))).toBe(true)
+    expect(within(host).getByRole('button', { name: '4장 연습문제 자세히 보기' })).toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.type(within(host).getByRole('textbox', { name: '새 항목 제목' }), '6장 요약{Enter}')
+    await waitFor(() => expect(stored().items.map((i: { title: string }) => i.title)).toContain('6장 요약'))
+    // 깨진 파일 안에만 있던 것을 사람이 찾아 쓸 수 있게 옆에 남긴다.
+    expect(disk.copies).toEqual([{ tag: expect.stringMatching(/^broken-/), text: '{ "items": [ 반쯤' }])
+    expect(stored().items.map((i: { title: string }) => i.title)).toContain('4장 연습문제')
+  })
+
+  it('남이 깨뜨린 data.json 은 잠깐 기다렸다가 옆에 남기고 지금 기록으로 되살린다', async () => {
+    await start()
+    plugin.repairDelayMs = 0
+    const host = await renderBlock()
+    await within(host).findByRole('button', { name: '4장 연습문제 자세히 보기' })
+    fake().dataText = '{ "items": [ 반쯤'
+    await act(() => plugin.onExternalSettingsChange())
+
+    // 사람이 아무것도 안 해도 기록이 깨진 파일로만 남지 않는다. 옵시디언을 바로 꺼도 된다.
+    await waitFor(() => expect(disk.copies).toHaveLength(1))
+    expect(disk.copies[0].text).toBe('{ "items": [ 반쯤')
+    await waitFor(() =>
+      expect(stored().items.map((i: { title: string }) => i.title)).toContain('4장 연습문제')
+    )
+    expect(Notice.messages.some((m) => m.includes('남기고 지금 기록을 다시 썼어요'))).toBe(true)
+  })
+
+  it('남이 JSON 이지만 기록의 꼴이 아닌 것을 써도 옆에 남기고 지금 기록으로 되살린다', async () => {
+    await start()
+    plugin.repairDelayMs = 0
+    const host = await renderBlock()
+    await within(host).findByRole('button', { name: '4장 연습문제 자세히 보기' })
+    fake().dataText = '[]'
+    await act(() => plugin.onExternalSettingsChange())
+    expect(within(host).getByRole('button', { name: '4장 연습문제 자세히 보기' })).toBeInTheDocument()
+    await waitFor(() => expect(disk.copies.map((c) => c.text)).toEqual(['[]']))
+    await waitFor(() => expect(stored().items).toHaveLength(2))
+  })
+
+  it('남이 data.json 을 지우면 지금 기록으로 다시 쓴다', async () => {
+    await start()
+    plugin.repairDelayMs = 0
+    const host = await renderBlock()
+    await within(host).findByRole('button', { name: '4장 연습문제 자세히 보기' })
+    // 동기화 프로그램이 충돌을 풀며 지우는 일이 흔하다. 그대로 두면 끄는 순간 기록이 사라진다.
+    fake().dataText = null
+    await act(() => plugin.onExternalSettingsChange())
+    await waitFor(() => expect(stored()?.items).toHaveLength(2))
+    expect(Notice.messages.some((m) => m.includes('기록 파일이 지워져서'))).toBe(true)
+  })
+
+  it('옵시디언은 지운 것을 알려 오지 않는다. 보관함 알림만 보고도 지운 파일을 되살린다', async () => {
+    await start()
+    plugin.repairDelayMs = 0
+    const host = await renderBlock()
+    await within(host).findByRole('button', { name: '4장 연습문제 자세히 보기' })
+    fake().dataText = null
+    // 진짜 옵시디언은 이때 onExternalSettingsChange 를 부르지 않고 보관함의 낮은 단계 알림만 낸다.
+    await act(async () => {
+      app.vault.trigger('raw', '.obsidian/plugins/retention-planner/data.json')
+    })
+    await waitFor(() => expect(stored()?.items).toHaveLength(2))
+    expect(Notice.messages.some((m) => m.includes('기록 파일이 지워져서'))).toBe(true)
+  })
+
+  it('옵시디언을 끌 때는 기다려 주는 일감에서 지워진 파일을 되살린다', async () => {
+    await start()
+    plugin.repairDelayMs = 60_000
+    const host = await renderBlock()
+    await within(host).findByRole('button', { name: '4장 연습문제 자세히 보기' })
+    fake().dataText = null
+    // 끌 때는 onunload 를 부르지 않는다. 'quit' 에 건 일감을 기다린 뒤 끈다.
+    const tasks: (() => Promise<unknown>)[] = []
+    app.workspace.trigger('quit', { add: (task: () => Promise<unknown>) => tasks.push(task) })
+    expect(tasks).toHaveLength(1)
+    await act(async () => {
+      await Promise.all(tasks.map((task) => task()))
+    })
+    expect(stored().items).toHaveLength(2)
+  })
+
+  it('알림 없이 바뀐 파일은 덮기 전에 옆에 남긴다', async () => {
+    await start()
+    const host = await renderBlock()
+    await within(host).findByRole('button', { name: '4장 연습문제 자세히 보기' })
+    // 수정 시각을 그대로 둔 채 되살린 파일처럼, 옵시디언이 알려 오지 않는 바뀜이다.
+    const outside = JSON.parse(savedData())
+    outside.items.push(anItem({ id: 'i9', title: '밖에서만 더한 것', created_at: '2026-01-09T00:00:00.000Z' }))
+    fake().dataText = JSON.stringify(outside)
+    const user = userEvent.setup()
+    await user.type(within(host).getByRole('textbox', { name: '새 항목 제목' }), '6장 요약{Enter}')
+    await waitFor(() => expect(stored().items.map((i: { title: string }) => i.title)).toContain('6장 요약'))
+    expect(disk.copies).toHaveLength(1)
+    expect(disk.copies[0].tag).toMatch(/^outside-/)
+    expect(disk.copies[0].text).toContain('밖에서만 더한 것')
+  })
+
+  it('앱 탭을 쓰는 동안 옵시디언 단축키 차례에서 Esc 를 막는다. 따로 띄운 창의 키도 이 차례를 거친다', async () => {
+    await start()
+    await act(() => plugin.openApp(null, 'tab'))
+    const view = app.workspace.getLeavesOfType('retention-planner')[0].view!
+    const escape = view.scope?.keys.find((k) => k.key === 'Escape' && k.modifiers.length === 0)
+    expect(escape).toBeDefined()
+    // 기본 동작만 막는다. false 를 돌려주면 옵시디언이 키를 거둬 가서 앱 안의 Esc 처리가 못 받는다.
+    const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
+    expect(escape!.func(event)).not.toBe(false)
+    expect(event.defaultPrevented).toBe(true)
+    expect(view.scope?.parent).toBe(app.scope)
+  })
+
+  it('깨진 파일을 되살리기 전에 끄면 끄면서 되살린다', async () => {
+    await start()
+    plugin.repairDelayMs = 60_000
+    const host = await renderBlock()
+    await within(host).findByRole('button', { name: '4장 연습문제 자세히 보기' })
+    fake().dataText = '{ 반쯤'
+    await act(() => plugin.onExternalSettingsChange())
+    expect(disk.copies).toHaveLength(0)
+    plugin.unload()
+    await waitFor(() => expect(disk.copies.map((c) => c.text)).toEqual(['{ 반쯤']))
+    await waitFor(() => expect(stored().items).toHaveLength(2))
+  })
+
+  it('저장하지 못하면 알리고, 다음에 저장되면 그때까지 한 것이 다 남는다', async () => {
+    await start()
+    const host = await renderBlock()
+    const user = userEvent.setup()
+    const input = within(host).getByRole('textbox', { name: '새 항목 제목' })
+    disk.failWrites = true
+    await user.type(input, '6장 요약{Enter}')
+    await waitFor(() =>
+      expect(Notice.messages.some((m) => m.includes('기록을 저장하지 못했어요'))).toBe(true)
+    )
+    expect(stored().items.map((i: { title: string }) => i.title)).not.toContain('6장 요약')
+
+    disk.failWrites = false
+    await user.type(input, '7장 요약{Enter}')
+    await waitFor(() =>
+      expect(stored().items.map((i: { title: string }) => i.title)).toEqual(
+        expect.arrayContaining(['6장 요약', '7장 요약'])
+      )
+    )
+  })
+
+  it('끄면 노트 카드와 앱 화면에 띄운 것을 모두 거둔다', async () => {
+    await start()
+    const host = await renderBlock()
+    await within(host).findByRole('list', { name: '오늘 볼 항목' })
+    await act(() => plugin.openApp(null, 'tab'))
+    const view = app.workspace.getLeavesOfType('retention-planner')[0].view!.containerEl
+    await within(view).findByText('오늘 볼 항목')
+
+    // 끈 뒤에 남은 카드는 스타일이 빠진 채로 남고, 누르면 옛 기록으로 data.json 을 덮는다.
+    plugin.unload()
+    expect(host.querySelector('.rp-root')).toBeNull()
+    expect(view.querySelector('.rp-root')).toBeNull()
+  })
+
+  it('앱을 다시 열면 보던 자리를 지키고 그 탭을 쓰는 탭으로 삼는다', async () => {
+    await start()
+    await act(() => plugin.openApp({ itemId: 'i1' }, 'tab'))
+    const leaf = app.workspace.getLeavesOfType('retention-planner')[0]
+    const view = leaf.view!.containerEl
+    await within(view).findByRole('button', { name: '제목' }, LAZY)
+
+    // 다른 노트를 보다가 리본 단추나 명령으로 돌아온다.
+    app.workspace.activeLeaf = new WorkspaceLeaf(app.workspace, 'tab', undefined)
+    await act(async () => {
+      await fake().commands.find((c) => c.id === 'open')!.callback!()
+    })
+    // 앞에 내기만 하면 키보드가 뒤의 노트로 간다.
+    expect(app.workspace.activeLeaf).toBe(leaf)
+    expect(within(view).getByRole('button', { name: '제목' })).toHaveTextContent('4장 연습문제')
+  })
+
+  it('앱 탭을 쓰는 동안 Esc 로 옵시디언이 다른 탭으로 옮겨 가지 않는다', async () => {
+    await start()
+    await act(() => plugin.openApp(null, 'tab'))
+    const leaf = app.workspace.getLeavesOfType('retention-planner')[0]
+    await within(leaf.view!.containerEl).findByText('오늘 볼 항목')
+    const press = () => {
+      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      document.body.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    expect(press()).toBe(true)
+
+    // 옵시디언의 대화 상자나 메뉴가 떠 있으면 Esc 는 그것을 닫는다.
+    const modal = document.createElement('div')
+    modal.className = 'modal-container'
+    document.body.appendChild(modal)
+    expect(press()).toBe(false)
+    modal.remove()
+
+    // 다른 탭을 쓰는 중이면 그 탭의 Esc 다.
+    app.workspace.activeLeaf = new WorkspaceLeaf(app.workspace, 'tab', undefined)
+    expect(press()).toBe(false)
+  })
+
+  it('옵시디언을 켜면 열려 있던 캔버스에서 이 카드 칸만 다시 그린다', async () => {
+    // 옵시디언은 플러그인보다 캔버스를 먼저 그린다. 그때는 이 카드를 그릴 줄 몰라 빈 코드 칸이 남는다.
+    const rerender = vi.fn()
+    const other = vi.fn()
+    const fileRerender = vi.fn()
+    const fileNodeEl = document.createElement('div')
+    fileNodeEl.innerHTML = '<pre><code class="language-retention-planner"></code></pre>'
+
+    const leaf = app.workspace.getLeaf('tab')
+    const canvasView = new View(leaf)
+    canvasView.getViewType = () => 'canvas'
+    Object.assign(canvasView, {
+      canvas: {
+        nodes: new Map([
+          ['a', { text: '```retention-planner\n```', child: { previewMode: { renderer: { rerender } } } }],
+          ['b', { text: '그냥 글', child: { previewMode: { renderer: { rerender: other } } } }],
+          ['c', { file: '노트.md' }],
+          // 이 카드를 품은 노트를 띄운 파일 칸. 글이 없고, 플러그인보다 먼저 그려져 코드 글자로 남았다.
+          ['d', { file: '카드.md', nodeEl: fileNodeEl, child: { previewMode: { renderer: { rerender: fileRerender } } } }],
+        ]),
+      },
+    })
+    leaf.view = canvasView
+    await start()
+    expect(rerender).toHaveBeenCalledWith(true)
+    expect(fileRerender).toHaveBeenCalledWith(true)
+    expect(other).not.toHaveBeenCalled()
   })
 })

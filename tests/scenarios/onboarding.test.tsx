@@ -38,7 +38,18 @@ describe('첫 실행 안내', () => {
     const { user } = render(<Onboarding />)
     await user.click(screen.getByRole('button', { name: '다음' }))
     // 오늘은 10월 1일이다. 이틀 뒤를 다음 날짜로 보여 준다.
-    expect(screen.getByText('다음은 10월 3일에 3개예요')).toBeInTheDocument()
+    // 숫자 덩어리만 따로 감싸 그리므로 글이 여러 조각이다. 상자 전체의 글로 본다.
+    const example = screen.getByText(
+      (_, element) =>
+        element?.tagName === 'DIV' && element.textContent === '다음은 10월\u00a03일에 3개예요'
+    )
+    // 한글 낱말은 본문 글꼴이고 숫자 덩어리만 등폭이다. 통째로 등폭이면 낱말 사이가 벌어진다.
+    expect(example).not.toHaveClass('num')
+    // 날짜는 한 덩어리다. 월과 일 사이에서 줄이 바뀌지 않는다.
+    expect([...example.querySelectorAll('.num')].map((n) => n.textContent)).toEqual([
+      '10월\u00a03일',
+      '3개',
+    ])
   })
 
   it('S-096b 이전으로 돌아간다', async () => {

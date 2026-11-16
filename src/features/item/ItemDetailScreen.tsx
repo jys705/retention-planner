@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { restsOnDay, type Horizon } from '../../core/horizon/horizon'
 import { AdjustedBadge, Badge, FinishedBadge } from '../../components/Badge'
 import { Chip } from '../../components/Chip'
@@ -73,6 +73,9 @@ export function ItemDetailScreen({
     setConfirmingDelete(false)
   }
 
+  // 옵시디언에서 따로 띄운 창이면 그 창의 키를 들어야 한다.
+  const rootRef = useRef<HTMLDivElement>(null)
+
   // 훅은 이른 반환보다 앞에 와야 한다. 항목이 사라지는 순간에도 호출 순서가 같아야 하기 때문이다.
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -97,8 +100,9 @@ export function ItemDetailScreen({
         setConfirmingDelete(false)
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    const win = rootRef.current?.ownerDocument.defaultView ?? window
+    win.addEventListener('keydown', onKey)
+    return () => win.removeEventListener('keydown', onKey)
   })
 
   if (!item) {
@@ -164,7 +168,7 @@ export function ItemDetailScreen({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[940px] flex-col gap-[14px] px-6 pb-7 pt-10">
+    <div ref={rootRef} className="mx-auto flex w-full max-w-[940px] flex-col gap-[14px] px-6 pb-7 pt-10">
       <div>
         <div className="flex items-center justify-between pr-[18px]">
           <button
@@ -196,6 +200,7 @@ export function ItemDetailScreen({
               label="제목"
               placeholder="제목 없음"
               allowEmpty={false}
+              wrap
               className="-ml-[6px] text-[23px] font-semibold tracking-[-0.02em]"
               onSave={(next) => void updateItem(found.id, { title: next })}
             />
@@ -342,7 +347,7 @@ export function ItemDetailScreen({
             <button
               type="button"
               onClick={() => void saveEdit()}
-              className="rounded-ctl bg-accent px-[14px] py-[7px] text-[13px] font-semibold text-white disabled:opacity-35"
+              className="rounded-ctl bg-accent px-[14px] py-[7px] text-[13px] font-semibold text-on-fill disabled:opacity-35"
             >
               저장
             </button>
@@ -371,7 +376,7 @@ export function ItemDetailScreen({
             <button
               type="button"
               onClick={() => void removeItem()}
-              className="rounded-ctl bg-imp-fg px-[14px] py-[7px] text-[13px] font-semibold text-white"
+              className="rounded-ctl bg-imp-fg px-[14px] py-[7px] text-[13px] font-semibold text-on-fill"
             >
               지우기
             </button>
@@ -401,7 +406,7 @@ export function ItemDetailScreen({
         <div className="relative grid grid-cols-[1fr_268px]">
           <div className="min-w-0 px-[20px] py-[16px]">
             {/* 한 줄만 읽는다면 이 줄이다. 그림보다 먼저 나와야 한다. */}
-            <p className="pb-3 text-[15px] font-medium leading-relaxed">
+            <p className="text-pretty break-keep pb-3 text-[15px] font-medium leading-relaxed">
               {finished
                 ? finishedSentence(goal, end, atEnd)
                 : beyond
@@ -640,7 +645,7 @@ function curveSentence(
   if (due > today) {
     return `${now} 목표 기억률 ${percent(
       target
-    )} 아래로 떨어지기 전인 ${dueLabel(today, due)} 보라고 잡아두었어요.`
+    )} 아래로 떨어지기 전인 ${onDay(today, due)} 보라고 잡아두었어요.`
   }
   // 오늘 올라온 까닭은 규칙마다 다르다. 오른쪽 이유와 어긋나면 안 된다.
   switch (item.due_kind) {
@@ -653,10 +658,23 @@ function curveSentence(
     case 'hold':
       return `${now} 목표한 기간 동안 기억을 붙잡아 두려고 오늘 잡았어요.`
     default:
-      return `${now} 목표 기억률 ${percent(
-        target
-      )}보다 낮아서 오늘 보라고 잡았어요.`
+      // 예정일은 기억률이 목표 아래로 내려가는 날이다. 그날 아침에는 아직 목표 위일 수 있다.
+      // 화면에 적힌 두 수를 견줘 맞는 말을 한다. 91% 를 두고 90% 보다 낮다고 하면 안 된다.
+      return belowTarget(retention, target)
+        ? `${now} 목표 기억률 ${percent(target)}보다 낮아서 오늘 보라고 잡았어요.`
+        : `${now} 오늘 중에 목표 기억률 ${percent(target)} 아래로 내려가서 오늘 보라고 잡았어요.`
   }
+}
+
+/** 화면에 적는 반올림한 값으로 목표보다 낮은지. 적힌 두 수와 말이 어긋나지 않게 한다. */
+function belowTarget(retention: number, target: number): boolean {
+  return Math.round(retention * 100) < Math.round(target * 100)
+}
+
+/** '내일', '모레' 는 그대로, '13일 뒤' 와 '12월 9일' 에는 '에' 를 붙인다. */
+function onDay(today: DateOnly, due: DateOnly): string {
+  const label = dueLabel(today, due)
+  return label === '오늘' || label === '내일' || label === '모레' ? label : `${label}에`
 }
 
 /**
@@ -672,10 +690,7 @@ function whyToday(
   today: DateOnly
 ): string {
   if (!item.due || item.due > today) {
-    return `아직 오늘 볼 차례는 아니에요. ${dueLabel(
-      today,
-      item.due ?? today
-    )} 올라옵니다.`
+    return `아직 오늘 볼 차례는 아니에요. ${onDay(today, item.due ?? today)} 올라옵니다.`
   }
 
   const since = item.last_review
@@ -686,7 +701,9 @@ function whyToday(
     : ''
 
   if (item.due_kind === 'normal' || item.due_kind === null) {
-    return `${since}목표 기억률 ${percent(target)}를 밑돌아서 오늘로 잡았습니다.`
+    return belowTarget(retention, target)
+      ? `${since}목표 기억률 ${percent(target)}를 밑돌아서 오늘로 잡았습니다.`
+      : `${since}오늘 중에 목표 기억률 ${percent(target)}를 밑돌아서 오늘로 잡았습니다.`
   }
   return `${since}${dueReason(item.due_kind)}`
 }

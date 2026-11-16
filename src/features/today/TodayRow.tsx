@@ -9,6 +9,7 @@ import { goalColor } from '../../lib/domain'
 import { dueLabel, percent } from '../../lib/format'
 import type { Settings } from '../../lib/settings'
 import { GRADE_HINT_SHORT } from '../../lib/grade'
+import { useReveal } from '../../lib/reveal'
 import { todayRowModel } from './rowModel'
 
 export interface TodayRowProps {
@@ -46,6 +47,7 @@ export function TodayRow({
     settings,
     today,
   })
+  const panel = useReveal<HTMLDivElement>(expanded)
 
   return (
     <div
@@ -77,11 +79,11 @@ export function TodayRow({
             onClick={onOpen}
             title={`${item.title} 자세히 보기`}
             aria-label={`${item.title} 자세히 보기`}
-            className="min-w-0 truncate text-left text-[15px] font-medium tracking-[-0.005em] hover:text-accent"
+            className="group min-w-0 truncate text-left text-[15px] font-medium tracking-[-0.005em] hover:text-accent"
           >
-            <span className="text-text-2">{parts.pre}</span>
+            <span className="text-text-2 group-hover:text-accent">{parts.pre}</span>
             <span className="num text-[14px] font-medium">{parts.num}</span>
-            <span className="text-text-2">{parts.post}</span>
+            <span className="text-text-2 group-hover:text-accent">{parts.post}</span>
           </button>
           {badge ? <Badge kind={badge} /> : null}
           {item.due_source === 'spread' ? (
@@ -97,7 +99,7 @@ export function TodayRow({
       </div>
 
       {expanded ? (
-        <div className="px-[18px] pb-4 pl-[40px] pt-[2px]">
+        <div ref={panel} className="px-[18px] pb-4 pl-[40px] pt-[2px]">
           <div className="flex items-baseline gap-[10px] pb-[9px]">
             <span className="text-[13px] text-text-2">얼마나 기억났나요?</span>
           </div>
@@ -122,11 +124,12 @@ export function TodayRow({
                   </span>
                 </span>
                 {showFullGradeHelp ? (
-                  <span className="text-[11.5px] leading-snug text-text-3">
+                  <span className="text-pretty break-keep text-[11.5px] leading-snug text-text-3">
                     {option.hint}
                   </span>
                 ) : null}
-                <span className="num text-[12px] text-accent">{option.next}</span>
+                {/* 설명 줄 수가 달라도 다음 날짜는 네 칸 모두 바닥에 맞춘다. */}
+                <span className="num mt-auto text-[12px] text-accent">{option.next}</span>
               </button>
             ))}
           </div>

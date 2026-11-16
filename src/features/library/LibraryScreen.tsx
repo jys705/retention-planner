@@ -8,12 +8,13 @@ import { statusBadgeOf } from '../../lib/badge'
 import { cn } from '../../lib/cn'
 import { diffDays, type DateOnly } from '../../lib/date'
 import {
+  compareTitles,
   goalColor,
   isActive,
   memoryStateOf,
   splitTitle,
 } from '../../lib/domain'
-import { monthDay, percent } from '../../lib/format'
+import { josa, monthDay, percent } from '../../lib/format'
 import { goalEndDay, itemEndDay, retentionOn } from '../../lib/lifecycle'
 import type { Settings } from '../../lib/settings'
 import { usePlanner } from '../../store/planner'
@@ -58,7 +59,7 @@ export function LibraryScreen({
 
   const sorted = [...rows].sort((a, b) => {
     if (sort === 'retention') return a.retention - b.retention
-    return a.item.title < b.item.title ? -1 : 1
+    return compareTitles(a.item.title, b.item.title)
   })
 
   // 부제는 서재 전체를 말한다. 걸러진 것만 세면 걸개를 켤 때마다 '목표 0개' 가 된다.
@@ -129,10 +130,13 @@ export function LibraryScreen({
 
       {matched.length === 0 && finishedMatched.length === 0 ? (
         <div className="rounded-card border border-line bg-surface px-[18px] py-[22px]">
-          <p className="text-[15px] font-medium">찾는 항목이 없어요.</p>
+          {/* 아무것도 안 적은 서재에서 '찾는 항목이 없어요' 라고 하면 찾기가 실패한 것처럼 읽힌다. */}
+          <p className="text-[15px] font-medium">
+            {query.trim() ? '찾는 항목이 없어요.' : '아직 적어둔 게 없어요.'}
+          </p>
           <p className="pt-1 text-[13px] text-text-2">
             {query.trim()
-              ? `'${query.trim()}'와 맞는 제목이 없습니다. 다른 말로 찾아보거나 오늘 화면에서 새로 적어보세요.`
+              ? `'${query.trim()}'${josa(query.trim(), '과', '와')} 맞는 제목이 없습니다. 다른 말로 찾아보거나 오늘 화면에서 새로 적어보세요.`
               : '오늘 화면에서 한 줄 적으면 여기에 쌓입니다.'}
           </p>
         </div>
@@ -238,7 +242,7 @@ function FinishedGroups({
                 retentionOf(item, today),
             }
           })
-          .sort((a, b) => (a.item.title < b.item.title ? -1 : 1))
+          .sort((a, b) => compareTitles(a.item.title, b.item.title))
         const avg = rows.reduce((sum, r) => sum + r.retention, 0) / rows.length
         const end = goal ? goalEndDay(goal) : null
         const isOpen = opened(goalKey)

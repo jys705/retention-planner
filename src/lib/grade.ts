@@ -21,7 +21,8 @@ export const GRADE_META: {
   {
     grade: 2,
     name: '어려움',
-    hint: '떠올리는 데 오래 걸렸고 여러 번 막혔어요',
+    // '여러 번' 은 한 덩어리다. 줄이 '여러' / '번' 으로 갈리지 않게 붙인다.
+    hint: '떠올리는 데 오래 걸렸고 여러\u00a0번 막혔어요',
     color: 'var(--g2)',
   },
   {
@@ -40,7 +41,10 @@ export const GRADE_META: {
 
 /** 짧게 줄인 기준. 평가에 익숙해진 뒤에 이걸로 바꾼다. */
 export const GRADE_HINT_SHORT =
-  '다시: 거의 기억 안 남 | 어려움: 여러 번 막힘 | 무난함: 무난하게 기억남 | 쉬움: 바로 나옴'
+  '다시: 거의 기억 안 남 | 어려움: 여러\u00a0번 막힘 | 무난함: 무난하게 기억남 | 쉬움: 바로 나옴'
+
+/** 짧은 안내의 짝들. 화면은 짝 하나가 두 줄에 걸치지 않게 묶어 찍는다. */
+export const GRADE_HINT_PAIRS = GRADE_HINT_SHORT.split(' | ')
 
 export function gradeName(grade: number): string {
   return GRADE_META.find((m) => m.grade === grade)?.name ?? ''

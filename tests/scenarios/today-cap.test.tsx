@@ -61,7 +61,8 @@ describe('하루 상한과 오늘 본 것', () => {
     await addStudiedToday(goal.id)
     render(<TodayScreen onOpenItem={noop} />)
 
-    expect(await screen.findByText('오늘 볼 건 다 봤어요.')).toBeInTheDocument()
+    // 새로 적기만 했고 복습한 것은 없다. 오늘 목록이 처음부터 빈 날이다.
+    expect(await screen.findByText('오늘은 볼 게 없어요.')).toBeInTheDocument()
     expect(selectTodayItems(usePlanner.getState())).toHaveLength(0)
     expect(backOnLastReview()).toHaveLength(0)
     // 오늘을 못 쓰는 만큼 뒤로 가도 상한은 그대로 지킨다.
@@ -76,7 +77,7 @@ describe('하루 상한과 오늘 본 것', () => {
     }
 
     expect(usePlanner.getState().items).toHaveLength(15)
-    expect(await screen.findByText('오늘 볼 건 다 봤어요.')).toBeInTheDocument()
+    expect(await screen.findByText('오늘은 볼 게 없어요.')).toBeInTheDocument()
     expect(backOnLastReview()).toHaveLength(0)
     expect(busiestDay()).toBeLessThanOrEqual(CAP)
   })

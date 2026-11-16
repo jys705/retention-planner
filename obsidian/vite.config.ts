@@ -4,14 +4,15 @@ import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type Plugin } from 'vite'
-import { scopeCss, unscopedSelectors } from './build/scopeCss.ts'
+import { packageCss } from './build/scopeCss.ts'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
 /**
  * 옵시디언이 읽는 세 파일을 만든다. main.js, styles.css, manifest.json.
  *
- * 앱 스타일은 앱 뿌리 안으로 가둔 뒤에 옵시디언 그릇을 다듬는 규칙을 붙인다.
+ * 앱 스타일은 앱 뿌리 안으로 가둔다. 앞에는 옵시디언 CSS 를 걷는 규칙을, 뒤에는 옵시디언
+ * 그릇을 다듬는 규칙을 붙인다.
  * 가둔 결과에 뿌리 밖을 고르는 선택자가 하나라도 남으면 빌드를 멈춘다.
  */
 function obsidianPackage(): Plugin {
@@ -30,16 +31,16 @@ function obsidianPackage(): Plugin {
         .join('\n')
       for (const file of sheets) delete bundle[file.fileName]
 
-      const scoped = scopeCss(appCss)
-      const leaks = unscopedSelectors(scoped)
-      if (leaks.length > 0) {
-        throw new Error(`앱 뿌리 밖을 고르는 선택자가 남았다: ${leaks.slice(0, 5).join(', ')}`)
-      }
-      const hostCss = readFileSync(resolve(here, 'src/host.css'), 'utf8')
+      // 옵시디언 CSS 를 걷는 규칙은 앱 CSS 앞에, 옵시디언 그릇을 다듬는 규칙은 뒤에 둔다.
+      // 뿌리 밖을 고르는 선택자가 남거나 뿌리 선택자가 어긋나면 빌드를 멈춘다.
       this.emitFile({
         type: 'asset',
         fileName: 'styles.css',
-        source: `${scoped}\n${hostCss}`,
+        source: packageCss(
+          appCss,
+          readFileSync(resolve(here, 'src/reset.css'), 'utf8'),
+          readFileSync(resolve(here, 'src/host.css'), 'utf8')
+        ),
       })
 
       const manifest = JSON.parse(readFileSync(resolve(here, 'manifest.json'), 'utf8'))
